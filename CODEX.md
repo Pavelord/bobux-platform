@@ -60,3 +60,17 @@ Production release files and versions must be generated together. Do not update
 only a launcher manifest or upload only an executable. A release is complete
 only after the Windows package, launcher, Android APK, manifests, checksums, and
 server endpoints all agree and smoke tests pass.
+
+Cloud releases run through the `Bobux Release` GitHub Actions workflow. Never
+request, print, or replace its signing/deployment secrets. For a production
+release:
+
+1. Merge the tested source to `main`.
+2. Dispatch `Bobux Release` with `deploy_production=true`.
+3. Let the workflow resolve the next build numbers unless an explicit recovery
+   build is required.
+4. Confirm the production switch and approve the `production` environment if
+   the repository plan asks for approval.
+5. Confirm the workflow's post-deploy health checks and GitHub Release.
+
+See `docs/CLOUD_RELEASES.md` for the phone workflow and recovery procedure.

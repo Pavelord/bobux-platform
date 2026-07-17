@@ -16,23 +16,32 @@ param(
 	[string]$WebRoot        = "/var/www/bobux",
 
 	# ---- Versions ----
-	[string]$Version        = "0.1.33",
-	[int]$Build             = 38,
-	[string]$MobileVersion  = "0.1.25-mobile",
-	[int]$MobileBuild       = 26,
+	[string]$Version        = "0.1.34",
+	[int]$Build             = 39,
+	[string]$MobileVersion  = "0.1.26-mobile",
+	[int]$MobileBuild       = 27,
 	[string]$LauncherVersion = "0.1.11",
 	[int]$LauncherBuild     = 13,
 	[string]$WindowsArchitecture = "x86_32",
+	[string]$ReleaseNotes = "Bobux release $Version build $Build.",
+	[string]$MobileReleaseNotes = "",
 
 	# ---- Flags ----
 	[switch]$SkipExport,
 	[switch]$SkipMobile,
+	[Alias("LocalOnly")]
 	[switch]$SkipUpload,
 
 	# ---- Server env ----
 	[string]$BobuxApiUrl    = "http://127.0.0.1:3000/api",
 	[string]$BobuxServiceKey = "bobux-server-compat",
-	[string]$HeartbeatToken = $env:BOBUX_SERVER_HEARTBEAT_TOKEN
+	[string]$HeartbeatToken = $env:BOBUX_SERVER_HEARTBEAT_TOKEN,
+
+	# ---- Reproducible build inputs ----
+	[string]$GodotExecutable = $env:GODOT_BIN,
+	[string]$AndroidKeystorePath = $env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH,
+	[string]$AndroidKeystoreUser = $env:GODOT_ANDROID_KEYSTORE_RELEASE_USER,
+	[string]$AndroidKeystorePassword = $env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,7 +50,10 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 # ---- Godot binary ----
 # Prefer the console binary so export failures are visible and reflected in LASTEXITCODE.
-$godotBin = Join-Path $projectRoot ".codex-tools\godot-4.7\Godot_v4.7-stable_win64_console.exe"
+$godotBin = $GodotExecutable
+if ([string]::IsNullOrWhiteSpace($godotBin)) {
+	$godotBin = Join-Path $projectRoot ".codex-tools\godot-4.7\Godot_v4.7-stable_win64_console.exe"
+}
 if (-not (Test-Path $godotBin)) {
 	$godotBin = Join-Path $projectRoot ".codex-tools\godot-4.7\Godot_v4.7-stable_win64.exe"
 }
@@ -81,6 +93,30 @@ $launcherExportDir  = Join-Path $projectRoot "launcher_export\windows"
 $launcherExe        = Join-Path $launcherExportDir "BobuxLauncher.exe"
 $launcherPck        = Join-Path $launcherExportDir "BobuxLauncher.pck"
 $gameLuaExtensionDll = Join-Path $projectRoot "addons\luaAPI\bin\libluaapi.windows.template_release.$WindowsArchitecture.dll"
+
+if ([string]::IsNullOrWhiteSpace($MobileReleaseNotes)) {
+	$MobileReleaseNotes = $ReleaseNotes
+}
+
+# Keep signing credentials out of export_presets.cfg. Godot officially supports
+# these environment variables and they work both locally and in GitHub Actions.
+if (-not $SkipMobile) {
+	if ([string]::IsNullOrWhiteSpace($AndroidKeystorePath)) {
+		$AndroidKeystorePath = Join-Path $projectRoot "tools\mobile\bobux_debug.keystore"
+	}
+	if ([string]::IsNullOrWhiteSpace($AndroidKeystoreUser)) {
+		$AndroidKeystoreUser = "bobuxdebug"
+	}
+	if ([string]::IsNullOrWhiteSpace($AndroidKeystorePassword)) {
+		$AndroidKeystorePassword = "android"
+	}
+	if (-not (Test-Path -LiteralPath $AndroidKeystorePath -PathType Leaf)) {
+		throw "Android release keystore is missing: $AndroidKeystorePath"
+	}
+	$env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH = [System.IO.Path]::GetFullPath($AndroidKeystorePath)
+	$env:GODOT_ANDROID_KEYSTORE_RELEASE_USER = $AndroidKeystoreUser
+	$env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = $AndroidKeystorePassword
+}
 
 function Get-SizeMB([string]$Path) {
 	if (Test-Path $Path) {
@@ -370,6 +406,9 @@ if (Test-Path $hotfix) { Remove-Item $hotfix -Force }
 Push-Location $projectRoot
 tar -czf $hotfix `
 	--exclude="./.git" `
+	--exclude="./*/.git" `
+	--exclude="./*/.git/*" `
+	--exclude="./game" `
 	--exclude="./.godot" `
 	--exclude="./exiting_game" `
 	--exclude="./launcher_export" `
@@ -525,7 +564,7 @@ $manifestObj = @{
 			"http://$ServerIp/downloads/BobuxLauncher-Windows.zip"
 		)
 	}
-	notes      = "Bobux $Version : PC build $Build, Android $MobileVersion. Stable lobby loading, mobile Studio, model library, avatar items, and publishing fixes."
+	notes      = $ReleaseNotes
 }
 [System.IO.File]::WriteAllText($launcherManifest, ($manifestObj | ConvertTo-Json -Depth 4), $utf8NoBom)
 Write-Host "  OK: $launcherManifest" -ForegroundColor Green
@@ -542,7 +581,7 @@ if (-not $SkipMobile) {
 			versioned_apk_url = "http://$ServerIp/mobile/Bobux-Android-$MobileVersion-build$MobileBuild.apk"
 			sha256            = $mobileSha256
 			required          = $true
-			notes             = "Bobux mobile $MobileVersion : stable lobby loading, mobile Studio, model library, avatar items, and publishing fixes."
+			notes             = $MobileReleaseNotes
 		}
 	}
 	[System.IO.File]::WriteAllText($mobileManifest, ($mobileManifestObj | ConvertTo-Json -Depth 4), $utf8NoBom)

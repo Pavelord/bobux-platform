@@ -210,12 +210,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default="109.71.245.162")
     parser.add_argument("--port", type=int, default=22)
     parser.add_argument("--user", default="root")
-    parser.add_argument("--version", default="0.1.33")
-    parser.add_argument("--build", type=int, default=38)
-    parser.add_argument("--mobile-version", default="0.1.25-mobile")
-    parser.add_argument("--mobile-build", type=int, default=26)
+    parser.add_argument("--version", default="0.1.34")
+    parser.add_argument("--build", type=int, default=39)
+    parser.add_argument("--mobile-version", default="0.1.26-mobile")
+    parser.add_argument("--mobile-build", type=int, default=27)
     parser.add_argument("--remote-root", default="/opt/bobux-server")
     parser.add_argument("--web-root", default="/var/www/bobux")
+    parser.add_argument("--key-file", default=os.environ.get("BOBUX_DEPLOY_KEY_FILE", ""))
+    parser.add_argument(
+        "--known-hosts",
+        default=os.environ.get(
+            "BOBUX_DEPLOY_KNOWN_HOSTS",
+            str(Path.home() / ".ssh" / "known_hosts"),
+        ),
+    )
     parser.add_argument("--skip-upload", action="store_true")
     return parser.parse_args()
 
@@ -227,8 +235,16 @@ def main() -> int:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(errors="backslashreplace")
     password = os.environ.get("BOBUX_DEPLOY_PASSWORD", "")
-    if not password:
-        raise RuntimeError("BOBUX_DEPLOY_PASSWORD is not set.")
+    key_file = Path(args.key_file).expanduser() if args.key_file else None
+    if key_file is not None and not key_file.is_file():
+        raise RuntimeError(f"SSH private key does not exist: {key_file}")
+    if key_file is None and not password:
+        raise RuntimeError(
+            "Set --key-file/BOBUX_DEPLOY_KEY_FILE or BOBUX_DEPLOY_PASSWORD."
+        )
+    known_hosts = Path(args.known_hosts).expanduser()
+    if not known_hosts.is_file():
+        raise RuntimeError(f"Pinned SSH known_hosts file does not exist: {known_hosts}")
 
     project_root = Path(__file__).resolve().parent.parent
     files = {
@@ -273,15 +289,27 @@ def main() -> int:
         raise RuntimeError("Launcher manifest SHA256 does not match the launcher ZIP.")
     if hashes["mobile"] != str(mobile_manifest["android"]["sha256"]).upper():
         raise RuntimeError("Mobile manifest SHA256 does not match the APK.")
+    if int(launcher_manifest.get("build", -1)) != args.build:
+        raise RuntimeError("Windows manifest build does not match --build.")
+    if str(launcher_manifest.get("version", "")) != args.version:
+        raise RuntimeError("Windows manifest version does not match --version.")
+    if int(mobile_manifest.get("build", -1)) != args.mobile_build:
+        raise RuntimeError("Mobile manifest build does not match --mobile-build.")
+    if str(mobile_manifest.get("version", "")) != args.mobile_version:
+        raise RuntimeError("Mobile manifest version does not match --mobile-version.")
 
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.load_host_keys(str(known_hosts))
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
     print(f"Connecting to {args.user}@{args.host}:{args.port}...", flush=True)
     client.connect(
         args.host,
         port=args.port,
         username=args.user,
-        password=password,
+        password=password or None,
+        key_filename=str(key_file) if key_file is not None else None,
+        allow_agent=False,
+        look_for_keys=False,
         timeout=20,
         banner_timeout=20,
         auth_timeout=20,
