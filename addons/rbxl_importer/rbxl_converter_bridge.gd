@@ -10,6 +10,10 @@ extends RefCounted
 ## relies on `OS.execute`.
 
 const _CONVERTER_PATH := "res://addons/rbxl_importer/rbxl_converter.py"
+const _RUNTIME_CONVERTER_PATH := "user://rbxl_runtime/rbxl_converter.py"
+const _MIN_CONVERTER_BYTES := 32 * 1024
+
+static var _materialize_mutex := Mutex.new()
 
 const _PythonCandidates := [
 	"python",
@@ -19,6 +23,7 @@ const _PythonCandidates := [
 
 ## Populated with the stderr / OS error message of the last failed call.
 var last_error: String = ""
+var _prepared_converter_path: String = ""
 
 
 ## Convert `source_path` (.rbxl or .rbxlx) into an intermediate JSON at
@@ -26,10 +31,10 @@ var last_error: String = ""
 ## `last_error` with details on failure.
 func convert_file(source_path: String, output_path: String) -> Error:
 	last_error = ""
-	var py_script := ProjectSettings.globalize_path(_CONVERTER_PATH)
-	if not FileAccess.file_exists(py_script):
-		last_error = "converter not found: %s" % py_script
-		return ERR_FILE_NOT_FOUND
+	var prepare_error := prepare_converter()
+	if prepare_error != OK:
+		return prepare_error
+	var py_script := _prepared_converter_path
 	var input_path := _globalize_if_needed(source_path)
 	var target_path := _globalize_if_needed(output_path)
 	if not FileAccess.file_exists(input_path):
@@ -63,6 +68,82 @@ func convert_file(source_path: String, output_path: String) -> Error:
 		last_error = "converter reported success but produced no output at %s" % target_path
 		return ERR_BUG
 	return OK
+
+
+## Makes the Python converter available as a physical file. In exported builds
+## res:// lives inside the PCK, so Python cannot execute it directly. A sidecar
+## copy is preferred when present; otherwise the packaged resource is extracted
+## into user:// and refreshed whenever its contents change.
+func prepare_converter() -> Error:
+	last_error = ""
+	_prepared_converter_path = ""
+
+	var sidecar_path := ProjectSettings.globalize_path(_CONVERTER_PATH)
+	if FileAccess.file_exists(sidecar_path):
+		var sidecar := FileAccess.open(sidecar_path, FileAccess.READ)
+		if sidecar != null and sidecar.get_length() >= _MIN_CONVERTER_BYTES:
+			sidecar.close()
+			_prepared_converter_path = sidecar_path
+			return OK
+
+	_materialize_mutex.lock()
+	var materialized_path := _materialize_packaged_converter()
+	_materialize_mutex.unlock()
+	if materialized_path.is_empty():
+		return ERR_FILE_NOT_FOUND
+	_prepared_converter_path = materialized_path
+	return OK
+
+
+func get_prepared_converter_path() -> String:
+	return _prepared_converter_path
+
+
+func _materialize_packaged_converter() -> String:
+	var source := FileAccess.open(_CONVERTER_PATH, FileAccess.READ)
+	if source == null:
+		last_error = (
+			"RBXL converter resource is missing from this build: %s. "
+			+ "Reinstall or update Bobux."
+		) % _CONVERTER_PATH
+		return ""
+	var converter_bytes := source.get_buffer(source.get_length())
+	source.close()
+	if converter_bytes.size() < _MIN_CONVERTER_BYTES:
+		last_error = "RBXL converter resource is incomplete (%d bytes)." % converter_bytes.size()
+		return ""
+
+	var runtime_dir := ProjectSettings.globalize_path(_RUNTIME_CONVERTER_PATH.get_base_dir())
+	var mkdir_error := DirAccess.make_dir_recursive_absolute(runtime_dir)
+	if mkdir_error != OK:
+		last_error = "cannot create RBXL runtime directory: %s" % runtime_dir
+		return ""
+	var target_path := ProjectSettings.globalize_path(_RUNTIME_CONVERTER_PATH)
+	if FileAccess.file_exists(target_path):
+		var existing_bytes := FileAccess.get_file_as_bytes(target_path)
+		if existing_bytes == converter_bytes:
+			return target_path
+
+	var temporary_path := "%s.tmp.%d.%d" % [
+		target_path,
+		OS.get_process_id(),
+		Time.get_ticks_usec(),
+	]
+	var target := FileAccess.open(temporary_path, FileAccess.WRITE)
+	if target == null:
+		last_error = "cannot extract RBXL converter to %s" % temporary_path
+		return ""
+	target.store_buffer(converter_bytes)
+	target.flush()
+	target.close()
+	if FileAccess.file_exists(target_path):
+		DirAccess.remove_absolute(target_path)
+	var rename_error := DirAccess.rename_absolute(temporary_path, target_path)
+	if rename_error != OK:
+		DirAccess.remove_absolute(temporary_path)
+		last_error = "cannot activate extracted RBXL converter (error %d)" % rename_error
+		return ""
+	return target_path
 
 
 func _globalize_if_needed(path: String) -> String:

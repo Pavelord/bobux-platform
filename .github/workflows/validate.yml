@@ -60,7 +60,7 @@ jobs:
         run: |
           $tests = @(
             "res://tools/validate_runtime_load.gd",
-            "res://tools/validate_cloud_map_publish_roundtrip.gd",
+            "res://tools/validate_rbxl_converter_runtime.gd",
             "res://tools/validate_model_publish_roundtrip.gd",
             "res://tools/validate_lobby_friend_preview_queue.gd",
             "res://tools/validate_mobile_studio_layout.gd"

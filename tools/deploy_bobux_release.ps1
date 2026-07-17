@@ -93,6 +93,7 @@ $launcherExportDir  = Join-Path $projectRoot "launcher_export\windows"
 $launcherExe        = Join-Path $launcherExportDir "BobuxLauncher.exe"
 $launcherPck        = Join-Path $launcherExportDir "BobuxLauncher.pck"
 $gameLuaExtensionDll = Join-Path $projectRoot "addons\luaAPI\bin\libluaapi.windows.template_release.$WindowsArchitecture.dll"
+$rbxlConverterSource = Join-Path $projectRoot "addons\rbxl_importer\rbxl_converter.py"
 
 if ([string]::IsNullOrWhiteSpace($MobileReleaseNotes)) {
 	$MobileReleaseNotes = $ReleaseNotes
@@ -439,6 +440,10 @@ Copy-Item $gameExe (Join-Path $windowsStageDir "Bobux.exe") -Force
 if (Test-Path $gamePck) {
 	Copy-Item $gamePck (Join-Path $windowsStageDir "Bobux.pck") -Force
 }
+$stageRbxlImporterDir = Join-Path $windowsStageDir "addons\rbxl_importer"
+New-Item -ItemType Directory -Path $stageRbxlImporterDir -Force | Out-Null
+Assert-HealthyFile $rbxlConverterSource (32KB) "RBXL converter"
+Copy-Item $rbxlConverterSource (Join-Path $stageRbxlImporterDir "rbxl_converter.py") -Force
 $stageLuaExtensionDir = Join-Path $windowsStageDir "addons\luaAPI\bin"
 New-Item -ItemType Directory -Path $stageLuaExtensionDir -Force | Out-Null
 Assert-HealthyFile $gameLuaExtensionDll (256KB) "LuaAPI Windows extension"
@@ -458,6 +463,7 @@ Compress-Archive -Path "$windowsStageDir\*" -DestinationPath $windowsVersionedZi
 Copy-Item $windowsVersionedZip $windowsZip -Force
 Assert-ZipEntries $windowsVersionedZip @{
 	"Bobux.exe" = 10MB
+	"addons/rbxl_importer/rbxl_converter.py" = 32KB
 	"addons/luaAPI/bin/$(Split-Path -Leaf $gameLuaExtensionDll)" = 256KB
 	"version.json" = 20
 } "Windows release ZIP"
@@ -467,6 +473,7 @@ if (Test-Path $windowsRoundTripDir) {
 }
 Expand-Archive -LiteralPath $windowsVersionedZip -DestinationPath $windowsRoundTripDir -Force
 Assert-HealthyFile (Join-Path $windowsRoundTripDir "Bobux.exe") (10MB) "Extracted Windows game executable"
+Assert-HealthyFile (Join-Path $windowsRoundTripDir "addons\rbxl_importer\rbxl_converter.py") (32KB) "Extracted RBXL converter"
 Assert-HealthyFile (Join-Path $windowsRoundTripDir "addons\luaAPI\bin\$(Split-Path -Leaf $gameLuaExtensionDll)") (256KB) "Extracted LuaAPI Windows extension"
 Invoke-GameSmokeTest (Join-Path $windowsRoundTripDir "Bobux.exe") (Join-Path $distRelease "roundtrip-smoke")
 Remove-Item $windowsRoundTripDir -Recurse -Force
