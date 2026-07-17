@@ -1,0 +1,157 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/main/main.gd" id="1_main_script"]
+[ext_resource type="Script" path="res://scripts/main/chat.gd" id="2_chat_script"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+background_color = Color(0.776471, 0.878431, 0.972549, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.658824, 0.74902, 0.847059, 1)
+ambient_light_energy = 1.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+size = Vector3(40, 1, 40)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(40, 1, 40)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_LeaveBtn"]
+bg_color = Color(0.15, 0.15, 0.18, 0.75)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_LeaveBtnHover"]
+bg_color = Color(0.75, 0.2, 0.2, 0.85)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ChatPanel"]
+bg_color = Color(0.05, 0.05, 0.05, 0.6)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ChatInput"]
+bg_color = Color(0.15, 0.15, 0.15, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main_script")
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="World"]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="World"]
+rotation = Vector3(-0.785398, 0.523599, 0)
+light_energy = 1.4
+shadow_enabled = true
+
+[node name="Players" type="Node3D" parent="World"]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="World"]
+spawn_path = NodePath("../Players")
+
+[node name="FallbackCamera" type="Camera3D" parent="World"]
+position = Vector3(0, 11, 14)
+rotation = Vector3(-0.575959, 0, 0)
+current = true
+fov = 70.0
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="LeaveButton" type="Button" parent="HUD"]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -120.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 48.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.95)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_LeaveBtn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_LeaveBtnHover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_LeaveBtnHover")
+text = "✕ Leave"
+
+[node name="HintLabel" type="Label" parent="HUD"]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -260.0
+offset_top = 54.0
+offset_right = -16.0
+offset_bottom = 74.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.4)
+theme_override_font_sizes/font_size = 11
+text = "RMB rotate · Scroll zoom · Enter chat"
+horizontal_alignment = 2
+
+[node name="ChatBox" type="CanvasLayer" parent="."]
+layer = 2
+script = ExtResource("2_chat_script")
+
+[node name="ChatPanel" type="Panel" parent="ChatBox"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -280.0
+offset_right = 400.0
+offset_bottom = -16.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_ChatPanel")
+
+[node name="Margin" type="MarginContainer" parent="ChatBox/ChatPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="ChatBox/ChatPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ScrollContainer" type="ScrollContainer" parent="ChatBox/ChatPanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="MessageList" type="VBoxContainer" parent="ChatBox/ChatPanel/Margin/VBox/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="ChatInput" type="LineEdit" parent="ChatBox/ChatPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_ChatInput")
+placeholder_text = "Press Enter to chat..."

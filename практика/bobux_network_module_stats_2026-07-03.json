@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-07-03T12:10:42.184Z",
+  "pocketbase_url": "http://127.0.0.1:8090",
+  "public_base_url": "http://109.71.245.162",
+  "database": {
+    "engine": "PocketBase",
+    "collection_counts": {
+      "profiles": 654,
+      "maps": 86,
+      "active_servers": 0,
+      "model_assets": 8,
+      "avatar_items": 83,
+      "catalog_items": 0,
+      "user_inventory": 1077,
+      "friendships": 172
+    },
+    "pocketbase_data_bytes": 2102950082,
+    "pocketbase_data_mb": 2005.53
+  },
+  "storage": {
+    "public_storage_dir": "/var/www/bobux/storage",
+    "public_storage_bytes": 431228795,
+    "public_storage_mb": 411.25
+  },
+  "accounts": {
+    "auth_users": 612,
+    "profiles": 654,
+    "anonymous_users": 0,
+    "named_profiles": 607
+  },
+  "realtime": {
+    "players_online": 0,
+    "unique_users_online": 0,
+    "active_servers": 0,
+    "total_server_records": 0,
+    "servers": []
+  },
+  "creation": {
+    "maps": 86,
+    "public_maps": 2,
+    "private_maps": 84,
+    "map_creators": 42,
+    "total_visits": 680,
+    "total_likes": 57,
+    "model_assets": 8,
+    "public_model_assets": 7,
+    "avatar_items": 83,
+    "public_avatar_items": 75,
+    "catalog_items": 0,
+    "inventory_records": 1077
+  },
+  "social": {
+    "friendships": 172
+  },
+  "top_maps": [
+    {
+      "id": "71272ag1031tgc9_baseplate 1",
+      "name": "Baseplate 1",
+      "owner_name": "Bludy",
+      "visits_count": 39,
+      "likes_count": 0,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-06-05 18:13:40"
+    },
+    {
+      "id": "59rp17e7a08s22i_baseplate 1",
+      "name": "Bobux PARK",
+      "owner_name": "INSAR43K123",
+      "visits_count": 35,
+      "likes_count": 4,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-31 07:49:08"
+    },
+    {
+      "id": "24j34m88py3372r_da floor is fuckin lava",
+      "name": "burmalda lava",
+      "owner_name": "zsertok",
+      "visits_count": 35,
+      "likes_count": 1,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-30 18:34:02"
+    },
+    {
+      "id": "fc39kwx4dt1s2u0_damage blocks",
+      "name": "Damage blocks",
+      "owner_name": "INSAR43K",
+      "visits_count": 24,
+      "likes_count": 0,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-30 07:57:59"
+    },
+    {
+      "id": "895639iuuq994mp_baseplate 1",
+      "name": "Baseplate 1",
+      "owner_name": "CHERIC777",
+      "visits_count": 22,
+      "likes_count": 1,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-31 17:31:43"
+    },
+    {
+      "id": "classic",
+      "name": "Classic Baseplate",
+      "owner_name": "Bobux",
+      "visits_count": 20,
+      "likes_count": 2,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-29T10:19:49.089Z"
+    },
+    {
+      "id": "938zxsi341j2v5v_squid game",
+      "name": "Squid Game",
+      "owner_name": "roblox",
+      "visits_count": 19,
+      "likes_count": 0,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-30 06:24:17"
+    },
+    {
+      "id": "7vd76x4s7h9j89c_тест",
+      "name": "тест",
+      "owner_name": "SemigaX",
+      "visits_count": 18,
+      "likes_count": 1,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-29 19:40:05"
+    },
+    {
+      "id": "e1urwqa29875a8w_baseplate 1",
+      "name": "Baseplate 1",
+      "owner_name": "DEVDREX",
+      "visits_count": 18,
+      "likes_count": 0,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-06-01 10:07:29"
+    },
+    {
+      "id": "87r5213x132alc2_город",
+      "name": "БЕТА: искаженная реальность",
+      "owner_name": "SpaceUP",
+      "visits_count": 17,
+      "likes_count": 2,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-31 16:12:02"
+    },
+    {
+      "id": "24j34m88py3372r_town big jump",
+      "name": "town big jump",
+      "owner_name": "zsertok",
+      "visits_count": 17,
+      "likes_count": 0,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-29 12:02:26"
+    },
+    {
+      "id": "87r5213x132alc2_...",
+      "name": "...",
+      "owner_name": "SpaceUP",
+      "visits_count": 15,
+      "likes_count": 6,
+      "is_public": false,
+      "is_published": true,
+      "updated_at": "2026-05-30 18:36:36"
+    }
+  ]
+}

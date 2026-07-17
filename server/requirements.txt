@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+lz4
+pygltflib
+Pillow
+aiofiles
+python-multipart

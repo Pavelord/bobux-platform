@@ -1,0 +1,13 @@
+{
+    "build":  27,
+    "version":  "0.1.26-mobile",
+    "android":  {
+                    "build":  27,
+                    "version":  "0.1.26-mobile",
+                    "sha256":  "A137F89CEC6F701241A03101E61E331402AFF10C3E1DC1446DA38BB8565E6705",
+                    "required":  true,
+                    "apk_url":  "http://109.71.245.162/mobile/Bobux-Android.apk",
+                    "versioned_apk_url":  "http://109.71.245.162/mobile/Bobux-Android-0.1.26-mobile-build27.apk",
+                    "notes":  "Bobux mobile 0.1.26-mobile : stable lobby loading, mobile Studio, model library, avatar items, and publishing fixes."
+                }
+}

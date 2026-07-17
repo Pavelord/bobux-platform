@@ -1,0 +1,1580 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учебно-технологическая практика | Все варианты заданий</title>
+    <!-- Подключаем внешний файл стилей -->
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Дополнительные стили для навигации между вариантами и запросов */
+        .variant-navigation {
+            display: flex;
+            justify-content: space-between;
+            margin: 30px 0;
+            padding: 15px 0;
+            border-top: 2px solid var(--border-light);
+            border-bottom: 2px solid var(--border-light);
+        }
+        .variant-navigation a {
+            padding: 10px 20px;
+            background-color: var(--primary-light);
+            border-radius: 30px;
+            text-decoration: none;
+            color: var(--primary-dark);
+            font-weight: 600;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-light);
+        }
+        .variant-navigation a:hover {
+            background-color: var(--accent-blue);
+            color: white;
+            transform: translateY(-2px);
+        }
+        .back-to-top {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .back-to-top a {
+            display: inline-block;
+            padding: 8px 25px;
+            background-color: var(--primary-medium);
+            color: white;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .back-to-top a:hover {
+            background-color: var(--accent-sky);
+            transform: translateY(-2px);
+        }
+        .variant-section {
+            scroll-margin-top: 20px;
+        }
+        
+        /* Стили для запросов */
+        .queries-section {
+            margin-top: 30px;
+        }
+        .queries-section h3 {
+            color: var(--primary-dark);
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 4px solid var(--accent-blue);
+        }
+        .query-list {
+            list-style-type: decimal;
+            padding-left: 20px;
+            margin: 20px 0;
+        }
+        .query-list li {
+            background: #f9fcff;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+            color: var(--primary-dark);
+            font-weight: 500;
+        }
+        .query-list li:hover {
+            box-shadow: 0 8px 16px rgba(52, 152, 219, 0.15);
+            transform: translateX(5px);
+            border-color: var(--accent-blue);
+            background-color: #ffffff;
+        }
+        .query-list li::marker {
+            color: var(--accent-blue);
+            font-weight: 700;
+        }
+        .note-box {
+            background: #eef7ff;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 30px;
+            border: 1px solid var(--accent-sky);
+        }
+        .note-box h4 {
+            color: var(--primary-dark);
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+        }
+        .note-box ul {
+            list-style-type: none;
+            padding-left: 10px;
+        }
+        .note-box li {
+            margin-bottom: 8px;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+        .practice-header {
+            background-color: var(--primary-light);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 30px 0 20px 0;
+            border-left: 6px solid var(--accent-blue);
+        }
+        .practice-header h2 {
+            margin: 0;
+            color: var(--primary-dark);
+            font-size: 1.6rem;
+        }
+        /* Стиль header для учебной практики */
+        .header {
+            background: #f0f8ff;
+            color: #333;
+            padding: 30px;
+            border-radius: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            margin-bottom: 0;
+        }
+        
+        /* Новые стили для блока с адресом и отчетом */
+        .deploy-info {
+            background: linear-gradient(135deg, #f0f8ff 0%, #e8f4f8 100%);
+            border: 2px solid var(--accent-blue);
+            border-radius: 16px;
+            padding: 25px 30px;
+            margin: 25px 0 30px 0;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
+        }
+        .deploy-info .deploy-address {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary-dark);
+            padding: 12px 20px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid var(--border-light);
+            margin: 10px 0 15px 0;
+            display: inline-block;
+            font-family: monospace;
+        }
+        .report-structure {
+            margin: 15px 0 10px 0;
+        }
+        .report-structure h3 {
+            color: var(--primary-dark);
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+        }
+        .report-structure ul {
+            list-style-type: none;
+            padding-left: 0;
+            display: block;
+        }
+        .report-structure ul li {
+            padding: 6px 10px 6px 25px;
+            position: relative;
+            color: #333;
+        }
+        .report-structure ul li::before {
+            content: "•";
+            color: var(--accent-blue);
+            font-weight: bold;
+            position: absolute;
+            left: 5px;
+        }
+        .report-links {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-light);
+        }
+        .report-links a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 6px 16px;
+            background: white;
+            border-radius: 20px;
+            border: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+        }
+        .report-links a:hover {
+            background: var(--accent-blue);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        .report-links a::before {
+            content: "📄 ";
+        }
+        
+        /* Стили для общих требований */
+        .requirements-section {
+            background: #f8faff;
+            border: 2px solid var(--border-light);
+            border-radius: 16px;
+            padding: 25px 30px;
+            margin: 20px 0 30px 0;
+        }
+        .requirements-section h2 {
+            color: var(--primary-dark);
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        .requirements-section h3 {
+            color: var(--primary-dark);
+            margin: 20px 0 10px 0;
+            font-size: 1.2rem;
+        }
+        .requirements-section ul, .requirements-section ol {
+            padding-left: 25px;
+            margin: 10px 0;
+        }
+        .requirements-section ul li, .requirements-section ol li {
+            margin-bottom: 5px;
+            line-height: 1.6;
+        }
+        .requirements-section .highlight {
+            background: #eef7ff;
+            padding: 12px 18px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-blue);
+            margin: 10px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .report-structure ul {
+                grid-template-columns: 1fr;
+            }
+            .requirements-section {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Шапка страницы -->
+        <header class="header">
+            <h1>Учебная технологическая (проектно-технологическая) практика</h1>
+            <p class="subtitle">Варианты заданий для учебно-технологической практики</p>
+        </header>
+
+        <!-- Общие требования -->
+        <section class="requirements-section">
+            <h2>Общие требования на учебно-технологическую практику</h2>
+            
+            <p>В рамках учебно-технологической практики необходимо разработать веб-сервис для заданной предметной области.</p>
+            
+            <h3>База данных</h3>
+            <p>Для реализации функционала веб-сервиса требуется разработать базу данных с применением форм нормализации и наполнить ее данными.</p>
+            
+            <h3>Функционал веб-сервиса</h3>
+            <ul>
+                <li>Регистрация</li>
+                <li>Авторизация</li>
+                <li>Вывод информации о товарах/услугах</li>
+                <li>Загрузка изображений</li>
+                <li>Создание записей</li>
+                <li>Редактирование записей</li>
+                <li>Удаление записей</li>
+                <li>Поиск</li>
+                <li>Выход</li>
+            </ul>
+            
+            <h3>Права доступа</h3>
+            <p><strong>Неавторизованный пользователь:</strong></p>
+            <ul>
+                <li>Регистрация</li>
+                <li>Авторизация</li>
+            </ul>
+            <p><strong>Авторизованный пользователь:</strong></p>
+            <ul>
+                <li>Просмотр информации</li>
+                <li>Загрузка изображений</li>
+                <li>Список записей</li>
+                <li>Поиск</li>
+                <li>Выход из аккаунта</li>
+            </ul>
+            
+            <h3>Функциональные требования</h3>
+            <div class="highlight">
+                <p><strong>Вся информация</strong> (данные страниц об информационных объектах, данные пользователей, товары, услуги, фото/пути к файлам и т.д.) должна храниться в базе данных.</p>
+                <p><strong>Валидация и проверка данных</strong> должны быть на стороне сервера.</p>
+            </div>
+            
+            <h3>Модуль «Регистрация»</h3>
+            <p>Форма для регистрации нового пользователя. При вводе некорректных значений отображаются тексты ошибок.</p>
+            <ul>
+                <li><strong>first_name</strong> – обязательное поле</li>
+                <li><strong>last_name</strong> – обязательное поле</li>
+                <li><strong>patronymic</strong> – обязательное поле</li>
+                <li><strong>email</strong> – обязательное и уникальное поле, валидация e-mail адреса</li>
+                <li><strong>password</strong> – пароль пользователя, обязательное поле, состоит минимум из 3 символов</li>
+                <li><strong>birth_date</strong> – обязательное поле</li>
+            </ul>
+            <p>По щелчку на кнопку регистрации происходит попытка зарегистрировать нового пользователя. При успешной регистрации происходит переход на экран входа в систему.</p>
+            
+            <h3>Модуль «Авторизация»</h3>
+            <p>Форма для входа пользователя в систему. При вводе некорректных значений отображаются тексты ошибок.</p>
+            <ul>
+                <li><strong>email</strong> – обязательное поле, валидация e-mail адреса</li>
+                <li><strong>password</strong> – пароль пользователя, обязательное поле</li>
+            </ul>
+            <p>При вводе неверных данных для авторизации необходимо отобразить ошибку. При успешной аутентификации происходит переход на главную страницу.</p>
+            
+            <h3>Модуль «Информация о товарах/услугах»</h3>
+            <p>На данном экране отображается общая информация – наименование, описание и изображение (вывод из базы данных).</p>
+            
+            <h3>Модуль «Список записей»</h3>
+            <p>На данном экране отображается список доступных записей, к которым имеет доступ авторизованный пользователь. Для каждой записи отображается идентификационный номер, наименование, дата, количество и кнопки «Удалить» и «Редактировать».</p>
+            <ul>
+                <li>По щелчку на кнопку «Добавить запись» происходит перенаправление на экран с формой добавления</li>
+                <li>По щелчку на кнопку «Удалить» происходит удаление записи</li>
+                <li>По щелчку на кнопку «Редактировать» происходит переход на страницу редактирования</li>
+            </ul>
+            
+            <h3>Страница «Создание записи»</h3>
+            <p>На данном экране пользователь может добавить новую запись. При вводе некорректного значения отображаются тексты ошибок.</p>
+            <ul>
+                <li>Идентификатор – обязательное поле</li>
+                <li>Наименование – обязательное поле</li>
+                <li>Дата – обязательное поле</li>
+                <li>Количество – обязательное поле</li>
+            </ul>
+            <p>По щелчку на кнопку «Сохранение» происходит попытка создать запись. По щелчку на кнопку «К списку» происходит перенаправление на экран «Список записей».</p>
+            
+            <h3>Модуль поиска</h3>
+            <p>На данном экране пользователь может выполнить поиск по записям. Результат поиска выводится на текущую страницу в виде блока с описанием. По щелчку на кнопку «Найти» происходит поиск.</p>
+            
+            <h3>Модуль «Добавление изображения»</h3>
+            <p>На данном экране пользователь может загрузить изображение. Изображение должно быть в формате JPG или PNG. После загрузки в таблицу выводится изображение и дата его загрузки в формате ГГГГ-ММ-ДД.</p>
+        </section>
+
+        <!-- Блок с адресом развертывания и отчетом -->
+        <div class="deploy-info">
+            <p style="font-weight: 600; color: var(--primary-dark); margin-bottom: 8px;">Адрес развёртывания:</p>
+            <div class="deploy-address">http://xxxxxx.beget.tech/UTP2026</div>
+            
+            <div class="report-structure">
+                <h3>Примерная структура отчёта по учебно-технологической практике:</h3>
+                <ul>
+                    <li>Введение</li>
+                    <li>1. Описание постановки задачи</li>
+                    <li>2. Структура ролей пользователей</li>
+                    <li>3. Обоснование выбора языка программирования</li>
+                    <li>4. Описание главной страницы</li>
+                    <li>5. Описание программных модулей регистрации и авторизации</li>
+                    <li>6. Описание программного модуля «Информация о товарах»</li>
+                    <li>7. Описание модуля «Добавление товаров»</li>
+                    <li>8. Описание программного модуля «Корзина»</li>
+                    <li>9. Описание программного модуля «Добавление товара в корзину»</li>
+                    <li>Заключение</li>
+                    <li>Список литературы</li>
+                </ul>
+            </div>
+            
+            <div class="report-links">
+                <a href="MetodUkaz.docx">Методические указания к выполнению примерного задания</a>
+                <a href="ReportExample.docx">Пример отчета по УТП</a>
+                <!-- Добавлен target="_blank" для открытия в новой вкладке -->
+                <a href="https://forms.yandex.ru/u/6a456920505690002ba2d17d" target="_blank">Форма добавления ссылки на проект</a>
+                <a href="RasprTem.docx">Распределение тем по студентам</a>
+            </div>
+        </div>
+
+        <!-- Цель практики -->
+        <section class="objective card">
+            <h2>Цель учебно-технологической практики</h2>
+            <p>Разработка функциональной и информационной модели предметной области и реализация программных модулей веб-сервиса на основе разработанной модели.</p>
+        </section>
+
+        <!-- Задачи -->
+        <section class="tasks card">
+            <h2>Задачи учебно-технологической практики</h2>
+            <ol class="tasks-list">
+                <li>Изучить принципы разработки и формализации предметной области в виде информационной модели.</li>
+                <li>Освоить приемы построения информационной модели предметной области.</li>
+                <li>Изучить сервисы размещения сайтов (хостинги).</li>
+                <li>Разработать программные модули для реализации функционала веб-сервиса (регистрация, авторизация, управление данными, поиск, загрузка изображений).</li>
+                <li>Реализовать взаимодействие программных модулей с базой данных для выполнения операций CRUD (создание, чтение, обновление, удаление).</li>
+            </ol>
+        </section>
+
+        <!-- Навигация по вариантам -->
+        <section class="variants">
+            <h2>Список вариантов</h2>
+            <div class="links-grid">
+                <a href="#variant1">1. Информационная система Вуза</a>
+                <a href="#variant2">2. Информационная система торговой организации</a>
+                <a href="#variant3">3. Информационная система медицинских организаций города</a>
+                <a href="#variant4">4. Информационная система автопредприятия города</a>
+                <a href="#variant5">5. Информационная система городской филармонии</a>
+                <a href="#variant6">6. Информационная система авиастроительного предприятия</a>
+                <a href="#variant7">7. Информационная система военного округа</a>
+                <a href="#variant8">8. Информационная система строительной организации</a>
+                <a href="#variant9">9. Информационная система библиотечного фонда города</a>
+                <a href="#variant10">10. Информационная система спортивных организаций города</a>
+                <a href="#variant11">11. Информационная система автомобилестроительного предприятия</a>
+                <a href="#variant12">12. Информационная система гостиничного комплекса</a>
+                <a href="#variant13">13. Информационная система магазина автозапчастей</a>
+                <a href="#variant14">14. Информационная система представительства туристической фирмы</a>
+                <a href="#variant15">15. Информационная система аптеки</a>
+                <a href="#variant16">16. Информационная система библиотеки вуза</a>
+                <a href="#variant17">17. Информационная система туристического клуба</a>
+                <a href="#variant18">18. Информационная система городской телефонной сети</a>
+                <a href="#variant19">19. Информационная система театра</a>
+                <a href="#variant20">20. Информационная система аэропорта</a>
+                <a href="#variant21">21. Информационная система зоопарка</a>
+                <a href="#variant22">22. Информационная система Госавтоинспекции</a>
+                <a href="#variant23">23. Информационная система фотоцентра</a>
+                <a href="#variant24">24. Информационная система железнодорожной пассажирской станции</a>
+                <a href="#variant25">25. Информационная система проектной организации</a>
+                <a href="#variant26">26. Информационная система малого музыкального театра</a>
+            </div>
+        </section>
+
+        <!-- Вариант 1 -->
+        <section id="variant1" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#">← Наверх</a>
+                <a href="#variant2">Вариант 2 →</a>
+            </div>
+            <div class="objective card">
+                <h2>1. Тема: Информационная система Вуза</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Студенты, организованные в группы, учатся на одном из факультетов, возглавляемом деканатом, в функции которого входит контроль за учебным процессом. В учебном процессе участвуют преподаватели кафедр, административно относящиеся к одному из факультетов. Преподаватели подразделяются на следующие категории: ассистенты, преподаватели, старшие преподаватели, доценты, профессора. Ассистенты и преподаватели могут обучаться в аспирантуре, ст. преподаватели, доценты, могут возглавлять научные темы, профессора — научные направления. Преподаватели любой из категории в свое время могли защитить кандидатскую, а доценты и профессора и докторскую диссертацию, при этом преподаватели могут занимать должности доцента и профессора только, если они имеют соответственно звания доцента и профессора.</p>
+                    <p>Учебный процесс регламентируется учебным планом, в котором указывается, какие учебные дисциплины на каких курсах и в каких семестрах читаются для студентов каждого года набора, с указанием количества часов на каждый вид занятий по дисциплине (виды занятий: лекции, семинары, лабораторные работы, консультации, курсовые работы, ИР и т.д.) и формы контроля (зачет, экзамен). Перед началом учебного семестра деканаты раздают на кафедры учебные поручения, в которых указываются какие кафедры (не обязательно относящиеся к данному факультету), какие дисциплины и для каких групп должны вести в очередном семестре. Руководствуясь ими, на кафедрах осуществляется распределение нагрузки, при этом по одной дисциплине в одной группе разные виды занятий могут вести один или несколько разных преподавателей кафедры (с учетом категории преподавателей, например, ассистент не может читать лекции, а профессор никогда не будет проводить лабораторные работы). Преподаватель может вести занятия по одной или нескольким дисциплинам для студентов как своего, так и других факультетов. Сведения о проведенных экзаменах и зачетах собираются деканатом.</p>
+                    <p>По окончании обучения студент выполняет дипломную работу, руководителем которой является преподаватель с кафедры, относящейся к тому же факультету, где обучается студент, при этом преподаватель может руководить несколькими студентами.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Students</strong> (student_id, last_name, first_name, birth_date, gender, children_count, scholarship, group_name, course)</li>
+                        <li><strong>Teachers</strong> (teacher_id, last_name, first_name, category, department, faculty_id, is_postgraduate, phd_defense_year, doctoral_defense_year, salary)</li>
+                        <li><strong>Subjects</strong> (subject_id, subject_name, course, semester, hours_lecture, hours_seminar, hours_lab, control_form)</li>
+                        <li><strong>Groups</strong> (group_id, group_name, course, faculty_id)</li>
+                        <li><strong>Faculties</strong> (faculty_id, faculty_name, dean)</li>
+                        <li><strong>TeachingAssignments</strong> (assignment_id, teacher_id, group_id, subject_id, semester, hours_count, lesson_type)</li>
+                        <li><strong>ExamResults</strong> (result_id, student_id, subject_id, teacher_id, semester, grade)</li>
+                        <li><strong>DiplomaProjects</strong> (project_id, student_id, supervisor_id, theme)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 2 -->
+        <section id="variant2" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant1">← Вариант 1</a>
+                <a href="#variant3">Вариант 3 →</a>
+            </div>
+            <div class="objective card">
+                <h2>2. Тема: Информационная система торговой организации</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Торговая организация ведет торговлю в торговых точках разных типов: универмаги, магазины, киоски, лотки и т.д.), в штате которых работают продавцы. Универмаги разделены на отдельные секции, руководимые управляющими секций и расположенные, возможно, на разных этажах здания. Как универмаги, так и магазины могут иметь несколько залов, в которых работает определенное число продавцов, универмаги, магазины, киоски могут иметь такие характеристики, как размер торговой точки, платежи за аренду, коммунальные услуги, количество прилавков и т.д. Кроме того, в универмагах и магазинах учет проданных товаров ведется персонифицированно с фиксацией имен и характеристик покупателя, чего в киосках и на лотках сделать не представляется возможным.</p>
+                    <p>Заказы поставщику составляются на основе заявок, поступающих из торговых точек. На основе заявок менеджеры торговой организации выбирают поставщика, формируют заказы, в которых перечисляются наименования товаров и заказываемое их количество, которое может отличаться от запроса из торговой точки. Если указанное наименование товара ранее не поставлялось, оно пополняет справочник номенклатуры товаров. На основе маркетинговых работ постоянно изучается рынок поставщиков, в результате чего могут появляться новые поставщики и исчезать старые. При этом одни и те же товары торговая организация может получать от разных поставщиков и, естественно, по различным ценам.</p>
+                    <p>Поступившие товары распределяются по торговым точкам и в любой момент можно получить такое распределение.</p>
+                    <p>Продавцы торговых точек ведут продажу товаров, учитывая все сделанные продажи, фиксируя номенклатуру и количество проданного товара, а продавцы универмагов и магазинов дополнительно фиксируют имена и характеристики покупателей, что позволяет вести учет покупателей и сделанных ими покупок. В процессе торговли торговые точки вправе менять цены на товары в зависимости от спроса и предложения товаров, а также по согласованию передавать товары в другую торговую точку.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Suppliers</strong> (supplier_id, name, contact_person, phone, email, address, product_type)</li>
+                        <li><strong>Products</strong> (product_id, product_name, category, unit, price)</li>
+                        <li><strong>RetailOutlets</strong> (outlet_id, name, type, address, area, halls_count, counters_count, rent, utilities)</li>
+                        <li><strong>Sellers</strong> (seller_id, last_name, first_name, position, outlet_id, salary, bonus)</li>
+                        <li><strong>Customers</strong> (customer_id, last_name, first_name, phone, email, discount_card, total_purchases)</li>
+                        <li><strong>Orders</strong> (order_id, order_number, supplier_id, order_date, status)</li>
+                        <li><strong>OrderItems</strong> (order_item_id, order_id, product_id, quantity, price)</li>
+                        <li><strong>Inventory</strong> (inventory_id, outlet_id, product_id, quantity, price)</li>
+                        <li><strong>Sales</strong> (sale_id, outlet_id, seller_id, customer_id, sale_date, total_amount)</li>
+                        <li><strong>SaleItems</strong> (sale_item_id, sale_id, product_id, quantity, price)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 3 -->
+        <section id="variant3" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant2">← Вариант 2</a>
+                <a href="#variant4">Вариант 4 →</a>
+            </div>
+            <div class="objective card">
+                <h2>3. Тема: Информационная система медицинских организаций города</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Каждая больница города состоит из одного или нескольких корпусов, в каждом из которых размещается одно или несколько отделений, специализирующихся на лечении определенной группы болезней; каждое отделение и имеет некоторое количество палат на определенное число коек. Поликлиники могут административно быть прикрепленными к больницам, а могут быть и нет. Как больницы, так и поликлиники обслуживаются врачебным (хирурги, терапевты, невропатологи, окулисты, стоматологи, рентгенологи, гинекологи и пр.) и обслуживающим персоналом (мед. сестры, санитары, уборщицы и пр.). Каждая категория врачебного персонала обладает характеристиками, присущими только специалистам этого профиля и по-разному участвует в связях: хирурги, стоматологи и гинекологи могут проводить операции, они же имеют такие характеристики, как число проведенных операций, число операций с летальным исходом; рентгенологи и стоматологи имеют коэффициент к зарплате за вредные условия труда, у рентгенологов и невропатологов более длительный отпуск. Врачи любого профиля могут иметь степень кандидата или доктора медицинских наук. Степень доктора медицинских наук дает право на присвоение звания профессора, а степень кандидата медицинских наук на присвоение звания доцента. Разрешено совместительство, так что каждый врач может работать либо в больнице, либо в поликлинике, либо и в одной больнице и в одной поликлинике. Врачи со званием доцента или профессора могут консультировать в нескольких больницах или поликлиниках.</p>
+                    <p>Лаборатории, выполняющие те или иные медицинские анализы, могут обслуживать различные больницы и поликлиники, при условии наличия договора на обслуживание с соответствующим лечебным заведением. При этом каждая лаборатория имеет один или несколько профилей: биохимические, физиологические, химические исследования.</p>
+                    <p>Пациенты амбулаторно лечатся в одной из поликлиник, и по направлению из них могут стационарно лечиться либо в больнице, к которой относится поликлиника, либо в любой другой, если специализация больницы, к которой приписана поликлиника, не позволяет провести требуемое лечение. Как в больнице, так и в поликлинике ведется персонифицированный учет пациентов, полная история их болезней, все назначения, операции и т.д. В больнице пациент имеет в каждый данный момент одного лечащего врача, в поликлинике — несколько.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Hospitals</strong> (hospital_id, name, address, phone, chief_physician, buildings_count)</li>
+                        <li><strong>Clinics</strong> (clinic_id, name, address, phone, chief_physician, attached_hospital_id)</li>
+                        <li><strong>Doctors</strong> (doctor_id, last_name, first_name, specialization, department, hospital_id, clinic_id, experience, category, academic_degree, academic_title, harmful_factor_coef, extended_vacation_days)</li>
+                        <li><strong>SupportStaff</strong> (staff_id, last_name, first_name, position, hospital_id, clinic_id, salary)</li>
+                        <li><strong>Wards</strong> (ward_id, hospital_id, department, room_number, floor, beds_count, free_beds)</li>
+                        <li><strong>Patients</strong> (patient_id, last_name, first_name, birth_date, address, phone, policy_number)</li>
+                        <li><strong>Admissions</strong> (admission_id, patient_id, hospital_id, doctor_id, ward_id, admission_date, discharge_date, diagnosis)</li>
+                        <li><strong>Appointments</strong> (appointment_id, patient_id, doctor_id, clinic_id, appointment_date, appointment_duration, diagnosis, prescription)</li>
+                        <li><strong>Operations</strong> (operation_id, patient_id, doctor_id, operation_date, operation_type, duration_hours, result, fatal_outcome)</li>
+                        <li><strong>Laboratories</strong> (laboratory_id, name, address, phone, head_name, profile)</li>
+                        <li><strong>LaboratoryContracts</strong> (contract_id, laboratory_id, hospital_id, clinic_id, contract_number, start_date, end_date)</li>
+                        <li><strong>LaboratoryAnalyses</strong> (analysis_id, laboratory_id, hospital_id, clinic_id, patient_id, analysis_date, analysis_type, result, completion_hours)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 4 -->
+        <section id="variant4" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant3">← Вариант 3</a>
+                <a href="#variant5">Вариант 5 →</a>
+            </div>
+            <div class="objective card">
+                <h2>4. Тема: Информационная система автопредприятия города</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Автопредприятие города занимается организацией пассажирских и грузовых перевозок внутри города. В ведении предприятия находится автотранспорт различного назначения: автобусы, такси, маршрутные такси, прочий легковой транспорт, грузовой транспорт, транспорт вспомогательного характера, представленный различными марками. Каждая из перечисленных категорий транспорта имеет характеристики, свойственные только этой категории: например, к характеристикам только грузового транспорта относится грузоподъемность, пассажирский транспорт характеризуется вместимостью и т.д. С течением времени, с одной стороны, транспорт стареет и списывается (возможно, продается), а с другой, — предприятие пополняется новым автотранспортом.</p>
+                    <p>Предприятие имеет штат водителей, закрепленных за автомобилями (за одним автомобилем может быть закреплено более одного водителя). Обслуживающий персонал (техники, сварщики, слесари, сборщики и др.) занимается техническим обслуживанием автомобильной техники, при этом различные вышеперечисленные категории также могут иметь уникальные для данной категории атрибуты. Обслуживающий персонал и водители объединяется в бригады, которыми руководят бригадиры, далее следуют мастера, затем начальники участков и цехов. В ведении предприятия находятся объекты гаражного хозяйства (цеха, гаражи, боксы и пр.), где содержится и ремонтируется автомобильная техника.</p>
+                    <p>Пассажирский автотранспорт (автобусы, маршрутные такси) перевозит пассажиров по определенным маршрутам, за каждым из них закреплены отдельные единицы автотранспорта. Ведется учет числа перевозимых пассажиров, на основании чего производится перераспределением транспорта с одного маршрута на другой. Учитывается также пробег, число ремонтов и затраты на ремонт по всему автотранспорту, объем грузоперевозок для грузового транспорта, интенсивность использования транспорта вспомогательного назначения. Учитывается интенсивность работы бригад по ремонту (число ремонтов, объем выполненных работ), число замененных и отремонтированных узлов и агрегатов (двигателей, КП, мосты, шасси и т.д.) по каждой автомашине, и суммарно по участку, цеху, предприятию.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Vehicles</strong> (vehicle_id, license_plate, brand, model, year, category, capacity, load_capacity, status, mileage, garage_id, writeoff_date, writeoff_reason, sale_price)</li>
+                        <li><strong>Drivers</strong> (driver_id, last_name, first_name, experience_years, license_category, medical_certificate_date)</li>
+                        <li><strong>DriverVehicle</strong> (assignment_id, driver_id, vehicle_id, assignment_date, end_date)</li>
+                        <li><strong>Workers</strong> (worker_id, last_name, first_name, position, qualification, brigade_id, foreman_id, master_id, supervisor_id, hire_date)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_name, brigadier_id)</li>
+                        <li><strong>Garages</strong> (garage_id, name, address, capacity, area, garage_type)</li>
+                        <li><strong>Routes</strong> (route_id, route_number, route_name, length_km, start_point, end_point)</li>
+                        <li><strong>RouteVehicles</strong> (assignment_id, route_id, vehicle_id, assignment_date)</li>
+                        <li><strong>Trips</strong> (trip_id, vehicle_id, driver_id, route_id, trip_date, passengers_in, passengers_out, distance_km, fuel_consumption)</li>
+                        <li><strong>MileageLog</strong> (log_id, vehicle_id, log_date, daily_mileage)</li>
+                        <li><strong>Repairs</strong> (repair_id, vehicle_id, worker_id, repair_date, repair_type, description, labor_hours, cost)</li>
+                        <li><strong>Units</strong> (unit_id, unit_name, unit_type, description)</li>
+                        <li><strong>RepairUnits</strong> (repair_unit_id, repair_id, unit_id, quantity, price)</li>
+                        <li><strong>CargoTransportations</strong> (cargo_id, vehicle_id, driver_id, cargo_date, route_from, route_to, cargo_type, weight_tons, distance_km)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 5 -->
+        <section id="variant5" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant4">← Вариант 4</a>
+                <a href="#variant6">Вариант 6 →</a>
+            </div>
+            <div class="objective card">
+                <h2>5. Тема: Информационная система городской филармонии</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Инфраструктура городской филармонии представлена культурными сооружениями различного типа: театры, концертные площадки, эстрады, дворцы культуры и т.д. Каждая из категорий культурных сооружений обладает атрибутами, специфичными только для нее: театр характеризуется вместимостью, кинотеатр — размером экрана.</p>
+                    <p>Артисты под руководством импресарио выступают в различных жанрах, при этом один и тот же артист может выступать в нескольких жанрах, и может работать с несколькими импресарио.</p>
+                    <p>Организаторы концертных мероприятий проводят выступления, концерты, конкурсы в культурных сооружениях города, организуя участие в нем артистов. По результатам участия артистов в конкурсах производится награждение.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>CulturalVenues</strong> (venue_id, name, venue_type, address, capacity, screen_size, has_orchestra_pit, year_built)</li>
+                        <li><strong>Artists</strong> (artist_id, last_name, first_name, stage_name, birth_date, experience_years, phone)</li>
+                        <li><strong>Genres</strong> (genre_id, genre_name, description)</li>
+                        <li><strong>ArtistGenres</strong> (artist_genre_id, artist_id, genre_id)</li>
+                        <li><strong>Impresarios</strong> (impresario_id, last_name, first_name, agency_name, phone, email, experience_years)</li>
+                        <li><strong>ArtistImpresario</strong> (contract_id, artist_id, impresario_id, contract_date, contract_number, end_date)</li>
+                        <li><strong>Organizers</strong> (organizer_id, name, contact_person, phone, email)</li>
+                        <li><strong>Events</strong> (event_id, event_name, event_type, venue_id, organizer_id, event_date, event_time, ticket_price_min, ticket_price_max, ticket_sales_count, revenue)</li>
+                        <li><strong>EventArtists</strong> (event_artist_id, event_id, artist_id, fee, performance_order)</li>
+                        <li><strong>Competitions</strong> (competition_id, competition_name, competition_date, venue_id, organizer_id)</li>
+                        <li><strong>CompetitionResults</strong> (result_id, competition_id, artist_id, prize_place, prize_amount, nomination, jury_id)</li>
+                        <li><strong>Jury</strong> (jury_id, last_name, first_name, profession, organization)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 6 -->
+        <section id="variant6" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant5">← Вариант 5</a>
+                <a href="#variant7">Вариант 7 →</a>
+            </div>
+            <div class="objective card">
+                <h2>6. Тема: Информационная система авиастроительного предприятия</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Структурно предприятие разбито на цеха, которые в свою очередь подразделяются на участки. Выпускаемые изделия предприятия — самолеты (гражданские, транспортные, военные), планеры, вертолеты, дельтапланы, ракеты (артиллерийские, авиационные, военно-морские), прочие изделия. Каждая категория изделий имеет специфические, присущие только ей атрибуты. Например, для самолетов это число двигателей, для ракеты — мощность заряда и т.д. По каждой категории изделий может собираться несколько видов изделий. Каждой категории инженерно-технического персонала (инженеры, технологи, техники) и рабочих (сборщики, токари, слесари, сварщики и пр.) также свойственны характерные только для этой группы атрибуты. Рабочие объединяется в бригады, которыми руководят бригадиры. Бригадиры выбираются из числа рабочих, мастера, начальники участков и цехов назначаются из числа инженерно-технического персонала.</p>
+                    <p>Каждое изделие собирается в своем цехе (в цехе может собираться несколько видов изделий) и в процессе изготовления проходит определенный цикл работ, перемещаясь с одного участка на другой. Все работы по сборке конкретного изделия на определенном участке выполняет одна бригада рабочих, при этом на участке может работать несколько бригад. Возглавляет работу на участке начальник участка, в подчинении которого находится несколько мастеров. Различные изделия могут проходить одни и те же циклы работ на одних и тех же участках цеха.</p>
+                    <p>Собранное изделие проходит серию испытаний в испытательных лабораториях (полигонах). Испытательные лаборатории могут обслуживать несколько цехов, в свою очередь цеха пользуются, возможно, несколькими испытательными лабораториями. Испытания проводятся испытателями на оборудовании испытательной лаборатории, при этом при испытании конкретного изделия в лаборатории могут быть задействованы различные виды оборудования.</p>
+                    <p>Ведется учет движения кадров и учет выпускаемой продукции.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Workshops</strong> (workshop_id, workshop_number, workshop_name, head_id, phone)</li>
+                        <li><strong>ProductionSites</strong> (site_id, site_name, site_number, workshop_id, head_id, description)</li>
+                        <li><strong>ProductTypes</strong> (product_type_id, category, product_type_name, description)</li>
+                        <li><strong>Products</strong> (product_id, product_name, model, serial_number, product_type_id, workshop_id, assembly_date, engine_count, wingspan, max_speed, warhead_power)</li>
+                        <li><strong>Personnel</strong> (personnel_id, last_name, first_name, position, position_type, qualification, experience_years, education, workshop_id, site_id, brigade_id, phone, hire_date)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_name, site_id, foreman_id, specialization)</li>
+                        <li><strong>WorkTypes</strong> (work_type_id, work_name, work_description, category)</li>
+                        <li><strong>ProductWorkflow</strong> (workflow_id, product_id, work_type_id, site_id, brigade_id, work_order, planned_hours, actual_hours, start_date, end_date)</li>
+                        <li><strong>TestLabs</strong> (lab_id, lab_name, lab_type, location, head_name, phone)</li>
+                        <li><strong>TestItems</strong> (test_id, product_id, lab_id, tester_id, test_date, test_name, result, temperature_conditions, pressure_conditions)</li>
+                        <li><strong>TestEquipment</strong> (equipment_id, test_id, equipment_name, equipment_type, model, inventory_number, calibration_date, accuracy_class)</li>
+                        <li><strong>LabWorkshopRelations</strong> (relation_id, lab_id, workshop_id, contract_number, start_date, end_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 7 -->
+        <section id="variant7" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant6">← Вариант 6</a>
+                <a href="#variant8">Вариант 8 →</a>
+            </div>
+            <div class="objective card">
+                <h2>7. Тема: Информационная система военного округа</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Военные части округа расквартированы по различным местам дислокации, причем в одном месте могут располагаться несколько частей. Каждая воинская часть состоит из рот, роты из взводов, взводы из отделений, в свою очередь воинские части объединяются в дивизии, корпуса или бригады, а те в армии. Военный округ представлен офицерским составом (генералы, полковники, подполковники, майоры, капитаны, лейтенанты) и рядовым и сержантским составом (старшины, сержанты, прапорщики, ефрейторы, рядовые). Каждая из перечисленных категорий военнослужащих может иметь характеристики, присущие только этой категории: для генералов это может быть дата окончания академии, дата присвоения генеральского звания и т.д. Каждое из подразделений имеет командира, причем военнослужащие офицерского состава могут командовать любым из вышеперечисленных подразделений, а военнослужащие рядового и сержантского состава только взводом и отделением. Все военнослужащие имеют одну или несколько воинских специальностей.</p>
+                    <p>Каждой воинской части придана боевая и транспортная техника: БМП, тягачи, автотранспорт и пр. и вооружение: карабины, автоматическое оружие, артиллерия, ракетное вооружение и т.д. Каждая из перечисленных категорий боевой техники и вооружения также имеет специфические, присущие только ей атрибуты и по каждой категории может быть несколько видов техники и вооружения. Инфраструктура военной части представлена набором сооружений (сооружение №1, сооружение №2 . . .), некоторые, из которых предназначены для дислокации подразделений части.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>MilitaryDistrict</strong> (district_id, district_name, headquarters, commander_id)</li>
+                        <li><strong>Armies</strong> (army_id, army_name, army_number, headquarters_location, commander_id, district_id)</li>
+                        <li><strong>Divisions</strong> (division_id, division_name, division_number, army_id, commander_id)</li>
+                        <li><strong>Corps</strong> (corps_id, corps_name, corps_number, army_id, commander_id)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_name, brigade_number, division_id, corps_id, commander_id)</li>
+                        <li><strong>MilitaryUnits</strong> (unit_id, unit_name, unit_number, unit_type, army_id, division_id, corps_id, brigade_id, location_id, commander_id)</li>
+                        <li><strong>Units</strong> (unit_id, unit_name, unit_type, parent_unit_id, commander_id) -- для рот, взводов, отделений</li>
+                        <li><strong>Locations</strong> (location_id, location, address, garrison, coordinates)</li>
+                        <li><strong>Personnel</strong> (personnel_id, last_name, first_name, middle_name, rank, rank_category, position, unit_id, military_specialty, years_of_service, conscription_date, academy_graduation_date, academy_name, rank_assignment_date)</li>
+                        <li><strong>MilitarySpecialties</strong> (specialty_id, specialty_code, specialty_name, description)</li>
+                        <li><strong>PersonnelSpecialties</strong> (personnel_specialty_id, personnel_id, specialty_id, qualification_date)</li>
+                        <li><strong>Equipment</strong> (equipment_id, equipment_type, equipment_name, model, characteristics)</li>
+                        <li><strong>UnitEquipment</strong> (unit_equipment_id, unit_id, equipment_id, quantity, status, technical_condition)</li>
+                        <li><strong>Weapons</strong> (weapon_id, weapon_category, weapon_type, weapon_name, caliber, range, ammunition_type)</li>
+                        <li><strong>UnitWeapons</strong> (unit_weapon_id, unit_id, weapon_id, quantity, ammunition_count, technical_condition)</li>
+                        <li><strong>Buildings</strong> (building_id, unit_id, building_name, building_number, building_type, construction_year, capacity)</li>
+                        <li><strong>UnitBuildings</strong> (unit_building_id, building_id, unit_id, assignment_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 8 -->
+        <section id="variant8" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant7">← Вариант 7</a>
+                <a href="#variant9">Вариант 9 →</a>
+            </div>
+            <div class="objective card">
+                <h2>8. Тема: Информационная система строительной организации</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Строительная организация занимается строительством различного рода объектов: жилых домов, больниц, школ, мостов, дорог и т.д. по договорам с заказчиками (городская администрация, ведомства, частные фирмы и т.д.). Каждая из перечисленных категорий объектов имеет характеристики, свойственные только этой или нескольким категориям: например, к характеристикам жилых домов относится этажность, тип строительного материала, число квартир, для мостов уникальными характеристиками являются тип пролетного строения, ширина, количество полос для движения.</p>
+                    <p>Структурно строительная организация состоит из строительных управлений, каждое строительное управление ведет работы на одном или нескольких участках, возглавляемых начальниками участков, которым подчиняется группа прорабов, мастеров и техников. Каждой категории инженерно-технического персонала (инженеры, технологи, техники) и рабочих (каменщики, бетонщики, отделочники, сварщики, электрики, шофера, слесари, и пр.) также свойственны характерные только для этой группы атрибуты. Рабочие объединяется в бригады, которыми руководят бригадиры. Бригадиры выбираются из числа рабочих, мастера, прорабы, начальники участков и управлений назначаются из числа инженерно-технического персонала.</p>
+                    <p>На каждом участке возводится один или несколько объектов, на каждом объекте работу ведут одна или несколько бригад. Закончив работу, бригада переходит к другому объекту на этом или другом участке. Строительному управлению придается строительная техника (подъемные краны, экскаваторы, бульдозеры и т.д.), которая распределяется по объектам.</p>
+                    <p>Технология строительства того или иного объекта предполагает выполнение определенного набора видов работ, необходимых для сооружения данного типа объекта. Например, для жилого дома — это возведение фундамента, кирпичные работы, прокладка водоснабжения и т.д. Каждый вид работ на объекте выполняется одной бригадой. Для организации работ на объекте составляется графики работ, указывающие в каком порядке и в какие сроки выполняются те или иные работы, а также смета, определяющая какие строительные материалы и в каких количествах необходимы для сооружения объекта. По результатам выполнения работ составляется отчет с указанием сроков выполнения работ и фактических расходов материалов.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>ConstructionDepartments</strong> (management_id, management_name, management_number, address, phone, head_id)</li>
+                        <li><strong>ConstructionSites</strong> (site_id, site_name, site_number, management_id, head_id, address)</li>
+                        <li><strong>Personnel</strong> (personnel_id, last_name, first_name, middle_name, position, personnel_type, specialization, qualification, experience_years, education, site_id, brigade_id, phone, hire_date)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_name, brigade_number, site_id, foreman_id, specialization)</li>
+                        <li><strong>ConstructionObjects</strong> (object_id, object_name, object_type, address, site_id, start_date, planned_end_date, actual_end_date, status, floors_count, apartments_count, building_material, bridge_type, span_type, width, lanes_count, contract_amount, customer)</li>
+                        <li><strong>WorkTypes</strong> (work_type_id, work_name, work_category, work_description)</li>
+                        <li><strong>WorkSchedule</strong> (work_schedule_id, object_id, work_type_id, brigade_id, planned_start_date, planned_end_date, planned_duration_days, actual_start_date, actual_end_date, actual_duration_days, status)</li>
+                        <li><strong>Materials</strong> (material_id, material_name, material_type, unit, description)</li>
+                        <li><strong>EstimateMaterials</strong> (estimate_id, object_id, material_id, planned_quantity, planned_price_per_unit, actual_quantity, actual_price_per_unit, supplier, delivery_date)</li>
+                        <li><strong>Equipment</strong> (equipment_id, equipment_name, equipment_type, model, manufacturer, year_manufactured, inventory_number, management_id, site_id, object_id, technical_condition)</li>
+                        <li><strong>ObjectEquipment</strong> (object_equipment_id, object_id, equipment_id, operator_id, start_date, end_date)</li>
+                        <li><strong>ObjectBrigades</strong> (object_brigade_id, object_id, brigade_id, start_date, end_date)</li>
+                        <li><strong>Customers</strong> (customer_id, customer_name, customer_type, contact_person, phone, address)</li>
+                        <li><strong>Contracts</strong> (contract_id, object_id, customer_id, contract_number, contract_date, contract_amount, start_date, end_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 9 -->
+        <section id="variant9" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant8">← Вариант 8</a>
+                <a href="#variant10">Вариант 10 →</a>
+            </div>
+            <div class="objective card">
+                <h2>9. Тема: Информационная система библиотечного фонда города</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Библиотечный фонд города составляют библиотеки, расположенные на территории города. Каждая библиотека включает в себя абонементы и читальные залы. Пользователями библиотек являются различные категории читателей: студенты, научные работники, преподаватели, школьники, рабочие, пенсионеры и другие жители города. Каждая категория читателей может обладать непересекающимися характеристиками-атрибутами: для студентов это название учебного заведения, факультет, курс, номер группы, для научного работника — название организации, научная тема и т.д. Каждый читатель, будучи зарегистрированным, в одной из библиотек, имеет доступ ко всему библиотечному фонду города.</p>
+                    <p>Библиотечный фонд (книги, журналы, газеты, сборники статей, сборники стихов, диссертации, рефераты, сборники докладов и тезисов докладов и пр.) размещен в залах-хранилищах различных библиотек на определенных местах хранения (номер зала, стеллажа, полки) и идентифицируется номенклатурными номерами. При этом существуют различные правила относительно тех или иных изданий: какие-то подлежат только чтению в читальных залах библиотек, для тех, что выдаются, может быть установлен различный срок выдачи и т.д. С одной стороны, библиотечный фонд может пополняться, с другой, — с течением времени происходит его списание.</p>
+                    <p>Произведения авторов, составляющие библиотечный фонд, также можно разделить на различные категории, характеризующиеся собственным набором атрибутов: учебники, повести, романы, статьи, стихи, диссертации, рефераты, тезисы докладов и т.д.</p>
+                    <p>Сотрудники библиотеки, работающие в различных залах различных библиотек, ведут учет читателей, а также учет размещения и выдачи литературы.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Libraries</strong> (library_id, name, address, phone, foundation_year)</li>
+                        <li><strong>ReadingRooms</strong> (room_id, library_id, room_number, room_name, room_type, capacity)</li>
+                        <li><strong>Shelves</strong> (shelf_id, library_id, hall_number, shelf_number, shelf_name, section)</li>
+                        <li><strong>Authors</strong> (author_id, last_name, first_name, middle_name, birth_date, death_date, biography)</li>
+                        <li><strong>Works</strong> (work_id, title, work_type, original_language, year_written, description)</li>
+                        <li><strong>Books</strong> (book_id, work_id, title, publication_year, publisher, isbn, pages, language)</li>
+                        <li><strong>BookAuthors</strong> (book_author_id, book_id, author_id, author_order)</li>
+                        <li><strong>Magazines</strong> (publication_id, title, publisher, issn, frequency)</li>
+                        <li><strong>MagazineIssues</strong> (issue_id, publication_id, issue_number, year, month, pages)</li>
+                        <li><strong>BookItems</strong> (book_item_id, book_id, library_id, shelf_id, inventory_number, acquisition_date, price, condition, status)</li>
+                        <li><strong>Readers</strong> (reader_id, last_name, first_name, middle_name, category, home_library_id, registration_date, phone, email, address)</li>
+                        <li><strong>Students</strong> (reader_id, university, faculty, course, group_number, student_id_number)</li>
+                        <li><strong>Researchers</strong> (reader_id, organization, research_topic, position, degree)</li>
+                        <li><strong>Librarians</strong> (librarian_id, last_name, first_name, middle_name, library_id, position, qualification, phone, email)</li>
+                        <li><strong>LibraryRooms</strong> (library_room_id, librarian_id, room_id, assignment_date)</li>
+                        <li><strong>Loans</strong> (loan_id, book_item_id, reader_id, librarian_id, issue_date, due_date, return_date, notes)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 10 -->
+        <section id="variant10" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant9">← Вариант 9</a>
+                <a href="#variant11">Вариант 11 →</a>
+            </div>
+            <div class="objective card">
+                <h2>10. Тема: Информационная система спортивных организаций города</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Спортивная инфраструктура города представлена спортивными сооружениями различного типа: спортивные залы, манежи, стадионы, корты и т.д. Каждая из категорий спортивных сооружений обладает атрибутами, специфичными только для нее: стадион характеризуется вместимостью, корт — типом покрытия.</p>
+                    <p>Спортсмены под руководством тренеров занимаются отдельными видами спорта, при этом один и тот же спортсмен может заниматься несколькими видами спорта, и в рамках одного и того же вида спорта может тренироваться у нескольких тренеров. Все спортсмены объединяются в спортивные клубы, при этом каждый из них может выступать только за один клуб.</p>
+                    <p>Организаторы соревнований проводят состязания по отдельным видам спорта на спортивных сооружениях города. По результатам участия спортсменов в соревнованиях производится награждение.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>SportsFacilities</strong> (facility_id, name, facility_type, address, capacity, field_type, year_built, has_track, has_lighting, contact_phone)</li>
+                        <li><strong>SportsClubs</strong> (club_id, club_name, city, founded_year, president, phone, email)</li>
+                        <li><strong>Sports</strong> (sport_id, sport_name, sport_category, description, olympic_sport)</li>
+                        <li><strong>Athletes</strong> (athlete_id, last_name, first_name, middle_name, birth_date, rank, achievements, club_id, phone, email)</li>
+                        <li><strong>Trainers</strong> (trainer_id, last_name, first_name, middle_name, qualification, experience_years, achievements, club_id, phone, email)</li>
+                        <li><strong>AthleteSports</strong> (athlete_sport_id, athlete_id, sport_id, start_date, personal_best)</li>
+                        <li><strong>AthleteTrainers</strong> (athlete_trainer_id, athlete_id, trainer_id, sport_id, start_date, end_date)</li>
+                        <li><strong>Organizers</strong> (organizer_id, name, contact_person, phone, email, address)</li>
+                        <li><strong>Competitions</strong> (competition_id, competition_name, sport_id, facility_id, organizer_id, competition_date, competition_level, participants_count, description)</li>
+                        <li><strong>Results</strong> (result_id, competition_id, athlete_id, place, result_value, result_unit, medal, record_status)</li>
+                        <li><strong>Teams</strong> (team_id, team_name, sport_id, club_id, coach_id)</li>
+                        <li><strong>TeamCompetitions</strong> (team_competition_id, competition_id, team_id, place, result)</li>
+                        <li><strong>TeamMembers</strong> (team_member_id, team_id, athlete_id, role, start_date, end_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 11 -->
+        <section id="variant11" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant10">← Вариант 10</a>
+                <a href="#variant12">Вариант 12 →</a>
+            </div>
+            <div class="objective card">
+                <h2>11. Тема: Информационная система автомобилестроительного предприятия</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Структурно предприятие состоит из цехов, которые в свою очередь подразделяются на участки. Выпускаемые изделия предприятия: грузовые, легковые автомобили, автобусы, сельскохозяйственные, дорожно-строительные машины, мотоциклы и прочие изделия. Каждая категория изделий имеет специфические, присущие только ей атрибуты. Например, для автобусов это вместимость, для сельскохозяйственных и дорожно-строительных машин — производительность и т.д. По каждой категории изделий может собираться несколько видов изделий. Каждой категории инженерно-технического персонала (инженеры, технологи, техники) и рабочих (сборщики, токари, слесари, сварщики и пр.) также характерны атрибуты, свойственные только для этой группы. Рабочие объединяется в бригады, которыми руководят бригадиры. Бригадиры выбираются из числа рабочих; мастера, начальники участков и цехов назначаются из числа инженерно-технического персонала.</p>
+                    <p>Каждое изделие собирается в своем цехе (в цехе может собираться несколько видов изделий) и в процессе изготовления проходит определенный цикл работ, перемещаясь с одного участка на другой. Все работы по сборке конкретного изделия на определенном участке выполняет одна бригада рабочих, при этом на участке может работать несколько бригад. Возглавляет работу на участке начальник участка, в подчинении которого находится несколько мастеров. Различные изделия могут проходить одни и те же циклы работ на одних и тех же участках цеха.</p>
+                    <p>Собранное изделие проходит серию испытаний в испытательных лабораториях. Испытательные лаборатории могут обслуживать несколько цехов, в свою очередь цеха могут пользоваться несколькими лабораториями. Испытания проводятся специалистами на оборудовании испытательной лаборатории, при этом при испытании конкретного изделия в лаборатории могут быть задействованы различные виды оборудования.</p>
+                    <p>Ведется учет движения кадров и учет выпускаемой продукции.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Workshops</strong> (workshop_id, workshop_name, workshop_number, head_id, phone)</li>
+                        <li><strong>ProductionSites</strong> (site_id, site_name, site_number, workshop_id, head_id, description)</li>
+                        <li><strong>ProductTypes</strong> (product_type_id, category, product_type_name, description)</li>
+                        <li><strong>Products</strong> (product_id, product_name, model, serial_number, product_type_id, workshop_id, assembly_date, engine_power, fuel_type, body_type, capacity, productivity, length, width, height)</li>
+                        <li><strong>Personnel</strong> (personnel_id, last_name, first_name, middle_name, position, personnel_type, qualification, experience_years, education, workshop_id, site_id, brigade_id, phone, hire_date)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_name, site_id, foreman_id, specialization)</li>
+                        <li><strong>WorkTypes</strong> (work_type_id, work_name, work_description, work_category, standard_hours)</li>
+                        <li><strong>WorkStages</strong> (work_stage_id, product_id, work_type_id, site_id, brigade_id, work_order, planned_hours, actual_hours, start_date, end_date)</li>
+                        <li><strong>TestLabs</strong> (lab_id, lab_name, lab_type, location, head_name, phone, accreditation)</li>
+                        <li><strong>TestItems</strong> (test_id, product_id, lab_id, tester_id, test_date, test_name, result, test_duration_hours, cycles_completed, temperature_conditions)</li>
+                        <li><strong>TestEquipment</strong> (equipment_id, test_id, equipment_name, equipment_type, model, manufacturer, inventory_number, calibration_date, accuracy_class)</li>
+                        <li><strong>LabWorkshopRelations</strong> (relation_id, lab_id, workshop_id, contract_number, start_date, end_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 12 -->
+        <section id="variant12" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant11">← Вариант 11</a>
+                <a href="#variant13">Вариант 13 →</a>
+            </div>
+            <div class="objective card">
+                <h2>12. Тема: Информационная система гостиничного комплекса</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Гостиничный комплекс состоит из нескольких зданий-гостиниц (корпусов). Каждый корпус имеет ряд характеристик, таких, как класс отеля (двух-, пятизвездочные), количество этажей в здании, общее количество комнат, комнат на этаже, местность номеров (одно-, двух-, трехместные и т.д.), наличие служб быта: ежедневная уборка номера, прачечная, химчистка, питание (рестораны, бары) и развлечения (бассейн, сауна, бильярд и пр.). От типа корпуса и местности номера зависит сумма оплаты за него. Химчистка, стирка, дополнительное питание, все развлечения производятся за отдельную плату.</p>
+                    <p>С крупными организациями (туристические фирмы, организации, занимающиеся проведением международных симпозиумов, конгрессов, семинаров, карнавалов и т.д.) заключаются договора, позволяющие организациям бронировать номера с большими скидками на определенное время вперед не для одного человека, а для группы людей. Каждая из перечисленных групп организаций обладает характеристиками, свойственными только этой группе. Желательно группы людей от одной организации не расселять по разным этажам. В брони указывается класс отеля, этаж, количество комнат и общее количество людей. Броня может быть отменена за неделю до заселения. На основе маркетинговых работ расширяется рынок гостиничных услуг, в результате чего заключаются договора с новыми фирмами. Также исследуется мнение жильцов о ценах и сервисе. Жалобы фиксируются и исследуются. Изучается статистика популярности номеров. Ведется учет долгов постояльца гостинице за все дополнительные услуги.</p>
+                    <p>Новые жильцы пополняют перечень клиентов гостиницы. Ведется учет свободных номеров, дополнительных затрат постояльцев гостиницы и учет расходов и доходов гостиничного комплекса.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Buildings</strong> (building_id, building_name, stars, floors_count, total_rooms, rooms_per_floor, address, phone, has_restaurant, has_bar, has_pool, has_sauna, has_billiard, has_laundry, has_dry_cleaning)</li>
+                        <li><strong>Rooms</strong> (room_id, building_id, room_number, floor, capacity, room_class, area, price_per_night, view_type, facilities, status)</li>
+                        <li><strong>Guests</strong> (guest_id, last_name, first_name, middle_name, passport_number, country, city, address, phone, email, registration_date)</li>
+                        <li><strong>Companies</strong> (company_id, company_name, company_type, contact_person, phone, email, address, discount_percent)</li>
+                        <li><strong>Contracts</strong> (contract_id, company_id, contract_number, contract_date, valid_from, valid_to, discount_percent, special_terms)</li>
+                        <li><strong>Bookings</strong> (booking_id, company_id, building_name, preferred_floor, rooms_count, persons_count, booking_date, check_in_date, check_out_date, discount_percent, status, cancellation_date)</li>
+                        <li><strong>Stays</strong> (stay_id, guest_id, room_id, booking_id, check_in_date, check_out_date, total_amount, payment_status)</li>
+                        <li><strong>ServiceCatalog</strong> (service_id, service_name, service_type, price, unit)</li>
+                        <li><strong>AdditionalServices</strong> (usage_id, stay_id, service_id, usage_date, quantity, price, total_amount, payment_status)</li>
+                        <li><strong>Complaints</strong> (complaint_id, guest_id, stay_id, room_id, complaint_date, complaint_type, description, severity, resolution_status, resolution_date, handled_by)</li>
+                        <li><strong>Staff</strong> (staff_id, last_name, first_name, middle_name, position, building_id, phone, email)</li>
+                        <li><strong>Payments</strong> (payment_id, stay_id, payment_date, amount, payment_method, transaction_id)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 13 -->
+        <section id="variant13" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant12">← Вариант 12</a>
+                <a href="#variant14">Вариант 14 →</a>
+            </div>
+            <div class="objective card">
+                <h2>13. Тема: Информационная система магазина автозапчастей</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Магазин розничной торговли осуществляет заказ запчастей в различных странах. Ведется статистика продаж, отражающая спрос на те или иные детали, и, соответственно, потребность магазина в них (сколько единиц, на какую сумму, какого товара продано за последнее время) и на ее основе составляются заказы на требуемые товары. Выбор поставщика на каждый конкретный заказ осуществляют менеджеры магазина. В заказах перечисляется наименование товара, количество. Если указанное наименование товара ранее не поставлялось, оно пополняет справочник номенклатуры товаров.</p>
+                    <p>Поставщики бывают различных категорий: фирмы, непосредственно производящие детали, дилеры, небольшие производства, мелкие поставщики и магазины. В результате поставщики различных категорий имеют различающийся набор атрибутов. Фирмы и дилеры — это самые надежные партнеры, они могут предложить полный пакет документов, скидки, а главное — гарантию, чего не может сделать небольшое производство или мелкий магазин. У них же (фирмы и дилеры) закупается большой объем продукции. Небольшое производство — это низкие цены, но никакой гарантии качества. В мелких лавках можно выгодно купить небольшое количество простых деталей, на которых сразу виден брак. Фирмы и дилеры поставляют детали на основе договоров, чего не делается для небольшого производства и мелкого магазина. В ходе маркетинговых работ изучается рынок поставщиков, в результате чего могут появляться новые поставщики и исчезать старые.</p>
+                    <p>Когда ожидаются новые поставки, магазин собирает заявки от покупателей на свои товары. Груз приходит, производится его таможенное оформление, оплата пошлин, после чего он доставляется на склад в магазин. В первую очередь удовлетворяются заявки покупателей, а оставшийся товар продается в розницу.</p>
+                    <p>В любой момент можно получить любую информацию о деталях, находящихся на складе, либо о поставляемых деталях. Детали хранятся на складе в определенных ячейках. Все ячейки пронумерованы. Касса занимается приемом денег от покупателей за товар, а так же производит возврат денег за брак. Брак, если это, возможно, возвращается поставщику, который производит замену бракованной детали. Информация о браке (поставщик, фирма-производитель, деталь) фиксируется.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Products</strong> (product_id, product_name, part_number, manufacturer, car_brand, car_model, year_from, year_to, category, purchase_price, selling_price)</li>
+                        <li><strong>Suppliers</strong> (supplier_id, supplier_name, supplier_type, country, contact_person, phone, email, address, rating, warranty_provided, contract_required)</li>
+                        <li><strong>SupplierProducts</strong> (supplier_product_id, supplier_id, product_id, price, delivery_time_days, min_order_quantity, discount_percent)</li>
+                        <li><strong>Contracts</strong> (contract_id, supplier_id, contract_number, contract_date, valid_from, valid_to, terms)</li>
+                        <li><strong>Orders</strong> (order_id, supplier_id, order_date, expected_date, received_date, total_cost, status, payment_status)</li>
+                        <li><strong>OrderItems</strong> (order_item_id, order_id, product_id, quantity, price_per_unit, total_amount)</li>
+                        <li><strong>WarehouseCells</strong> (cell_id, cell_number, warehouse_section, capacity, current_occupancy)</li>
+                        <li><strong>Inventory</strong> (inventory_id, product_id, cell_id, quantity, arrival_date, expiry_date, last_count_date, counted_quantity)</li>
+                        <li><strong>Customers</strong> (customer_id, last_name, first_name, middle_name, phone, email, car_brand, car_model, registration_date)</li>
+                        <li><strong>PreOrders</strong> (preorder_id, customer_id, product_id, quantity, requested_date, expected_arrival, status)</li>
+                        <li><strong>Staff</strong> (staff_id, last_name, first_name, middle_name, position, phone, hire_date)</li>
+                        <li><strong>Sales</strong> (sale_id, product_id, customer_id, cashier_id, sale_date, sale_time, quantity, price_per_unit, total_amount, payment_method)</li>
+                        <li><strong>Defects</strong> (defect_id, product_id, supplier_id, defect_date, defect_type, description, quantity, purchase_price, total_loss, returned_to_supplier, replacement_received)</li>
+                        <li><strong>OperatingExpenses</strong> (expense_id, expense_date, expense_type, amount, description)</li>
+                        <li><strong>CustomsClearance</strong> (clearance_id, order_id, clearance_date, duty_amount, broker, clearance_status)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 14 -->
+        <section id="variant14" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant13">← Вариант 13</a>
+                <a href="#variant15">Вариант 15 →</a>
+            </div>
+            <div class="objective card">
+                <h2>14. Тема: Информационная система представительства туристической фирмы в зарубежной стране</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Туристическая фирма в России формирует группу туристов и данные на каждого туриста (ФИО, паспортные данные, пол, возраст, дети, в какой гостинице хотят жить) отправляют в представительство. Представительство на основе этих данных заполняет на каждого пакет документов для получения визы, в отделе эмиграции получает визы, готовит списки расселения по разным гостиницам и бронирует номера в этих гостиницах.</p>
+                    <p>Представительство занимается приемом туристов в аэропорту, решает проблемы, связанные с визами и таможней, расселяет группу по гостиницам. Представительство предлагает расписание экскурсий и производит запись на определенные экскурсии. Составляется список: кто, на какие экскурсии едет и передается в агентство организации экскурсий.</p>
+                    <p>Туристическая группа делится на туристов, которые едут отдохнуть (они больше интересуются экскурсиями и не интересуются складом), на туристов, которые едут за грузом (они интересуются складом и не будут интересоваться экскурсиями) и их детей. Дети не могут получить визу, сами переселиться, и никуда ходить без сопровождения родителей. Каждая категория туристов имеет специфические характеристики.</p>
+                    <p>В функциональные обязанности представительства входит также: хранение и отправка груза туристов. На складе заводится на каждого туриста весовая ведомость, проводится маркировка, взвешивание, упаковка груза. Для отправки груза составляется ведомость на каждого туриста, в ней указывается: количество мест, вес, стоимость упаковки, страховки, итоговая сумма.</p>
+                    <p>Предоставление полного финансового отчета в головную фирму. Все статьи расхода и дохода — гостиница, перевозки, экскурсии, непредвиденные расходы, расчеты в аэропорту (загрузка самолета, разгрузка, взлет-посадка, диспетчерские услуги, хранение груза) переносятся в финансовый отчет.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>TouristGroups</strong> (group_id, group_code, arrival_date, departure_date, agent_name)</li>
+                        <li><strong>Flights</strong> (flight_id, flight_number, airline, aircraft_type, departure_city, arrival_city, departure_date, departure_time, arrival_date, arrival_time, passenger_capacity)</li>
+                        <li><strong>Tourists</strong> (tourist_id, last_name, first_name, passport_number, nationality, birth_date, category, has_children, children_count, group_id, flight_id, arrival_confirmed, visa_number, visa_issue_date, visa_expiry_date)</li>
+                        <li><strong>Hotels</strong> (hotel_id, hotel_name, hotel_class, address, phone, contact_person)</li>
+                        <li><strong>Accommodation</strong> (accommodation_id, tourist_id, hotel_id, room_number, check_in_date, check_out_date, room_type, meal_plan)</li>
+                        <li><strong>Excursions</strong> (excursion_id, excursion_name, city, duration_hours, price_per_person, agency_name, agency_phone)</li>
+                        <li><strong>ExcursionBookings</strong> (booking_id, tourist_id, excursion_id, booking_date, excursion_date, persons_count, total_price)</li>
+                        <li><strong>ExcursionReviews</strong> (review_id, excursion_id, tourist_id, rating, comment, review_date)</li>
+                        <li><strong>CargoManifests</strong> (manifest_id, tourist_id, manifest_number, arrival_flight_id, departure_flight_id, pieces_count, weight_kg, volume_weight, cargo_type, packaging_cost, insurance_cost, total_amount, storage_location, storage_date, shipment_date, marks)</li>
+                        <li><strong>Payments</strong> (payment_id, tourist_id, payment_date, amount, payment_type, description)</li>
+                        <li><strong>Expenses</strong> (expense_id, group_id, expense_date, expense_category, amount, description, receipt_number)</li>
+                        <li><strong>AirportServices</strong> (service_id, flight_id, service_date, service_type, cost, provider)</li>
+                        <li><strong>VisaApplications</strong> (visa_id, tourist_id, application_date, visa_type, status, fee, issue_date, expiry_date)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 15 -->
+        <section id="variant15" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant14">← Вариант 14</a>
+                <a href="#variant16">Вариант 16 →</a>
+            </div>
+            <div class="objective card">
+                <h2>15. Тема: Информационная система аптеки</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Аптека продает медикаменты и изготавливает их по рецептам. Лекарства могут быть разных типов:</p>
+                    <ol>
+                        <li>Готовые лекарства: таблетки, мази, настойки.</li>
+                        <li>Изготовляемые аптекой: микстуры, мази, растворы, настойки, порошки.</li>
+                    </ol>
+                    <p>Различие в типах лекарств отражается в различном наборе атрибутов, их характеризующих. Микстуры и порошки изготавливаются только для внутреннего применения, растворы для наружного, внутреннего применения и для смешивания с другими лекарствами и мази только для наружного применения. Лекарство различны также по способу приготовления и по времени приготовления. Порошки и мази изготавливаются смешиванием различных компонент. При изготовлении растворов и микстур ингредиенты не только смешивают, но и отстаивают с последующей фильтрацией лекарства, что увеличивает время изготовления.</p>
+                    <p>В аптеке существует справочник технологий приготовления различных лекарств. В нем указываются: идентификационный номер технологии, название лекарства и сам способ приготовления. На складе на все медикаменты устанавливается критическая норма, т.е. когда какого-либо вещества на складе меньше критической нормы, то составляются заявки на данные вещества и их в срочном порядке привозят с оптовых складов медикаментов.</p>
+                    <p>Для изготовления аптекой лекарства, больной должен принести рецепт от лечащего врача. В рецепте должно быть указано: ФИО, подпись и печать врача, ФИО, возраст и диагноз пациента, также количество лекарства и способ применения. Больной отдает рецепт регистратору, он принимает заказ и смотрит, есть ли компоненты заказываемого лекарства. Если не все компоненты имеются в наличии, то делает заявки на оптовые склады лекарств и фиксирует ФИО, телефон и адрес необслуженного покупателя, чтобы сообщить ему, когда доставят нужные компоненты. Такой больной пополняет справочник заказов — это те заказы, которые находятся в процессе приготовления, с пометкой, что не все компоненты есть для заказа. Если все компоненты имеются, то они резервируются для лекарства больного. Покупатель выплачивает цену лекарства, ему возвращается рецепт с пометкой о времени изготовления. Больной также пополняет справочник заказов в производстве. В назначенное время больной приходит и по тому же рецепту получает готовое лекарство. Такой больной пополняет список отданных заказов.</p>
+                    <p>Ведется статистика по объемам используемых медикаментов. Через определенный промежуток времени производится инвентаризация склада. Это делается для того, чтобы определить, есть ли лекарства с критической нормой, или вышел срок хранения или недостача.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Medicines</strong> (medicine_id, medicine_name, medicine_type, category, manufacturer, form, dosage, unit, selling_price, critical_level, preferred_supplier_id)</li>
+                        <li><strong>Ingredients</strong> (ingredient_id, ingredient_name, ingredient_type, supplier_name, purchase_price, unit, critical_level)</li>
+                        <li><strong>Technologies</strong> (technology_id, medicine_id, medicine_name, medicine_type, preparation_method, preparation_time_minutes, temperature_conditions, equipment_needed, storage_conditions)</li>
+                        <li><strong>TechnologyIngredients</strong> (tech_ingredient_id, technology_id, ingredient_id, quantity, unit)</li>
+                        <li><strong>Inventory</strong> (inventory_id, medicine_id, ingredient_id, quantity, storage_location, received_date, expiry_date, batch_number)</li>
+                        <li><strong>Customers</strong> (customer_id, last_name, first_name, middle_name, birth_date, phone, address, email)</li>
+                        <li><strong>Doctors</strong> (doctor_id, last_name, first_name, middle_name, specialization, license_number, phone)</li>
+                        <li><strong>Prescriptions</strong> (prescription_id, doctor_id, customer_id, prescription_date, diagnosis, medicine_name, quantity, dosage, usage_instructions, is_valid)</li>
+                        <li><strong>Orders</strong> (order_id, order_number, customer_id, prescription_id, medicine_id, medicine_name, quantity, created_at, ready_time, pickup_time, status, total_price, supplier_id)</li>
+                        <li><strong>OrderIngredients</strong> (order_ingredient_id, order_id, ingredient_id, ingredient_name, required_quantity, available_quantity, used_quantity, available)</li>
+                        <li><strong>Suppliers</strong> (supplier_id, supplier_name, contact_person, phone, email, address, expected_delivery)</li>
+                        <li><strong>SupplierOrders</strong> (supplier_order_id, supplier_id, order_date, expected_date, received_date, status)</li>
+                        <li><strong>SupplierOrderItems</strong> (order_item_id, supplier_order_id, medicine_id, ingredient_id, quantity, price_per_unit, total_amount)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 16 -->
+        <section id="variant16" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant15">← Вариант 15</a>
+                <a href="#variant17">Вариант 17 →</a>
+            </div>
+            <div class="objective card">
+                <h2>16. Тема: Информационная система библиотеки вуза</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Библиотека включает в себя абонементы, читальные залы и справочную систему каталогов и картотек. Читателями библиотеки вуза имеют право быть: студенты всех форм обучения, профессорско-преподавательский состав университета, аспиранты, ассистенты и другие сотрудники подразделений вуза, слушатели подготовительного отделения (ПО), факультета повышения квалификации (ФПК), стажеры, абитуриенты. Различные категории читателей среди прочих обладают характеристиками, специфическими для своей категории: для студентов это название факультета, номер группы, для преподавателя — название кафедры, степень, звание и т.д. Слушатели ФПК, абитуриенты, стажеры — разовые читатели — имеют право пользоваться только читальными залами.</p>
+                    <p>Читатели библиотеки имеют право получать книги и другие источники информации на всех пунктах выдачи библиотеки (абонементах и читальных залах), а также получать необходимые издания по межбиблиотечному абонементу, сделав предварительно заказ. Читатели, приходящие на пункт выдачи, обязаны иметь при себе читательский билет с отметками о записи и перерегистрации текущего года на данном пункте выдачи. При выбытии из вуза (отчисление, окончание обучения, увольнение) читатели обязаны вернуть числящиеся за ними издания и сдать читательские билеты.</p>
+                    <p>За нарушение правил пользования библиотекой читатели лишаются права пользования всеми пунктами обслуживания библиотеки на установленные администрацией сроки (от 1 до 6 месяцев). В случае утери или порчи книг читатель обязан заменить их такими же или другими изданиями, признанными библиотекой равноценными, или же возместить их 10-кратную стоимость. В случае невозвращения в библиотеку книг в установленный срок, читатель обязан заплатить штраф.</p>
+                    <p>Срок пользования литературой для различных категорий читателей и количество выдаваемых изданий на каждом абонементе определяется администрацией, исходя из вида литературы и категории читателя. Число книг, выдаваемых в читальных залах, не ограничивается.</p>
+                    <p>При поступлении новых изданий в библиотеку они должны быть внесены в картотеку с указанием их количества для каждого абонемента и читального зала. Выдача книг, сроки, штрафы и т.п. собираются и обрабатываются администрацией.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Locations</strong> (location_id, name, location_type, address, phone, librarian_name)</li>
+                        <li><strong>Authors</strong> (author_id, last_name, first_name, middle_name, birth_date, biography)</li>
+                        <li><strong>Books</strong> (book_id, title, publication_year, publisher, isbn, pages, language)</li>
+                        <li><strong>BookAuthors</strong> (book_author_id, book_id, author_id, author_order)</li>
+                        <li><strong>BookItems</strong> (book_item_id, book_id, location_id, inventory_number, acquisition_date, price, quantity, condition)</li>
+                        <li><strong>Readers</strong> (reader_id, last_name, first_name, middle_name, category, ticket_number, faculty, department, registration_date, expiry_date, phone, email, address)</li>
+                        <li><strong>Students</strong> (reader_id, faculty, department, course, group_number, student_id, form_of_study)</li>
+                        <li><strong>Teachers</strong> (reader_id, faculty, department, position, degree, title, teacher_id)</li>
+                        <li><strong>TemporaryReaders</strong> (reader_id, document_type, document_number, purpose, valid_until)</li>
+                        <li><strong>Loans</strong> (loan_id, book_item_id, reader_id, location_id, librarian_id, issue_date, due_date, return_date, fine_amount, notes)</li>
+                        <li><strong>ILARequests</strong> (request_id, reader_id, book_id, request_date, status, arrival_date, notes) — межбиблиотечный абонемент</li>
+                        <li><strong>Violations</strong> (violation_id, reader_id, location_id, violation_date, violation_type, description, fine_amount, penalty_start_date, penalty_end_date, lost_book_id, paid_status, payment_date)</li>
+                        <li><strong>Librarians</strong> (librarian_id, last_name, first_name, middle_name, location_id, position, phone, email)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 17 -->
+        <section id="variant17" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant16">← Вариант 16</a>
+                <a href="#variant18">Вариант 18 →</a>
+            </div>
+            <div class="objective card">
+                <h2>17. Тема: Информационная система туристического клуба</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Туристы, приходящие в туристический клуб, могут не только ходить в плановые походы, но и заниматься в различных секциях в течение всего года. Для этого они записываются в группы, относящиеся к определенным секциям.</p>
+                    <p>Туристов можно условно разделить на любителей, спортсменов и тренеров. Каждая из перечисленных категорий может иметь свой набор характеристик-атрибутов. Секции клуба возглавляются руководителями, в функции которых входит контроль за работой секции. В работе секции участвуют тренеры, административно относящиеся к одной из секций. Руководитель секции назначает каждой группе тренера. Тренер может тренировать несколько групп, причем необязательно принадлежащих его секции. Спортсмены и тренеры могут участвовать в различных соревнованиях.</p>
+                    <p>Каждый год составляется расписание работы секций. В нем указывается, какие будут проводиться тренировки, и в каких секциях: их количество, место, время и т.д. В соответствии с этим руководители секций осуществляют распределение нагрузки для тренеров (с учетом их специальности). Сведения о проведенных тренировках и посещаемости тренировок собираются руководителями.</p>
+                    <p>В течение года клуб организует различные походы. Каждый поход имеет свой маршрут, на который отводится определенное количество дней. По маршруту и количеству дней определяется категория сложности данного похода. Поход возглавляет инструктор, которым может быть какой-либо тренер или спортсмен. Он набирает группу в количестве 5-15 человек для своего похода, исходя из типа похода (пеший, конный, водный, горный) и физических данных туристов (по их занятиям в секциях: водники, спелеологи, альпинисты и другие, с учетом специфики занятий — не умеющего плавать, никогда не возьмут на сплав, а в пеший поход небольшой категории сложности могут взять любого туриста). Инструктор может водить в походы данной категории сложности, если он сам ее ранее уже прошел.</p>
+                    <p>Походы могут быть плановыми и неплановыми. Для каждого планового похода существует точный план, в котором указывается маршрут, расписание привалов и стоянок на каждый день. Во время планового похода ведется дневник. Неплановые походы имеют только маршрут и полное время его прохождения. Неплановый поход может быть переведен в категорию плановых. Каждому туристу присваивается категория максимально сложного из пройденных им плановых походов.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Sections</strong> (section_id, section_name, established_year, head_trainer_id, description)</li>
+                        <li><strong>Groups</strong> (group_id, group_name, section_id, formation_date, level)</li>
+                        <li><strong>Tourists</strong> (tourist_id, last_name, first_name, middle_name, birth_date, gender, category, max_difficulty_category, specializations, medical_certificate_date, experience_years, group_id)</li>
+                        <li><strong>Trainers</strong> (trainer_id, last_name, first_name, middle_name, specialization, experience_years, salary, max_difficulty_category, achievements, section_id, phone)</li>
+                        <li><strong>TrainingSessions</strong> (training_id, group_id, trainer_id, training_date, start_time, end_time, training_type, location)</li>
+                        <li><strong>TrainingPresence</strong> (presence_id, training_id, tourist_id, present)</li>
+                        <li><strong>Routes</strong> (route_id, route_name, route_type, difficulty_category, duration_days, length_km, start_point, end_point, max_elevation, region, description)</li>
+                        <li><strong>RoutePoints</strong> (point_id, route_id, point_order, point_name, day_number, coordinates, elevation, description)</li>
+                        <li><strong>Hikes</strong> (hike_id, hike_name, hike_type, route_id, organizing_section_id, instructor_id, instructor_type, start_date, end_date, group_size_min, group_size_max, actual_participants)</li>
+                        <li><strong>HikeParticipants</strong> (participant_id, hike_id, tourist_id, role_in_hike, notes)</li>
+                        <li><strong>HikeLogDays</strong> (log_id, hike_id, day_number, date, route_point, elevation, distance_covered, duration_hours, weather_conditions, temperature, description, notes)</li>
+                        <li><strong>Competitions</strong> (competition_id, competition_name, competition_date, location, competition_level, organizing_section_id)</li>
+                        <li><strong>TouristCompetitions</strong> (tc_id, competition_id, tourist_id, result, place, notes)</li>
+                        <li><strong>Equipment</strong> (equipment_id, equipment_name, equipment_type, weight, description)</li>
+                        <li><strong>HikeEquipment</strong> (he_id, hike_id, equipment_id, quantity, condition)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 18 -->
+        <section id="variant18" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant17">← Вариант 17</a>
+                <a href="#variant19">Вариант 19 →</a>
+            </div>
+            <div class="objective card">
+                <h2>18. Тема: Информационная система городской телефонной сети</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>ГТС представляет собой разветвленную сеть локальных АТС. АТС подразделяются на городские, ведомственные и учрежденческие и, возможно, обладают характерным только для этой группы набором атрибутов. У каждой АТС есть свои абоненты. У абонента может стоять телефон одного из трех типов: основной, параллельный или спаренный. За каждым абонентом (у него есть фамилия, имя, отчество, пол, возраст и т.д.) закреплен свой номер телефона, причем у нескольких абонентов может быть один и тот же номер (при параллельном или спаренном телефоне). Каждому номеру телефона соответствует адрес (индекс, район, улица, дом, квартира), причем параллельные или спаренные телефоны обязательно должны находиться в одном доме.</p>
+                    <p>Все телефоны городской АТС имеют выход на межгород, но для конкретного абонента он может быть либо открыт, либо закрыт по какой-либо причине (отключен по желанию абонента, за неуплату и т.п.). Ведомственные и учрежденческие АТС имеют свою внутреннюю замкнутую сеть телефонов. Сведения о междугородных переговорах собираются и анализируются на ГТС.</p>
+                    <p>Абоненты обязаны платить абонентскую плату. Плата должна вноситься каждый месяц до 20-го числа. При неуплате после письменного уведомления в течение двух суток отключается абонент. При задолженности за междугородние разговоры и неоплате после письменного уведомления производится отключение только возможности выхода на межгород. Включение того и (или) другого производится при оплате стоимости включения, абонентской платы и пени.</p>
+                    <p>Абонентов любой АТС можно подразделить на простых и льготных. К категории льготников относятся пенсионеры, инвалиды и т.д. Льготники платят только 50% абонентской платы. В соответствии со всем этим (тип телефона, льготник или нет, есть ли выход на межгород) рассчитывается размер абонентской платы.</p>
+                    <p>На установку телефона существуют очереди: льготная и обычная. При подходе очередности рассматривается техническая возможность установки (наличие кабеля и свободного канала, наличие свободных телефонных номеров).</p>
+                    <p>В городе также существуют общественные телефоны и таксофоны, расположенные по определенным адресам.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>ATS</strong> (ats_id, ats_code, name, ats_type, address, director, capacity)</li>
+                        <li><strong>Addresses</strong> (address_id, district, street, building, apartment, postal_code, building_type)</li>
+                        <li><strong>PhoneNumbers</strong> (phone_number_id, phone_number, ats_id, phone_type, capacity, long_distance, technical_status, status, address_id)</li>
+                        <li><strong>Abonents</strong> (abonent_id, last_name, first_name, middle_name, birth_date, benefit_type, discount_percent, phone_number, ats_id, address_id, long_distance_blocked, registration_date, notes)</li>
+                        <li><strong>PublicPhones</strong> (public_id, public_type, phone_number, ats_id, address_id, location_description, operational_status, installation_date)</li>
+                        <li><strong>Debts</strong> (debt_id, abonent_id, debt_type, amount, start_date, paid_date, notification_sent, notification_date, disconnected, disconnection_date, penalty_amount)</li>
+                        <li><strong>Payments</strong> (payment_id, abonent_id, payment_date, amount, payment_type, period_start, period_end, receipt_number)</li>
+                        <li><strong>LongDistanceCalls</strong> (call_id, abonent_id, call_date, call_time, destination_city, destination_country, duration_minutes, cost, operator)</li>
+                        <li><strong>InstallationQueue</strong> (queue_id, applicant_name, applicant_phone, applicant_type, benefit_type, preferred_district, application_date, technical_possibility, status, completion_date)</li>
+                        <li><strong>Tariffs</strong> (tariff_id, tariff_name, monthly_fee, long_distance_rate, connection_fee, description)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 19 -->
+        <section id="variant19" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant18">← Вариант 18</a>
+                <a href="#variant20">Вариант 20 →</a>
+            </div>
+            <div class="objective card">
+                <h2>19. Тема: Информационная система театра</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Работников театра можно подразделить на актеров, музыкантов, постановщиков и служащих. Каждая из перечисленных категорий имеет уникальные атрибуты-характеристики и может подразделяться (например, постановщики) на более мелкие категории. Театр возглавляет директор, в функции которого входят контроль за постановками спектаклей, утверждение репертуара, принятие на работу новых служащих, приглашение актеров и постановщиков. Актеры, музыканты и постановщики, работающие в театре, могут уезжать на гастроли. Актеры театра могут иметь звания заслуженных и народных артистов, могут быть лауреатами конкурсов. Также актерами театра могут быть и студенты театральных училищ. Каждый актер имеет свои вокальные и внешние данные (пол, возраст, голос, рост и т.п.), которые могут подходить для каких-то ролей, а для каких-то нет (не всегда женщина может сыграть мужчину и наоборот).</p>
+                    <p>Для постановки любого спектакля необходимо подобрать актеров на роли и дублеров на каждую главную роль. Естественно, что один и тот же актер не может играть более одной роли в спектакле, но может играть несколько ролей в различных спектаклях. У спектакля также имеется режиссер-постановщик, художник-постановщик, дирижер-постановщик, автор. Спектакли можно подразделить по жанрам: музыкальная комедия, трагедия, оперетта и пр. С другой стороны, спектакли можно подразделить на детские, молодежные и пр. В репертуаре театра указывается какие спектакли, в какие дни и в какое время будут проходить, а также даты премьер. В кассах театра можно заранее приобрести билеты или абонемент на любые спектакли. Абонемент обычно включает в себя билеты на спектакли либо конкретного автора, либо конкретного жанра. Цена билетов зависит от места, и спектакля. На премьеры билеты дороже. Администрацией театра фиксируется количество проданных билетов на каждый спектакль.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, birth_date, gender, position_type, hire_date, salary, children_count, phone, address)</li>
+                        <li><strong>Actors</strong> (employee_id, voice_type, height, acting_style, honors, awards, student_school, student_course, teacher)</li>
+                        <li><strong>Musicians</strong> (employee_id, instrument, music_style, orchestra_position)</li>
+                        <li><strong>Producers</strong> (employee_id, producer_type, specialization, notable_works)</li>
+                        <li><strong>Authors</strong> (author_id, last_name, first_name, country, birth_year, death_year, biography)</li>
+                        <li><strong>Plays</strong> (play_id, title, genre, age_category, author_id, year_written, description)</li>
+                        <li><strong>Repertoire</strong> (repertoire_id, play_id, season, premiere_date, director, stage_designer, conductor, is_premiere)</li>
+                        <li><strong>Halls</strong> (hall_id, hall_name, capacity, rows_count, seats_per_row, description)</li>
+                        <li><strong>Seats</strong> (seat_id, hall_id, row_number, seat_number, section, category, price)</li>
+                        <li><strong>Schedule</strong> (schedule_id, play_id, hall_id, schedule_date, schedule_time, is_premiere_performance)</li>
+                        <li><strong>PlayCasting</strong> (casting_id, play_id, actor_id, character_name, is_main_role, is_understudy, understudy_for)</li>
+                        <li><strong>ProductionTeam</strong> (team_id, play_id, employee_id, role_in_production)</li>
+                        <li><strong>Tours</strong> (tour_id, tour_name, start_date, end_date, destination_city, destination_theater, organizer)</li>
+                        <li><strong>TourParticipants</strong> (participant_id, tour_id, employee_id, role_type)</li>
+                        <li><strong>TourPlays</strong> (tour_play_id, tour_id, play_id)</li>
+                        <li><strong>Tickets</strong> (ticket_id, schedule_id, seat_id, price_paid, sale_date, sale_method, customer_name, customer_phone)</li>
+                        <li><strong>Subscriptions</strong> (subscription_id, customer_name, customer_phone, price, play_author, play_genre, valid_from, valid_to)</li>
+                        <li><strong>SubscriptionTickets</strong> (sub_ticket_id, subscription_id, schedule_id, seat_id, used)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 20 -->
+        <section id="variant20" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant19">← Вариант 19</a>
+                <a href="#variant21">Вариант 21 →</a>
+            </div>
+            <div class="objective card">
+                <h2>20. Тема: Информационная система аэропорта</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Работников аэропорта можно подразделить на пилотов, диспетчеров, техников, кассиров, работников службы безопасности, справочной службы и других, которые административно относятся каждый к своему отделу. Каждая из перечисленных категорий работников имеет уникальные атрибуты-характеристики, определяемые профессиональной направленностью. В отделах существует разбиение работников на бригады. Отделы возглавляются начальниками, которые представляют собой администрацию аэропорта. В функции администрации входит планирование рейсов, составление расписаний, формирование кадрового состава аэропорта. За каждым самолетом закрепляется бригада пилотов, техников и обслуживающего персонала. Пилоты обязаны проходить каждый год медосмотр, не прошедших медосмотр необходимо перевести на другую работу. Самолет должен своевременно осматриваться техниками и при необходимости ремонтироваться. Подготовка к рейсу включает в себя техническую часть (техосмотр, заправка необходимого количества топлива) и обслуживающую часть (уборка салона, запас продуктов питания и т.п.).</p>
+                    <p>В расписании указывается тип самолета, рейс, дни вылета, время вылета и прилета, маршрут (начальный и конечный пункты назначения, пункт пересадки), стоимость билета. Билеты на авиарейсы можно приобрести заранее или забронировать в авиакассах. Цена билета зависит не только от маршрута, но и от времени вылета (в неудобное время — ночь, раннее утро — цена билета ниже). До отправления рейса, если в этом есть необходимость, билет можно вернуть. Авиарейсы могут быть задержаны из-за погодных условий, технических неполадок, а также могут быть отменены, если не продано меньше установленного минимума билетов.</p>
+                    <p>Авиарейсы можно разделить на следующие категории: внутренние, международные, чартерные, грузоперевозки, специальные рейсы. Пассажир при посадке в самолет должен предъявить билет, паспорт, а для международного рейса обязан также предъявить заграничный паспорт и пройти таможенный досмотр. Пассажиры могут сдавать свои вещи в багажное отделение. На рейсы грузоперевозок и специальные рейсы билеты не продаются. Для спец. рейсов не существует расписания. Билеты на чартерные рейсы распространяет то агентство, которое его организовало.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Departments</strong> (department_id, department_name, head_id, phone, location)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_number, department_id, brigade_leader_id)</li>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, birth_date, gender, position, department_id, brigade_id, hire_date, salary, children_count, phone, address)</li>
+                        <li><strong>Pilots</strong> (employee_id, license_number, rank, flight_hours, last_medical_date, medical_status, medical_expiry_date)</li>
+                        <li><strong>Technicians</strong> (employee_id, qualification, specialization, certificate_number)</li>
+                        <li><strong>Aircraft</strong> (aircraft_id, registration_number, aircraft_type, model, manufacturer, year_manufactured, capacity, flight_hours, last_maintenance_date, maintenance_status, home_airport, acquisition_date)</li>
+                        <li><strong>Maintenance</strong> (maintenance_id, aircraft_id, maintenance_date, maintenance_type, description, performed_by, next_maintenance_date)</li>
+                        <li><strong>Flights</strong> (flight_id, flight_number, departure_city, arrival_city, departure_country, arrival_country, flight_category, aircraft_id, flight_duration_minutes)</li>
+                        <li><strong>FlightSchedule</strong> (schedule_id, flight_id, schedule_date, schedule_time, status, min_tickets_for_guarantee)</li>
+                        <li><strong>TicketSettings</strong> (setting_id, schedule_id, ticket_class, ticket_price, available_seats)</li>
+                        <li><strong>Passengers</strong> (passenger_id, last_name, first_name, middle_name, birth_date, gender, passport_number, international_passport, phone, email)</li>
+                        <li><strong>Tickets</strong> (ticket_id, schedule_id, passenger_id, seat_number, ticket_class, price_paid, booking_status, booking_date, check_in_status, boarding_status)</li>
+                        <li><strong>Baggage</strong> (baggage_id, ticket_id, baggage_count, baggage_weight, special_items)</li>
+                        <li><strong>Refunds</strong> (refund_id, ticket_id, refund_date, refund_amount, refund_reason)</li>
+                        <li><strong>CancelledFlights</strong> (cancellation_id, schedule_id, cancellation_date, cancellation_reason, insufficient_tickets_sold, alternative_flight)</li>
+                        <li><strong>DelayedFlights</strong> (delay_id, schedule_id, delay_date, delay_minutes, delay_reason, new_departure_time)</li>
+                        <li><strong>FlightCrew</strong> (crew_id, schedule_id, employee_id, role_in_crew)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 21 -->
+        <section id="variant21" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant20">← Вариант 20</a>
+                <a href="#variant22">Вариант 22 →</a>
+            </div>
+            <div class="objective card">
+                <h2>21. Тема: Информационная система зоопарка</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Служащих зоопарка можно подразделить на несколько категорий: ветеринары, уборщики, дрессировщики, строители-ремонтники, работники администрации. Каждая из перечисленных категорий работников имеет уникальные атрибуты-характеристики, определяемые профессиональной направленностью. За каждым животным ухаживает определенный круг служащих, причем только ветеринарам, уборщикам и дрессировщикам разрешен доступ в клетки к животным.</p>
+                    <p>В зоопарке обитают животные различных климатических зон, поэтому часть животных на зиму необходимо переводить в отапливаемые помещения. Животных можно подразделить на хищников и травоядных. При расселении животных по клеткам необходимо учитывать не только потребности данного вида, но и их совместимость с животными в соседних клетках (нельзя рядом селить, например, волков и их добычу — различных копытных).</p>
+                    <p>Для кормления животных необходимы различные типы кормов: растительный, живой, мясо и различные комбикорма. Растительный корм это фрукты и овощи, зерно и сено. Живой корм — мыши, птицы, корм для рыб. Для каждого вида животных рассчитывается свой рацион, который в свою очередь варьируется в зависимости от возраста, физического состояния животного и сезона. Таким образом у каждого животного в зоопарке имеется меню на каждый день, в котором указывается количество и время кормлений в день, количество и вид пищи (обезьянам необходимы фрукты и овощи, мелким хищникам — хорькам, ласкам, совам, некоторым кошачьим, змеям — надо давать мышей). У зоопарка имеются поставщики кормов для животных. Каждый поставщик специализируются на каких-то конкретных видах кормов. Часть кормов зоопарк может производить сам: запасать сено, разводить мышей и т.д.</p>
+                    <p>Ветеринары должны проводить медосмотры, следить за весом, ростом, развитием животного, ставить своевременно прививки и заносить все эти данные в карточку, которая заводится на каждую особь при ее появлении в зоопарке. Больным животным назначается лечение и при необходимости их можно изолировать в стационаре.</p>
+                    <p>При определенных условиях (наличие пары особей, подходящих по возрасту, физическому состоянию) можно ожидать появления потомства. Потомство от данной пары животных при достижении ими положенного возраста можно либо оставить в зоопарке, создав для них подходящие условия содержания, либо обменяться с другими зоопарками или просто раздать в другие зоопарки — по решению администрации.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Departments</strong> (department_id, department_name, head_id, phone)</li>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, birth_date, gender, position, department_id, hire_date, salary, experience_years, phone, address)</li>
+                        <li><strong>Veterinarians</strong> (employee_id, specialization, education, license_number, experience_years)</li>
+                        <li><strong>Cleaners</strong> (employee_id, section_responsible, tools)</li>
+                        <li><strong>Trainers</strong> (employee_id, specialization, experience_with)</li>
+                        <li><strong>WinterShelters</strong> (shelter_id, shelter_name, capacity, has_heating, winter_temperature, location)</li>
+                        <li><strong>Cages</strong> (cage_id, cage_number, section, area_sqm, building_type, shelter_id, capacity, current_occupancy)</li>
+                        <li><strong>Animals</strong> (animal_id, animal_name, animal_type, species, gender, birth_date, arrival_date, weight_kg, height_cm, climate_zone, diet_type, cage_id, health_status, needs_warm_shelter, breeding_potential, father_id, mother_id)</li>
+                        <li><strong>AnimalTypes</strong> (animal_type_id, animal_type_name, class, order, family, genus)</li>
+                        <li><strong>Compatibility</strong> (compatibility_id, animal1_id, animal2_id, compatibility_level, notes)</li>
+                        <li><strong>CareAssignments</strong> (assignment_id, animal_id, employee_id, responsibility_type, assignment_date, end_date)</li>
+                        <li><strong>AccessPermissions</strong> (permission_id, employee_id, animal_type_id, access_level)</li>
+                        <li><strong>Feeds</strong> (feed_id, feed_name, feed_type, unit, nutritional_value, storage_conditions)</li>
+                        <li><strong>Suppliers</strong> (supplier_id, supplier_name, supplier_type, contact_person, phone, email, address)</li>
+                        <li><strong>SupplierFeeds</strong> (supplier_feed_id, supplier_id, feed_id, price_per_unit, delivery_time_days, min_order_quantity)</li>
+                        <li><strong>OwnProduction</strong> (production_id, feed_id, production_amount, production_date, storage_location, expiration_date, production_cost_per_unit, is_active)</li>
+                        <li><strong>DietPlans</strong> (diet_id, animal_id, season, age_category, is_active)</li>
+                        <li><strong>DietItems</strong> (diet_item_id, diet_id, feed_id, quantity_per_day, frequency_per_day, feeding_time)</li>
+                        <li><strong>Vaccinations</strong> (vaccination_id, animal_id, vet_id, vaccination_date, vaccination_name, vaccination_type, dosage, next_vaccination_date)</li>
+                        <li><strong>MedicalHistory</strong> (history_id, animal_id, vet_id, illness_date, illness_name, symptoms, diagnosis, treatment, medication, recovery_date)</li>
+                        <li><strong>Zoos</strong> (zoo_id, zoo_name, city, country, contact_person, phone, email)</li>
+                        <li><strong>Exchanges</strong> (exchange_id, other_zoo_id, exchange_date, exchange_type, sent_animal_id, received_animal_id, contract_number, notes)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 22 -->
+        <section id="variant22" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant21">← Вариант 21</a>
+                <a href="#variant23">Вариант 23 →</a>
+            </div>
+            <div class="objective card">
+                <h2>22. Тема: Информационная система Госавтоинспекции</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>У Госавтоинспекции есть три наиболее важные функциональные задачи:</p>
+                    <ul>
+                        <li>регистрация автотранспортных средств при совершении сделки купли-продажи;</li>
+                        <li>разработка мер, повышающих безопасность дорожного движения и выполнение всех мер при совершении ДТП (дорожно-транспортное происшествие) на улицах города (регистрация, разбор, выявление виновных, автоэкспертиза и т.п.);</li>
+                        <li>борьба с угоном автотранспортных средств, оперативный поиск угнанных машин и задержание преступников.</li>
+                    </ul>
+                    <p>Госавтоинспекция занимается выделением и учетом номерных знаков на автотранспорт. К автотранспортным средствам относятся легковые, грузовые автомобили, прицепы, полуприцепы, мотоциклы, тракторы, автобусы, микроавтобусы. На разные виды транспорта выдаются разные виды номеров и в базу данных заносятся разные характеристики. Номера могут выделяться как частным владельцам, так и организациям. В справочнике номеров, выданных частным владельцам, фиксируется: номер, ФИО владельца, его адрес, марка автомобиля, дата выпуска, объем двигателя, номера двигателя, шасси и кузова, цвет и т.п. В справочнике номеров, выданных организации, дополнительно фиксируется: название организации, район, адрес, руководитель. Существует справочник свободных номеров (серия, диапазон номеров). Госавтоинспекция периодически проводит технический осмотр (ТО) машин. Для прохождения техосмотра необходима квитанция об оплате налогов, сумма оплаты зависит от объема двигателя. Периодичность прохождения зависит от года выпуска и вида транспортного средства. Технические характеристики, проверяемые на ТО и допуски также зависят от вида транспортного средства.</p>
+                    <p>Госавтоинспекция занимается учетом и анализом ДТП (дорожно-транспортное происшествие). При регистрации ДТП фиксируется: дата, тип происшествия (наезд на пешехода, наезд на ограждение либо столб, лобовое столкновение, наезд на впереди стоящий транспорт, боковое столкновение на перекрестке и т.п.), место происшествия, марки пострадавших автомобилей, государственный номер, тип машины (легковая, грузовая, специальная), краткое содержание, число пострадавших, сумма ущерба, причина, дорожные условия и т.п. Анализ накопленной по ДТП статистике поможет правильно расставить запрещающие и предупреждающие знаки на улицах города, а так же спланировать местонахождение постов патрульных.</p>
+                    <p>Угон либо исчезновение виновника ДТП с места происшествия требует оперативного вмешательства всех постов Госавтоинспекции и патрульных машин. Для информирования о разыскиваемой машине ее данные (включая номера двигателя и кузова) извлекаются из базы зарегистрированных номеров и передаются по рации всем постам. Ведение статистики угонов, ее анализ и опубликование результатов в СМИ поможет снизить количество угонов, а хозяевам машин принять необходимые меры (самые угоняемые марки, самый популярный способ вскрытия, самые надежные сигнализации и т.п.).</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>PrivateOwners</strong> (owner_id, last_name, first_name, middle_name, birth_date, address, phone, passport_number)</li>
+                        <li><strong>Organizations</strong> (org_id, org_name, legal_address, district, director_name, phone, inn, kpp)</li>
+                        <li><strong>Vehicles</strong> (vehicle_id, license_plate, brand, model, year, vehicle_type, color, engine_volume, engine_number, chassis_number, body_number, owner_id, owner_type, alarm_id, registration_date)</li>
+                        <li><strong>Registrations</strong> (reg_id, vehicle_id, owner_id, owner_type, reg_number, series, issue_date, expiry_date)</li>
+                        <li><strong>AvailableNumbers</strong> (number_id, series, region_code, number, status)</li>
+                        <li><strong>InspectionStations</strong> (station_id, station_name, address, phone, head_name)</li>
+                        <li><strong>TechnicalInspections</strong> (inspection_id, vehicle_id, station_id, inspection_date, next_inspection_date, result, mileage, inspector_name, defects_found)</li>
+                        <li><strong>TaxPayments</strong> (payment_id, vehicle_id, payment_date, amount, receipt_number, payment_period)</li>
+                        <li><strong>Accidents</strong> (accident_id, accident_date, accident_time, location, accident_type, weather_conditions, road_conditions, primary_cause, description, injured_count, fatal_count, damage_amount)</li>
+                        <li><strong>AccidentVehicles</strong> (acc_vehicle_id, accident_id, vehicle_id, role, damage_description, guilty, penalty_amount)</li>
+                        <li><strong>AccidentWanted</strong> (wanted_id, accident_id, vehicle_id, search_status, search_start, found_date)</li>
+                        <li><strong>Thefts</strong> (theft_id, vehicle_id, theft_date, theft_time, theft_location, theft_method, circumstances, search_status, search_priority, found_date, recovery_condition)</li>
+                        <li><strong>Alarms</strong> (alarm_id, alarm_brand, alarm_model, alarm_type, reliability_rating, features)</li>
+                        <li><strong>WantedBulletins</strong> (bulletin_id, vehicle_id, reason_type, reason_id, bulletin_date, distributed_to, response_info)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 23 -->
+        <section id="variant23" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant22">← Вариант 22</a>
+                <a href="#variant24">Вариант 24 →</a>
+            </div>
+            <div class="objective card">
+                <h2>23. Тема: Информационная система фотоцентра</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Фотоцентр имеет главный офис и сеть филиалов и киосков приема заказов, расположенных по определенным адресам. Филиалы и киоски различаются количеством рабочих мест. В киосках осуществляется только прием заказов, поэтому каждый киоск прикреплен к определенному филиалу, в котором эти заказы выполняются. В филиалах имеется необходимое оборудование для проявки пленок и печати фотографий. Филиалы и киоски принимают заказы на проявку пленок, печать фотографий и проявку, и печать вместе. В заказе на печать указывается количество фотографий с каждого кадра, общее количество фотографий, формат, тип бумаги и срочность выполнения заказа. При заказе большого количества фотографий предоставляются скидки. Срочные заказы принимаются только в филиалах, и они имеют цену в два раза больше, чем обычный заказ. При приобретении дисконтной карты клиент получает значительные скидки на печать фотографий. Пленка, приобретенная в том же филиале, куда она принесена на проявку, появляется бесплатно.</p>
+                    <p>Клиентов можно разделить на профессионалов и любителей. Профессионалам, приносящим заказы в один и тот же филиал, могут быть предложены персональные скидки. Филиалы и киоски предлагают к продаже различные фототовары: фотопленки, фотоаппараты, альбомы и другие фотопринадлежности. Филиалы также предлагают дополнительные виды услуг: фотографии на документы, реставрация фотографий, прокат фотоаппаратов, художественное фото, предоставление услуг профессионального фотографа.</p>
+                    <p>Сведения о выполненных заказах и продаже различных фототоваров собираются и обрабатываются, и на основе этой информации делается общий заказ на поставку расходных материалов (фотобумага, фотопленка, химические реактивы), фототоваров и оборудования. Полученные товары и материалы распределяются в соответствии с запросами по киоскам и магазинам. У фотоцентра может быть несколько поставщиков, которые специализируются на различных поставках, либо на поставках фототоваров различных фирм.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Branches</strong> (branch_id, branch_name, address, phone, manager_name, workstations_count, has_equipment, is_active)</li>
+                        <li><strong>Kiosks</strong> (kiosk_id, kiosk_name, address, phone, manager_name, branch_id, is_active)</li>
+                        <li><strong>Workstations</strong> (workstation_id, branch_id, kiosk_id, workstation_number, workstation_type, equipment_model, status, last_maintenance, next_maintenance, assigned_to)</li>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, position, branch_id, kiosk_id, phone, hire_date)</li>
+                        <li><strong>Clients</strong> (client_id, last_name, first_name, middle_name, phone, email, client_type, registration_date, notes)</li>
+                        <li><strong>DiscountCards</strong> (card_id, client_id, discount_card_number, issue_date, discount_percent, valid_until)</li>
+                        <li><strong>Orders</strong> (order_id, client_id, branch_id, kiosk_id, order_date, order_time, service_type, is_urgent, frames_count, prints_per_frame, total_prints, print_format, paper_type, total_amount, discount_percent, final_amount, status, completion_date, client_name, client_phone)</li>
+                        <li><strong>Products</strong> (product_id, product_name, product_category, brand, model, description, unit)</li>
+                        <li><strong>ProductSales</strong> (sale_id, branch_id, product_id, sale_date, quantity, price_per_unit, total_amount, client_id, client_name, client_phone)</li>
+                        <li><strong>Suppliers</strong> (supplier_id, supplier_name, supplier_type, contact_person, phone, email, address, rating)</li>
+                        <li><strong>SupplierProducts</strong> (supplier_product_id, supplier_id, product_id, price_per_unit, delivery_time_days, min_order_quantity)</li>
+                        <li><strong>Deliveries</strong> (delivery_id, supplier_id, branch_id, delivery_date, invoice_number, total_amount, status)</li>
+                        <li><strong>DeliveryItems</strong> (delivery_item_id, delivery_id, product_id, quantity, price_per_unit, total_amount)</li>
+                        <li><strong>AdditionalServices</strong> (service_id, branch_id, service_name, service_type, price, description)</li>
+                        <li><strong>ServiceOrders</strong> (service_order_id, branch_id, client_id, service_id, order_date, service_date, total_amount, status)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 24 -->
+        <section id="variant24" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant23">← Вариант 23</a>
+                <a href="#variant25">Вариант 25 →</a>
+            </div>
+            <div class="objective card">
+                <h2>24. Тема: Информационная система железнодорожной пассажирской станции</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Работников железнодорожной станции можно подразделить на водителей подвижного состава, диспетчеров, ремонтников подвижного состава, путей, кассиров, работников службы подготовки составов, справочной службы и других, которые административно относятся каждый к своему отделу. Каждая из перечисленных категорий работников имеет уникальные атрибуты-характеристики, определяемые профессиональной направленностью. В отделах существует разбиение работников на бригады. Отделы возглавляются начальниками, которые представляют собой администрацию железнодорожной станции. В функции администрации входит планирование маршрутов, составление расписаний, формирование кадрового состава железнодорожной станции. За каждым локомотивом закрепляется локомотивная бригада. За несколькими локомотивами закрепляется бригада техников-ремонтников, выполняющая рейсовый и плановый техосмотр (по определенному графику), ремонт, техническое обслуживание. Водители локомотивов обязаны проходить каждый год медосмотр, не прошедших медосмотр необходимо перевести на другую работу. Локомотив должен своевременно осматриваться техниками-ремонтиками и при необходимости ремонтироваться. Подготовка к рейсу включает в себя техническую часть (рейсовый техосмотр, мелкий ремонт) и обслуживающую часть (уборка вагонов, запас продуктов питания и т.п.).</p>
+                    <p>В расписании указывается тип поезда (скорый, пассажирский . . .), номер поезда, дни и время отправления и прибытия, маршрут (начальный и конечный пункты назначения, основные узловые станции), стоимость билета. Билеты на поезд можно приобрести заранее или забронировать в железнодорожных кассах. До отправления поезда, если есть необходимость, билет можно вернуть. Отправление поездов может быть задержано из-за опозданий поездов, погодных условий, технических неполадок.</p>
+                    <p>Железнодорожные маршруты можно разделить на следующие категории: внутренние, международные, туристические, специальные маршруты. Пассажиры могут сдавать свои вещи в багажное отделение.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Departments</strong> (department_id, department_name, head_id, phone, location)</li>
+                        <li><strong>Brigades</strong> (brigade_id, brigade_number, department_id, brigade_leader_id, brigade_type)</li>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, birth_date, gender, position, department_id, brigade_id, hire_date, salary, children_count, phone, address)</li>
+                        <li><strong>LocomotiveDrivers</strong> (employee_id, license_number, rank, experience_years, last_medical_date, medical_status, medical_expiry_date)</li>
+                        <li><strong>RepairTechnicians</strong> (employee_id, qualification, specialization, certificate_number)</li>
+                        <li><strong>Depots</strong> (depot_id, depot_name, depot_location, capacity, head_id)</li>
+                        <li><strong>Locomotives</strong> (locomotive_id, registration_number, locomotive_type, model, manufacturer, year_manufactured, power_kw, total_routes, last_maintenance_date, maintenance_status, home_depot_id, home_station, acquisition_date)</li>
+                        <li><strong>Maintenance</strong> (maintenance_id, locomotive_id, maintenance_date, maintenance_type, description, performed_by_id, next_maintenance_date)</li>
+                        <li><strong>Routes</strong> (route_id, route_name, departure_station, arrival_station, departure_country, arrival_country, route_category, distance_km, duration_hours, intermediate_stations)</li>
+                        <li><strong>Trains</strong> (train_id, train_number, train_type, route_id, locomotive_id, capacity, carriages_count)</li>
+                        <li><strong>Schedule</strong> (schedule_id, train_id, schedule_date, departure_time, arrival_time, status)</li>
+                        <li><strong>TicketSettings</strong> (setting_id, schedule_id, carriage_class, ticket_price, available_seats)</li>
+                        <li><strong>Passengers</strong> (passenger_id, last_name, first_name, middle_name, birth_date, gender, passport_number, international_passport, phone, email)</li>
+                        <li><strong>Tickets</strong> (ticket_id, schedule_id, passenger_id, carriage_number, seat_number, carriage_class, price_paid, booking_status, booking_date, check_in_status)</li>
+                        <li><strong>Baggage</strong> (baggage_id, ticket_id, baggage_count, baggage_weight, special_items)</li>
+                        <li><strong>Refunds</strong> (refund_id, ticket_id, refund_date, refund_amount, refund_reason)</li>
+                        <li><strong>CancelledTrains</strong> (cancellation_id, schedule_id, cancellation_date, cancellation_reason, weather_conditions, technical_issues)</li>
+                        <li><strong>DelayedTrains</strong> (delay_id, schedule_id, delay_date, delay_minutes, delay_reason, new_departure_time)</li>
+                        <li><strong>TrainCrew</strong> (crew_id, schedule_id, employee_id, role_in_crew)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 25 -->
+        <section id="variant25" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant24">← Вариант 24</a>
+                <a href="#variant26">Вариант 26 →</a>
+            </div>
+            <div class="objective card">
+                <h2>25. Тема: Информационная система проектной организации</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Проектная организация представлена следующими категориями сотрудников: конструкторы, инженеры, техники, лаборанты, прочий обслуживающий персонал, каждая из которых может иметь свойственные только ей атрибуты. Например, конструктор характеризуется числом авторских свидетельств, техники — оборудованием, которое они могут обслуживать, инженер или конструктор может руководить договором или проектом и т.д. Сотрудники разделены на отделы, руководимые начальником так, что каждый сотрудник числится только в одном отделе.</p>
+                    <p>В рамках заключаемых проектной организацией договоров с заказчиками выполняются различного рода проекты, причем по одному договору может выполняться более одного проекта, и один проект может выполняться для нескольких договоров. Суммарная стоимость договора определяется стоимостью всех проектных работ, выполняемых для этого договора. Каждый договор и проект имеет руководителя и группу сотрудников, выполняющих этот договор или проект, причем это могут быть сотрудники не только одного отдела. Проекты выполняются с использованием различного оборудования, часть которого приписано отдельным отделам, а часть является коллективной собственностью проектной организации, при этом в процессе работы оборудование может передаваться из отдела в отдел. Для выполнения проекта оборудование придается группе, работающей над проектом, если это оборудование не используется в другом проекте.</p>
+                    <p>Для выполнения ряда проектов подрядная организация может привлекать субподрядные организации, передавая им объемы работ.</p>
+                    <p>Ведется учет кадров, учет выполнения договоров и проектов, стоимостной учет всех выполненных работ.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>Departments</strong> (department_id, department_name, department_number, head_id, phone, location)</li>
+                        <li><strong>Employees</strong> (employee_id, last_name, first_name, middle_name, birth_date, gender, position, category, qualification, experience_years, department_id, salary, hire_date, phone, email, patents_count, equipment_specialization)</li>
+                        <li><strong>Contracts</strong> (contract_id, contract_number, contract_name, client_name, client_contact, manager_id, start_date, planned_end_date, completion_date, total_value, status)</li>
+                        <li><strong>Projects</strong> (project_id, project_code, project_name, project_type, manager_id, start_date, planned_end_date, actual_end_date, budget, actual_cost, status, description)</li>
+                        <li><strong>ContractProjects</strong> (cp_id, contract_id, project_id, share_percent, notes)</li>
+                        <li><strong>ProjectEmployees</strong> (pe_id, project_id, employee_id, role_in_project, start_date, end_date, hours_worked, hourly_rate)</li>
+                        <li><strong>Equipment</strong> (equipment_id, equipment_name, equipment_type, model, manufacturer, inventory_number, purchase_date, purchase_cost, department_id, project_id, status, last_maintenance_date, next_maintenance_date)</li>
+                        <li><strong>ProjectEquipment</strong> (peq_id, project_id, equipment_id, start_date, end_date, condition_notes)</li>
+                        <li><strong>EquipmentTransfers</strong> (transfer_id, equipment_id, from_department_id, to_department_id, transfer_date, return_date, reason)</li>
+                        <li><strong>Subcontractors</strong> (subcontractor_id, subcontractor_name, contact_person, phone, email, address, specialization)</li>
+                        <li><strong>SubcontractorWorks</strong> (work_id, subcontractor_id, project_id, work_description, start_date, end_date, contract_amount, payment_status)</li>
+                        <li><strong>WorkTypes</strong> (work_type_id, work_name, work_category, standard_rate)</li>
+                        <li><strong>ProjectWorkTypes</strong> (pwt_id, project_id, work_type_id, planned_hours, actual_hours)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Вариант 26 -->
+        <section id="variant26" class="variant-section">
+            <div class="variant-navigation">
+                <a href="#variant25">← Вариант 25</a>
+                <a href="#">Наверх</a>
+            </div>
+            <div class="objective card">
+                <h2>26. Тема: Информационная система малого музыкального театра</h2>
+                <div class="description-content">
+                    <p><strong>Описание предметной области</strong></p>
+                    <p>Инфраструктура малого музыкального театра представлена культурными сооружениями различного типа: театры, концертные площадки, эстрады, дворцы культуры и т.д. Каждая из категорий культурных сооружений обладает атрибутами, специфичными только для нее: театр характеризуется вместимостью, кинотеатр — размером экрана.</p>
+                    <p>Артисты под руководством импресарио выступают в различных жанрах, при этом один и тот же артист может выступать в нескольких жанрах, и может работать с несколькими импресарио.</p>
+                    <p>Организаторы концертных мероприятий проводят выступления, концерты, конкурсы в культурных сооружениях города, организуя участие в нем артистов. По результатам участия артистов в конкурсах производится награждение.</p>
+                </div>
+
+                <!-- Примерная структура таблиц -->
+                <div class="note-box">
+                    <h4>Примерная структура таблиц</h4>
+                    <ul>
+                        <li><strong>CulturalVenues</strong> (venue_id, venue_name, venue_type, address, capacity, screen_size, has_orchestra_pit, acoustic_rating, rental_price_per_hour, year_built)</li>
+                        <li><strong>Genres</strong> (genre_id, genre_name, description, origin_period)</li>
+                        <li><strong>Artists</strong> (artist_id, last_name, first_name, middle_name, stage_name, birth_date, voice_type, experience_years, education, awards, rating, phone, email)</li>
+                        <li><strong>ArtistGenres</strong> (artist_genre_id, artist_id, genre_id, proficiency_level)</li>
+                        <li><strong>Impresarios</strong> (impresario_id, last_name, first_name, middle_name, agency_name, phone, email, experience_years, successful_projects, rating)</li>
+                        <li><strong>ArtistImpresario</strong> (contract_id, artist_id, impresario_id, contract_date, contract_number, commission_percent, region_responsibility, start_date, end_date)</li>
+                        <li><strong>Organizers</strong> (organizer_id, name, contact_person, phone, email, address, license_number)</li>
+                        <li><strong>Events</strong> (event_id, event_name, event_type, venue_id, organizer_id, event_date, event_time, ticket_price_min, ticket_price_max, tickets_sold, available_tickets, revenue, description)</li>
+                        <li><strong>EventArtists</strong> (event_artist_id, event_id, artist_id, fee, performance_order, special_requirements)</li>
+                        <li><strong>Competitions</strong> (competition_id, competition_name, competition_date, venue_id, organizer_id, prize_fund, description)</li>
+                        <li><strong>Jury</strong> (jury_id, last_name, first_name, middle_name, profession, organization, country)</li>
+                        <li><strong>CompetitionResults</strong> (result_id, competition_id, artist_id, jury_id, prize_place, prize_amount, nomination, diploma, critique_feedback)</li>
+                        <li><strong>Awards</strong> (award_id, award_name, awarding_organization, category, year_established)</li>
+                        <li><strong>ArtistAwards</strong> (artist_award_id, artist_id, award_id, year_received, nomination)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="back-to-top">
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+
+        <!-- Задание для самостоятельной работы -->
+        <section class="assignment card" style="margin-top: 40px;">
+            <h2>ЗАДАНИЕ ДЛЯ САМОСТОЯТЕЛЬНОЙ РАБОТЫ</h2>
+            
+            <div class="assignment-step">
+                <h3>1. Построить функциональную модель предметной области</h3>
+                <p>Для этого необходимо:</p>
+                <ul>
+                    <li>Ознакомиться с предложенным вариантом описания предметной области. Проанализировать предметную область, уточнив и дополнив ее, руководствуясь собственным опытом, консультациями и другими источниками.</li>
+                    <li>Выполнить структурное разбиение предметной области на отдельные подразделения (отделы, службы, подсистемы, группы и пр.) согласно выполняемым ими функциям.</li>
+                    <li>Определить задачи и функции системы в целом и функции каждого подразделения (подсистемы).</li>
+                    <li>Выполнить словесное описание работы каждого подразделения (подсистемы), алгоритмов и сценариев выполнения ими отдельных работ.</li>
+                </ul>
+            </div>
+
+            <div class="assignment-step">
+                <h3>2. Построить информационную модель предметной области</h3>
+                <p>Для этого необходимо:</p>
+                <ul>
+                    <li>Согласно варианту задания, выделить необходимый набор сущностей, отражающих предметную область и информационные потребности пользователей.</li>
+                    <li>Определить необходимый набор атрибутов каждой сущности, выделив идентифицирующие атрибуты.</li>
+                    <li>Классифицировать атрибуты каждой сущности (описательные, указывающие, вспомогательные).</li>
+                    <li>Определить связи между сущностями.</li>
+                    <li>Определить множественность и условность связей.</li>
+                </ul>
+            </div>
+
+            <div class="assignment-step">
+                <h3>3. Разработать ER-диаграмму базы данных</h3>
+                <p>С использованием сервиса DrawSQL и импортировать ее в СУБД MySQL.</p>
+            </div>
+        </section>
+
+        <!-- Финальная навигация -->
+        <section class="variants" style="margin-top: 30px;">
+            <div class="links-grid" style="grid-template-columns: repeat(2, 1fr);">
+                <a href="#">В начало страницы</a>
+                <a href="#">Вернуться к списку вариантов</a>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

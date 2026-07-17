@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://maps/templates/obby_setup.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://obby1/colorful_100-stage_obby.glb" id="2_scene"]
+
+[node name="Obby1_Template" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Model" parent="." instance=ExtResource("2_scene")]

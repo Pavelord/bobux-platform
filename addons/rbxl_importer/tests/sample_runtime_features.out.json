@@ -1,0 +1,127 @@
+{
+  "format": "xml",
+  "version": 0,
+  "class_count_hint": 0,
+  "instance_count_hint": 6,
+  "metadata": {},
+  "classes": {},
+  "instances": {
+    "1": {
+      "class": "Workspace",
+      "properties": {
+        "Name": "Workspace"
+      }
+    },
+    "10": {
+      "class": "SpawnLocation",
+      "properties": {
+        "Name": "SpawnLocation",
+        "Anchored": true,
+        "CanCollide": true,
+        "Size": [
+          8.0,
+          1.0,
+          8.0
+        ],
+        "CFrame": {
+          "position": [
+            0.0,
+            2.0,
+            0.0
+          ],
+          "rotation": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "Color": [
+          0.2,
+          0.4,
+          0.9
+        ]
+      }
+    },
+    "11": {
+      "class": "PointLight",
+      "properties": {
+        "Name": "SpawnLight",
+        "Brightness": 2.0,
+        "Range": 20.0,
+        "Color": [
+          1.0,
+          0.9,
+          0.7
+        ]
+      }
+    },
+    "20": {
+      "class": "SoundService",
+      "properties": {
+        "Name": "SoundService"
+      }
+    },
+    "21": {
+      "class": "Sound",
+      "properties": {
+        "Name": "Theme",
+        "Looped": true,
+        "Playing": true,
+        "Volume": 0.65,
+        "SoundId": "rbxassetid://1843529604"
+      }
+    },
+    "30": {
+      "class": "Lighting",
+      "properties": {
+        "Name": "Lighting",
+        "Brightness": 1.5,
+        "TimeOfDay": "18:30:00",
+        "OutdoorAmbient": [
+          0.8,
+          0.74,
+          0.65
+        ]
+      }
+    }
+  },
+  "hierarchy": [
+    {
+      "child": 1,
+      "parent": -1
+    },
+    {
+      "child": 10,
+      "parent": 1
+    },
+    {
+      "child": 11,
+      "parent": 10
+    },
+    {
+      "child": 20,
+      "parent": -1
+    },
+    {
+      "child": 21,
+      "parent": 20
+    },
+    {
+      "child": 30,
+      "parent": -1
+    }
+  ],
+  "warnings": []
+}
