@@ -1,0 +1,13 @@
+.godot
+.venv
+.git
+hf_space_smoke_test
+legacy_p2p_network
+mybuild
+stress_reports
+docs
+supabase
+tmp_*
+*.log
+*.tmp
+__pycache__

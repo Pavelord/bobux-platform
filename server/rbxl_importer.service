@@ -1,0 +1,13 @@
+[Unit]
+Description=Bobux RBXL Import Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/bobux/server
+EnvironmentFile=/opt/bobux/server/.env
+ExecStart=/usr/bin/env uvicorn rbxl_import_server:app --host 0.0.0.0 --port 7821
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0-mobile",
+  "build": 1,
+  "android": {
+    "version": "0.1.0-mobile",
+    "build": 1,
+    "apk_url": "http://109.71.245.162/mobile/Bobux-Android.apk",
+    "sha256": "PASTE_APK_SHA256_HERE",
+    "required": true,
+    "notes": "A new Bobux mobile beta is available. Download it to keep playing with PC friends."
+  }
+}

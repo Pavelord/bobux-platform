@@ -1,0 +1,13 @@
+{
+    "build":  29,
+    "version":  "0.1.28-mobile",
+    "android":  {
+                    "build":  29,
+                    "version":  "0.1.28-mobile",
+                    "sha256":  "E4552715B50FA787ACCE116DC3710B6CCBF6653441C795B2B009FACA631A246D",
+                    "required":  true,
+                    "apk_url":  "http://109.71.245.162/mobile/Bobux-Android.apk",
+                    "versioned_apk_url":  "http://109.71.245.162/mobile/Bobux-Android-0.1.28-mobile-build29.apk",
+                    "notes":  "Stable avatar persistence, safe world loading, authoritative creations and stats, incremental catalog rendering, and Roblox-style character fixes."
+                }
+}

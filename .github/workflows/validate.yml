@@ -1,0 +1,72 @@
+name: Bobux Validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bobux-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  godot-parse:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Bobux
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: false
+
+      - name: Checkout launcher manifest repository
+        uses: actions/checkout@v4
+        with:
+          repository: Pavelord/game
+          path: game
+          sparse-checkout: launcher
+          sparse-checkout-cone-mode: true
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: .codex-tools/godot-4.7
+          key: godot-4.7-windows-editor-v1
+
+      - name: Install verified Godot editor
+        shell: pwsh
+        run: ./tools/ci/install_godot.ps1 -SkipTemplates
+
+      - name: Parse main project
+        shell: pwsh
+        run: |
+          & $env:GODOT_BIN --headless --editor --quit --path .
+          if ($LASTEXITCODE -ne 0) { throw "Main project validation failed." }
+
+      - name: Parse launcher project
+        shell: pwsh
+        run: |
+          & $env:GODOT_BIN --headless --editor --quit --path ./launcher
+          if ($LASTEXITCODE -ne 0) { throw "Launcher project validation failed." }
+
+      - name: Run release-critical tests
+        shell: pwsh
+        run: |
+          $tests = @(
+            "res://tools/validate_runtime_load.gd",
+            "res://tools/validate_rbxl_converter_runtime.gd",
+            "res://tools/validate_model_publish_roundtrip.gd",
+            "res://tools/validate_lobby_friend_preview_queue.gd",
+            "res://tools/validate_mobile_studio_layout.gd"
+          )
+          foreach ($test in $tests) {
+            Write-Host "Running $test"
+            & $env:GODOT_BIN --headless --path . --script $test
+            if ($LASTEXITCODE -ne 0) { throw "Validation failed: $test" }
+          }

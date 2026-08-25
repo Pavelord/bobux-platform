@@ -1,0 +1,67 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Bobux"
+config/version="0.1.36"
+run/main_scene="res://scenes/login/login.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+config/icon="res://assets/branding/bobux_app_icon.png"
+config/dedicated_server_ws_url="ws://109.71.245.162/ws"
+config/dedicated_server_public_host="109.71.245.162"
+config/dedicated_server_public_port=80
+config/dedicated_server_ws_path="/ws"
+config/dedicated_server_routes_json="{}"
+
+[autoload]
+
+GameState="*res://autoload/game_state.gd"
+UserSession="*res://autoload/user_session.gd"
+Analytics="*res://autoload/analytics.gd"
+CloudAPI="*res://autoload/cloud_api.gd"
+SupabaseClient="*res://autoload/supabase_client.gd"
+MapManager="*res://autoload/map_manager.gd"
+NetworkManager="*res://autoload/client_network.gd"
+MobileRuntime="*res://autoload/mobile_runtime.gd"
+LuaScriptEngine="*res://autoload/lua_script_engine.gd"
+
+[bobux]
+
+mobile/manifest_url="http://109.71.245.162/mobile/latest.json"
+mobile/build=29
+mobile/force_mobile_beta=false
+mobile/auto_open_required_update=true
+
+[cloud]
+
+project_url="http://109.71.245.162/api"
+base_url="http://109.71.245.162/api/rest/v1"
+api_key="bobux-public-vps"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/rbxl_importer/plugin.cfg")
+
+[physics]
+
+common/physics_interpolation=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

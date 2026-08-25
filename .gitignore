@@ -1,0 +1,91 @@
+# Godot editor state and generated imports
+.godot/
+**/.godot/
+
+# Local runtimes and dependency caches
+.venv/
+**/.venv/
+.codex-tools/
+.codex-tmp/
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Build and release output
+/dist/
+/launcher_export/
+/mybuild/
+/export_templates/
+/tmp_*/
+*.exe
+*.apk
+*.aab
+*.pck
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Local diagnostics and generated QA material
+/tmp_*
+/*_check.log
+/runtime_check*.log
+/startup_check*.log
+/import_check*.log
+*.log
+/heartbeat_status.json
+/stress_reports/
+/practice_docx_work/
+/practice_report_exact_qa/
+/practice_report_qa/
+/practice_render_ascii/
+/practice_render*/
+/практика/
+/tools/build_practice_report*.py
+/tools/create_practice_report_diagrams.py
+/tools/fix_practice_report.py
+
+# Downloaded third-party reference repositories
+/tools/reference_repos/
+
+# Importer/server runtime data
+**/asset_cache/
+**/rbxl_assets/
+**/jobs/
+**/uploads/
+**/pb_data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Credentials and signing material
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.pfx
+*.p12
+*.key
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Temporary files left by editors and native builds
+*.tmp
+*.TMP
+*~
+~$*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

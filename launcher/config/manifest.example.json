@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "build": 1,
+  "zip_url": "http://109.71.245.162/downloads/Bobux-Windows.zip",
+  "sha256": "",
+  "executable": "Bobux.exe",
+  "notes": "Initial public build"
+}

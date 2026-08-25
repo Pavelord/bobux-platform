@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/place_editor/legacy_studio.gd" id="1_studio"]
+
+[sub_resource type="Environment" id="Environment_Studio"]
+background_mode = 2
+background_color = Color(0.6, 0.75, 0.92, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.7, 0.78, 0.88, 1)
+ambient_light_energy = 0.8
+glow_enabled = true
+glow_intensity = 0.5
+glow_bloom = 0.15
+glow_blend_mode = 2
+
+[node name="Studio" type="Node3D" node_paths=PackedStringArray("camera", "placement_parent", "sun_light")]
+script = ExtResource("1_studio")
+camera = NodePath("Camera3D")
+placement_parent = NodePath("Blocks")
+sun_light = NodePath("DirectionalLight3D")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_Studio")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 10, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 5, 10)
+fov = 70.0
+
+[node name="Blocks" type="Node3D" parent="."]
