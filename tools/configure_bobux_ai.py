@@ -32,11 +32,12 @@ def update_environment(sftp: paramiko.SFTPClient, api_key: str, folder_id: str) 
     except FileNotFoundError:
         existing = ""
 
+    is_gemini = api_key.startswith("AIza")
     values = {
         "BOBUX_AI_API_KEY": api_key,
-        "BOBUX_AI_PROVIDER": "auto",
+        "BOBUX_AI_PROVIDER": "gemini" if is_gemini else "yandex",
         "BOBUX_AI_FOLDER_ID": folder_id,
-        "BOBUX_AI_MODEL": "",
+        "BOBUX_AI_MODEL": "gemini-3.6-flash" if is_gemini else "",
         "BOBUX_AI_BASE_URL": "",
     }
     lines = [

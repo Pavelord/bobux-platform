@@ -186,6 +186,9 @@ jobs:
       - name: Deploy atomically to production
         if: ${{ inputs.deploy_production }}
         shell: pwsh
+        env:
+          BOBUX_AI_API_KEY: ${{ secrets.BOBUX_AI_API_KEY }}
+          BOBUX_AI_FOLDER_ID: ${{ secrets.BOBUX_AI_FOLDER_ID }}
         run: |
           python ./tools/deploy_bobux_release_paramiko.py `
             --key-file "$env:BOBUX_DEPLOY_KEY_FILE" `

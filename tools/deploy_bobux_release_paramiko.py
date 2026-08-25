@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import posixpath
+import re
 import shlex
 import stat
 import sys
@@ -91,6 +92,51 @@ def run_remote(
 
 def shell_quote(value: str) -> str:
     return shlex.quote(value)
+
+
+def sync_remote_ai_environment(sftp: paramiko.SFTPClient) -> bool:
+    """Update server-only AI settings without exposing values in commands/logs."""
+    api_key = os.environ.get("BOBUX_AI_API_KEY", "").strip()
+    if not api_key:
+        return False
+    folder_id = os.environ.get("BOBUX_AI_FOLDER_ID", "").strip()
+    safe_value = re.compile(r"^[A-Za-z0-9_.-]+$")
+    if safe_value.fullmatch(api_key) is None:
+        raise RuntimeError("BOBUX_AI_API_KEY contains unsupported dotenv characters.")
+    if folder_id and safe_value.fullmatch(folder_id) is None:
+        raise RuntimeError("BOBUX_AI_FOLDER_ID contains unsupported dotenv characters.")
+
+    remote_path = "/opt/bobux-api/.env"
+    temporary_path = f"{remote_path}.uploading"
+    try:
+        with sftp.open(remote_path, "r") as source:
+            existing = source.read().decode("utf-8", errors="replace")
+    except FileNotFoundError:
+        existing = ""
+
+    is_gemini = api_key.startswith("AIza")
+    values = {
+        "BOBUX_AI_API_KEY": api_key,
+        "BOBUX_AI_PROVIDER": "gemini" if is_gemini else "yandex",
+        "BOBUX_AI_FOLDER_ID": folder_id,
+        "BOBUX_AI_MODEL": "gemini-3.6-flash" if is_gemini else "",
+        "BOBUX_AI_BASE_URL": "",
+    }
+    retained = [
+        line for line in existing.splitlines()
+        if line.split("=", 1)[0].strip() not in values
+    ]
+    retained.extend(f"{name}={value}" for name, value in values.items())
+    payload = ("\n".join(retained).rstrip() + "\n").encode("utf-8")
+    with sftp.open(temporary_path, "w") as destination:
+        destination.write(payload)
+    sftp.chmod(temporary_path, stat.S_IRUSR | stat.S_IWUSR)
+    try:
+        sftp.remove(remote_path)
+    except FileNotFoundError:
+        pass
+    sftp.rename(temporary_path, remote_path)
+    return True
 
 
 def build_remote_script(
@@ -340,6 +386,19 @@ def main() -> int:
         finally:
             sftp.close()
         run_remote(client, "bash /tmp/bobux-release-deploy.sh", timeout=1200)
+        sftp = client.open_sftp()
+        try:
+            ai_environment_updated = sync_remote_ai_environment(sftp)
+        finally:
+            sftp.close()
+        if ai_environment_updated:
+            print("Updated protected Bobux AI server configuration.", flush=True)
+            run_remote(
+                client,
+                "cd /opt/bobux-api && set -a && . ./.env && set +a && "
+                "pm2 restart bobux-api --update-env >/dev/null && "
+                "echo 'OK: Bobux AI configuration activated'",
+            )
     finally:
         client.close()
     return 0

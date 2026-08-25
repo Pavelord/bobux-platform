@@ -11,6 +11,18 @@ const POCKETBASE_DATA_DIR = process.env.POCKETBASE_DATA_DIR || "/opt/pocketbase/
 const SUPERUSER_EMAIL = process.env.POCKETBASE_SUPERUSER_EMAIL || "";
 const SUPERUSER_PASSWORD = process.env.POCKETBASE_SUPERUSER_PASSWORD || "";
 const HEARTBEAT_TOKEN = process.env.BOBUX_SERVER_HEARTBEAT_TOKEN || "";
+const AI_API_KEY = process.env.BOBUX_AI_API_KEY || "";
+const AI_FOLDER_ID = process.env.BOBUX_AI_FOLDER_ID || "";
+const AI_PROVIDER = String(process.env.BOBUX_AI_PROVIDER || "auto").trim().toLowerCase();
+const RESOLVED_AI_PROVIDER = AI_PROVIDER === "auto"
+  ? (AI_API_KEY.startsWith("AIza") ? "gemini" : "yandex")
+  : AI_PROVIDER;
+const AI_BASE_URL = (process.env.BOBUX_AI_BASE_URL || (RESOLVED_AI_PROVIDER === "gemini"
+  ? "https://generativelanguage.googleapis.com/v1beta"
+  : "https://ai.api.cloud.yandex.net/v1")).replace(/\/+$/, "");
+const AI_MODEL = process.env.BOBUX_AI_MODEL || (RESOLVED_AI_PROVIDER === "gemini"
+  ? "gemini-3.6-flash"
+  : (AI_FOLDER_ID ? `gpt://${AI_FOLDER_ID}/yandexgpt/latest` : ""));
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const MAX_INLINE_THUMBNAIL_CHARS = 4500;
 const MAX_INLINE_MAP_ASSET_CHARS = 3_000_000;
@@ -21,6 +33,16 @@ const MAX_PUBLIC_AVATAR_ITEM_PAYLOADS = 6;
 let superuserToken = "";
 let superuserTokenExpiresAt = 0;
 const mutationTails = new Map();
+const aiRequestWindows = new Map();
+
+const STUDIO_AI_SYSTEM_PROMPT = `You are Bobux Studio Builder, an assistant for a Roblox-like editor.
+Return one JSON object only. Never wrap it in markdown. Schema:
+{"message":"short Russian explanation","actions":[ACTION,...]}
+Allowed ACTION forms:
+1. {"type":"create_script","name":"...","script_type":"Script|LocalScript|ModuleScript","parent":"Workspace|ServerScriptService|StarterGui|StarterPack|ReplicatedStorage","source":"valid Luau source"}
+2. {"type":"create_part","name":"...","shape":"Box|Sphere|Cylinder|Wedge|CornerWedge|Truss|Water|Spawn|Checkpoint|Teleport","size":[x,y,z],"position":[x,y,z],"rotation":[x,y,z],"color":"#RRGGBB","material":"Plastic|Wood|Metal|Glass|Neon|Grass|Concrete","anchored":true,"can_collide":true}
+3. {"type":"create_model","name":"...","parts":[create_part objects without type]}
+Use create_model for houses and multi-part builds. Positions are local offsets around the editor drop point. Rotation values are degrees. Keep builds compact: at most 96 parts, every size in 0.1..256 and every position coordinate in -512..512. Do not request files, network access, plugins, shell commands, secrets, destructive actions, or deletion. If the request is unclear, return no actions and explain what details are needed.`;
 
 async function withMutationLock(key, task) {
   const previous = mutationTails.get(key) || Promise.resolve();
@@ -116,6 +138,28 @@ async function main() {
   await cleanupTechnicalMapRows();
 
   app.get("/api/health", (_req, res) => res.json({ ok: true, database: "pocketbase", storage: "local" }));
+
+  app.post("/api/studio/assistant", express.json({ limit: "256kb" }), async (req, res) => {
+    try {
+      const user = await userFromRequest(req);
+      const userId = String(user.record?.id || "").trim();
+      enforceAiRateLimit(userId);
+      const prompt = String(req.body?.prompt || "").trim();
+      if (prompt.length < 3 || prompt.length > 4000) {
+        return res.status(400).json({ message: "Describe the Studio task in 3 to 4000 characters." });
+      }
+      if (!AI_API_KEY || !AI_MODEL) {
+        return res.status(503).json({
+          message: "Bobux AI is not configured on the server. Set BOBUX_AI_API_KEY and BOBUX_AI_MODEL."
+        });
+      }
+      const context = sanitizeStudioAiContext(req.body?.context);
+      const plan = await requestStudioAiPlan(prompt, context);
+      res.json({ ok: true, ...validateStudioAiPlan(plan) });
+    } catch (error) {
+      sendError(res, error, Number(error?.status || 502));
+    }
+  });
 
   app.post("/api/admin/login", express.json({ limit: "1mb" }), async (req, res) => {
     try {
@@ -2243,6 +2287,183 @@ async function cleanupTechnicalMapRows() {
   console.log(`[BobuxAPI] Removed ${deleted} technical map record(s) from creator listings.`);
 }
 
+function enforceAiRateLimit(userId) {
+  const key = userId || "anonymous";
+  const now = Date.now();
+  const windowStart = now - 60_000;
+  const recent = (aiRequestWindows.get(key) || []).filter((time) => time >= windowStart);
+  if (recent.length >= 8) {
+    const error = new Error("Too many AI requests. Wait a minute and try again.");
+    error.status = 429;
+    throw error;
+  }
+  recent.push(now);
+  aiRequestWindows.set(key, recent);
+}
+
+function sanitizeStudioAiContext(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    map_name: String(source.map_name || "Untitled Place").slice(0, 120),
+    selected_name: String(source.selected_name || "").slice(0, 120),
+    selected_class: String(source.selected_class || "").slice(0, 80),
+    selected_position: Array.isArray(source.selected_position)
+      ? source.selected_position.slice(0, 3).map((item) => clampFinite(item, -100000, 100000, 0))
+      : [],
+    editor_language: "Luau"
+  };
+}
+
+async function requestStudioAiPlan(prompt, context) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  try {
+    if (RESOLVED_AI_PROVIDER === "gemini") {
+      const response = await fetch(`${AI_BASE_URL}/models/${encodeURIComponent(AI_MODEL)}:generateContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": AI_API_KEY
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{
+            role: "user",
+            parts: [{ text: `${STUDIO_AI_SYSTEM_PROMPT}\n\nRequest:\n${prompt}\n\nEditor context: ${JSON.stringify(context)}` }]
+          }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 5000,
+            responseMimeType: "application/json"
+          }
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(String(payload?.error?.message || payload?.message || `AI provider returned ${response.status}`));
+        error.status = 502;
+        throw error;
+      }
+      const content = Array.isArray(payload?.candidates?.[0]?.content?.parts)
+        ? payload.candidates[0].content.parts.map((part) => String(part?.text || "")).join("")
+        : "";
+      const clean = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      if (!clean) throw new Error("AI provider returned an empty plan.");
+      return JSON.parse(clean);
+    }
+    if (RESOLVED_AI_PROVIDER !== "yandex") {
+      throw new Error(`Unsupported Bobux AI provider: ${RESOLVED_AI_PROVIDER}`);
+    }
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Api-Key ${AI_API_KEY}`
+    };
+    if (AI_FOLDER_ID) headers["OpenAI-Project"] = AI_FOLDER_ID;
+    const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: AI_MODEL,
+        temperature: 0.2,
+        max_tokens: 5000,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: STUDIO_AI_SYSTEM_PROMPT },
+          { role: "user", content: `${prompt}\n\nEditor context: ${JSON.stringify(context)}` }
+        ]
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(String(payload?.error?.message || payload?.message || `AI provider returned ${response.status}`));
+      error.status = response.status >= 400 && response.status < 500 ? 502 : response.status;
+      throw error;
+    }
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content === "object" && content !== null) return content;
+    const clean = String(content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    if (!clean) throw new Error("AI provider returned an empty plan.");
+    return JSON.parse(clean);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error("AI request timed out. Try a smaller build request.");
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function validateStudioAiPlan(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const actions = Array.isArray(source.actions) ? source.actions : [];
+  const cleanActions = [];
+  let partBudget = 96;
+  for (const action of actions.slice(0, 32)) {
+    if (!action || typeof action !== "object") continue;
+    const type = String(action.type || "");
+    if (type === "create_script") {
+      const scriptType = ["Script", "LocalScript", "ModuleScript"].includes(action.script_type) ? action.script_type : "Script";
+      const parent = ["Workspace", "ServerScriptService", "StarterGui", "StarterPack", "ReplicatedStorage"].includes(action.parent)
+        ? action.parent : "ServerScriptService";
+      cleanActions.push({
+        type,
+        name: cleanStudioName(action.name, scriptType),
+        script_type: scriptType,
+        parent,
+        source: String(action.source || "").slice(0, 60_000)
+      });
+    } else if (type === "create_part" && partBudget > 0) {
+      cleanActions.push(validateStudioPart(action));
+      partBudget -= 1;
+    } else if (type === "create_model" && partBudget > 0) {
+      const parts = (Array.isArray(action.parts) ? action.parts : []).slice(0, partBudget).map(validateStudioPart);
+      partBudget -= parts.length;
+      if (parts.length > 0) cleanActions.push({ type, name: cleanStudioName(action.name, "Model"), parts });
+    }
+  }
+  return {
+    message: String(source.message || "Plan is ready.").slice(0, 2000),
+    actions: cleanActions
+  };
+}
+
+function validateStudioPart(source) {
+  const shapes = ["Box", "Sphere", "Cylinder", "Wedge", "CornerWedge", "Truss", "Water", "Spawn", "Checkpoint", "Teleport"];
+  const materials = ["Plastic", "Wood", "Metal", "Glass", "Neon", "Grass", "Concrete"];
+  const color = /^#[0-9a-f]{6}$/i.test(String(source.color || "")) ? String(source.color).toUpperCase() : "#A3A2A5";
+  return {
+    type: "create_part",
+    name: cleanStudioName(source.name, "Part"),
+    shape: shapes.includes(source.shape) ? source.shape : "Box",
+    size: cleanVector(source.size, 0.1, 256, [4, 1, 2]),
+    position: cleanVector(source.position, -512, 512, [0, 0, 0]),
+    rotation: cleanVector(source.rotation, -360, 360, [0, 0, 0]),
+    color,
+    material: materials.includes(source.material) ? source.material : "Plastic",
+    anchored: source.anchored !== false,
+    can_collide: source.can_collide !== false
+  };
+}
+
+function cleanVector(value, min, max, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  return [0, 1, 2].map((index) => clampFinite(value[index], min, max, fallback[index]));
+}
+
+function clampFinite(value, min, max, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+}
+
+function cleanStudioName(value, fallback) {
+  const clean = String(value || fallback).replace(/[\u0000-\u001f\\/:*?"<>|]/g, " ").trim().slice(0, 80);
+  return clean || fallback;
+}
+
 function parsePrimitive(value) {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -2279,7 +2500,11 @@ function sendError(res, error, fallbackStatus = 400) {
   });
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+export { sanitizeStudioAiContext, validateStudioAiPlan };
+
+if (process.env.BOBUX_API_NO_START !== "1") {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
