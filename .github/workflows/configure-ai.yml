@@ -1,0 +1,42 @@
+name: Configure Bobux AI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    name: Activate production AI
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deployment client
+        run: python -m pip install --disable-pip-version-check paramiko==3.5.1
+
+      - name: Restore deployment key
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.BOBUX_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_KEY" || { echo "BOBUX_DEPLOY_SSH_KEY is missing"; exit 1; }
+          key_path="$RUNNER_TEMP/bobux-deploy-ed25519"
+          printf '%s' "$DEPLOY_KEY" | tr -d '\r' > "$key_path"
+          chmod 600 "$key_path"
+          echo "BOBUX_DEPLOY_KEY_FILE=$key_path" >> "$GITHUB_ENV"
+
+      - name: Configure and restart Bobux AI
+        env:
+          BOBUX_AI_API_KEY: ${{ secrets.BOBUX_AI_API_KEY }}
+          BOBUX_AI_FOLDER_ID: ${{ secrets.BOBUX_AI_FOLDER_ID }}
+          BOBUX_DEPLOY_KNOWN_HOSTS: ${{ github.workspace }}/.github/bobux_known_hosts
+        run: python tools/configure_bobux_ai.py
