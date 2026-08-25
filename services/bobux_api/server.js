@@ -19,7 +19,7 @@ const RESOLVED_AI_PROVIDER = AI_PROVIDER === "auto"
   : AI_PROVIDER;
 const AI_BASE_URL = (process.env.BOBUX_AI_BASE_URL || (RESOLVED_AI_PROVIDER === "gemini"
   ? "https://generativelanguage.googleapis.com/v1beta"
-  : "https://ai.api.cloud.yandex.net/v1")).replace(/\/+$/, "");
+  : "https://llm.api.cloud.yandex.net/foundationModels/v1")).replace(/\/+$/, "");
 const AI_MODEL = process.env.BOBUX_AI_MODEL || (RESOLVED_AI_PROVIDER === "gemini"
   ? "gemini-3.6-flash"
   : (AI_FOLDER_ID ? `gpt://${AI_FOLDER_ID}/yandexgpt/latest` : ""));
@@ -2354,23 +2354,23 @@ async function requestStudioAiPlan(prompt, context) {
     if (RESOLVED_AI_PROVIDER !== "yandex") {
       throw new Error(`Unsupported Bobux AI provider: ${RESOLVED_AI_PROVIDER}`);
     }
-    const headers = {
-      "Content-Type": "application/json",
-      "Authorization": `Api-Key ${AI_API_KEY}`
-    };
-    if (AI_FOLDER_ID) headers["OpenAI-Project"] = AI_FOLDER_ID;
-    const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${AI_BASE_URL}/completion`, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Api-Key ${AI_API_KEY}`
+      },
       signal: controller.signal,
       body: JSON.stringify({
-        model: AI_MODEL,
-        temperature: 0.2,
-        max_tokens: 5000,
-        response_format: { type: "json_object" },
+        modelUri: AI_MODEL,
+        completionOptions: {
+          stream: false,
+          temperature: 0.2,
+          maxTokens: "5000"
+        },
         messages: [
-          { role: "system", content: STUDIO_AI_SYSTEM_PROMPT },
-          { role: "user", content: `${prompt}\n\nEditor context: ${JSON.stringify(context)}` }
+          { role: "system", text: STUDIO_AI_SYSTEM_PROMPT },
+          { role: "user", text: `${prompt}\n\nEditor context: ${JSON.stringify(context)}` }
         ]
       })
     });
@@ -2380,7 +2380,7 @@ async function requestStudioAiPlan(prompt, context) {
       error.status = response.status >= 400 && response.status < 500 ? 502 : response.status;
       throw error;
     }
-    const content = payload?.choices?.[0]?.message?.content;
+    const content = payload?.result?.alternatives?.[0]?.message?.text;
     if (typeof content === "object" && content !== null) return content;
     const clean = String(content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     if (!clean) throw new Error("AI provider returned an empty plan.");
@@ -2500,7 +2500,7 @@ function sendError(res, error, fallbackStatus = 400) {
   });
 }
 
-export { sanitizeStudioAiContext, validateStudioAiPlan };
+export { requestStudioAiPlan, sanitizeStudioAiContext, validateStudioAiPlan };
 
 if (process.env.BOBUX_API_NO_START !== "1") {
   main().catch((error) => {
