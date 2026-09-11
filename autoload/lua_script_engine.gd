@@ -3,6 +3,8 @@ extends Node
 # LuaScriptEngine.gd - Autoload for in-game Lua scripting
 
 const RobloxDataModelClass = preload("res://addons/roblox_studio/roblox_data_model.gd")
+const RobloxInputBridge = preload("res://addons/roblox_studio/roblox_input_bridge.gd")
+signal script_message(context: Node, message: String, is_error: bool)
 
 var _lua: Variant = null
 var is_active: bool = false
@@ -30,6 +32,9 @@ var _runtime_last_errors: Array[String] = []
 var _runtime_resume_started_usec: Dictionary = {}
 var _runtime_budget_exceeded: Dictionary = {}
 var _service_nodes_cache: Dictionary = {}
+var _task_runtime_ids: Dictionary = {}
+var _task_scheduler_cursor: int = 0
+var _runtime_tweens: Array = []
 
 const SCRIPT_MEMORY_LIMIT_BYTES := 32 * 1024 * 1024
 const MAX_CONCURRENT_SCRIPTS := 2048
@@ -42,7 +47,9 @@ const SCRIPT_RESUME_TIME_BUDGET_USEC := 3000
 const SCRIPT_COMPILE_BUDGET_PER_FRAME := 1
 const SCRIPT_COMPILE_TIME_BUDGET_USEC := 4000
 const SCRIPT_INSTRUCTION_HOOK_INTERVAL := 2500
-const SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC := 4500
+# A hard runaway watchdog is separate from the small shared frame budget.
+# Native Instance traversal/resource creation can legitimately exceed 4.5 ms.
+const SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC := 50000
 const SCRIPT_EVENT_CALLBACK_BUDGET_PER_FRAME := 8
 const SCRIPT_EVENT_TIME_BUDGET_USEC := 1500
 # LuaAPI values are state-bound. Deeply nesting separate Lua states through
@@ -57,18 +64,27 @@ class BobuxEvent extends RefCounted:
 	var connections: Array = []
 	var _budget_cursor: int = 0
 	func Connect(callback_or_self: Variant, callback: Variant = null) -> Variant:
-		if callback == null and callback_or_self != self:
+		if callback == null and not (callback_or_self is BobuxEvent):
 			callback = callback_or_self
-		if callback != null:
-			connections.append(callback)
-		return self
+		var connection := BobuxConnection.new()
+		connection.event_ref = weakref(self)
+		connection.callback = callback
+		connection.Connected = callback != null
+		if connection.Connected:
+			connections.append(connection)
+		return connection
 	func Once(callback_or_self: Variant, callback: Variant = null) -> Variant:
-		if callback == null and callback_or_self != self:
+		if callback == null and not (callback_or_self is BobuxEvent):
 			callback = callback_or_self
-		if callback != null:
-			connections.append(callback)
-		return self
+		var connection: BobuxConnection = Connect(callback)
+		connection.once = true
+		return connection
 	func Disconnect(_self_arg: Variant = null) -> void:
+		for connection in connections:
+			if connection is BobuxConnection:
+				connection.Connected = false
+				connection.callback = null
+				connection.event_ref = null
 		connections.clear()
 	func Wait(_self_arg: Variant = null) -> Variant:
 		return null
@@ -77,6 +93,9 @@ class BobuxEvent extends RefCounted:
 		if arg1 != null: args.append(arg1)
 		if arg2 != null: args.append(arg2)
 		if arg3 != null: args.append(arg3)
+		FireArgs(args)
+
+	func FireArgs(args: Array) -> void:
 		for connection in connections.duplicate():
 			_invoke_connection(connection, args)
 
@@ -103,6 +122,14 @@ class BobuxEvent extends RefCounted:
 		return invoked
 
 	func _invoke_connection(connection: Variant, args: Array) -> void:
+		if connection is BobuxConnection:
+			if not connection.Connected:
+				return
+			var callback: Variant = connection.callback
+			if connection.once:
+				connection.Disconnect()
+			_invoke_connection(callback, args)
+			return
 		if connection is Callable:
 			var callable := connection as Callable
 			# LuaAPI's callable mode follows Godot's Callable contract. callv
@@ -113,6 +140,91 @@ class BobuxEvent extends RefCounted:
 				push_warning("[LuaScriptEngine] Event callback failed: %s" % str((callback_result as Object).call("get_error")))
 		elif connection is Object and (connection as Object).has_method("call"):
 			(connection as Object).call("call", args)
+
+
+class BobuxConnection extends RefCounted:
+	var Connected: bool = false
+	var callback: Variant = null
+	var event_ref: WeakRef = null
+	var once: bool = false
+	func Disconnect(_self_arg: Variant = null) -> void:
+		Connected = false
+		var event: Variant = event_ref.get_ref() if event_ref != null else null
+		if event != null:
+			event.connections.erase(self)
+		event_ref = null
+		callback = null
+
+class BobuxTween extends RefCounted:
+	var Completed := BobuxEvent.new()
+	var PlaybackState: int = 0
+	var engine: Node
+	var target: BobuxInstance
+	var info: Dictionary
+	var goals: Dictionary
+	var animation: Tween
+
+	func Play(_self_arg: Variant = null) -> void:
+		if animation != null and animation.is_valid() and PlaybackState == 3:
+			animation.play()
+			PlaybackState = 2
+			return
+		if PlaybackState == 2 or not is_instance_valid(target.node) or not is_instance_valid(engine):
+			return
+		animation = engine.create_tween().bind_node(target.node)
+		var duration := maxf(float(info.get("Time", 1.0)), 0.0)
+		var delay_time := maxf(float(info.get("DelayTime", 0.0)), 0.0)
+		if delay_time > 0.0:
+			animation.tween_interval(delay_time)
+		var styles := [Tween.TRANS_LINEAR, Tween.TRANS_SINE, Tween.TRANS_BACK, Tween.TRANS_QUAD, Tween.TRANS_QUART, Tween.TRANS_QUINT, Tween.TRANS_BOUNCE, Tween.TRANS_ELASTIC, Tween.TRANS_EXPO, Tween.TRANS_CIRC, Tween.TRANS_CUBIC]
+		animation.set_trans(styles[clampi(int(info.get("EasingStyle", 0)), 0, styles.size() - 1)])
+		animation.set_ease([Tween.EASE_IN, Tween.EASE_OUT, Tween.EASE_IN_OUT][clampi(int(info.get("EasingDirection", 1)), 0, 2)])
+		var starts := {}
+		for key in goals:
+			starts[key] = target._get(str(key))
+		animation.tween_method(_apply_fraction.bind(starts, goals), 0.0, 1.0, duration)
+		if bool(info.get("Reverses", false)):
+			animation.tween_method(_apply_fraction.bind(goals, starts), 0.0, 1.0, duration)
+		var repeats := int(info.get("RepeatCount", 0))
+		animation.set_loops(0 if repeats < 0 else repeats + 1)
+		animation.finished.connect(_on_finished)
+		PlaybackState = 2
+
+	func _apply_fraction(fraction: float, starts: Dictionary, ends: Dictionary) -> void:
+		if not is_instance_valid(target.node):
+			return
+		for key in ends:
+			var first: Variant = starts.get(key)
+			var last: Variant = ends[key]
+			if first is BobuxCFrame and last is BobuxCFrame:
+				target._set(str(key), first.Lerp(last, fraction))
+			elif (first is float or first is int) and (last is float or last is int):
+				target._set(str(key), lerpf(float(first), float(last), fraction))
+			elif (first is Vector3 and last is Vector3) or (first is Color and last is Color) or (first is Vector2 and last is Vector2):
+				target._set(str(key), first.lerp(last, fraction))
+			elif fraction >= 1.0:
+				target._set(str(key), last)
+
+	func Pause(_self_arg: Variant = null) -> void:
+		if animation != null and animation.is_valid() and PlaybackState == 2:
+			animation.pause()
+			PlaybackState = 3
+
+	func Cancel(_self_arg: Variant = null) -> void:
+		if animation != null and animation.is_valid():
+			animation.kill()
+		PlaybackState = 5
+		Completed.Fire(PlaybackState)
+
+	func _on_finished() -> void:
+		PlaybackState = 4
+		Completed.Fire(PlaybackState)
+
+	func dispose() -> void:
+		Completed.Disconnect()
+		if animation != null and animation.is_valid():
+			animation.kill()
+		animation = null
 
 
 class BobuxCFrame extends RefCounted:
@@ -171,32 +283,32 @@ class BobuxCFrame extends RefCounted:
 		return Inverse()
 
 	func ToWorldSpace(self_or_other: Variant, maybe_other: Variant = null) -> Variant:
-		var other: Variant = maybe_other if self_or_other == self else self_or_other
+		var other: Variant = maybe_other if (self_or_other is Object and self_or_other == self) else self_or_other
 		return __mul(null, other)
 
 	func ToObjectSpace(self_or_other: Variant, maybe_other: Variant = null) -> Variant:
-		var other: Variant = maybe_other if self_or_other == self else self_or_other
+		var other: Variant = maybe_other if (self_or_other is Object and self_or_other == self) else self_or_other
 		return Inverse().__mul(null, other)
 
 	func PointToWorldSpace(self_or_point: Variant, maybe_point: Variant = null) -> Variant:
-		var point: Variant = maybe_point if self_or_point == self else self_or_point
+		var point: Variant = maybe_point if (self_or_point is Object and self_or_point == self) else self_or_point
 		return transform * point if point is Vector3 else null
 
 	func PointToObjectSpace(self_or_point: Variant, maybe_point: Variant = null) -> Variant:
-		var point: Variant = maybe_point if self_or_point == self else self_or_point
+		var point: Variant = maybe_point if (self_or_point is Object and self_or_point == self) else self_or_point
 		return transform.affine_inverse() * point if point is Vector3 else null
 
 	func VectorToWorldSpace(self_or_vector: Variant, maybe_vector: Variant = null) -> Variant:
-		var vector: Variant = maybe_vector if self_or_vector == self else self_or_vector
+		var vector: Variant = maybe_vector if (self_or_vector is Object and self_or_vector == self) else self_or_vector
 		return transform.basis * vector if vector is Vector3 else null
 
 	func VectorToObjectSpace(self_or_vector: Variant, maybe_vector: Variant = null) -> Variant:
-		var vector: Variant = maybe_vector if self_or_vector == self else self_or_vector
+		var vector: Variant = maybe_vector if (self_or_vector is Object and self_or_vector == self) else self_or_vector
 		return transform.basis.inverse() * vector if vector is Vector3 else null
 
 	func Lerp(self_or_goal: Variant, goal_or_alpha: Variant = null, maybe_alpha: Variant = null) -> BobuxCFrame:
-		var goal: Variant = goal_or_alpha if self_or_goal == self else self_or_goal
-		var alpha: float = float(maybe_alpha if self_or_goal == self else goal_or_alpha)
+		var goal: Variant = goal_or_alpha if (self_or_goal is Object and self_or_goal == self) else self_or_goal
+		var alpha: float = float(maybe_alpha if (self_or_goal is Object and self_or_goal == self) else goal_or_alpha)
 		if not (goal is BobuxCFrame):
 			return BobuxCFrame.new(transform)
 		var goal_transform := (goal as BobuxCFrame).transform
@@ -241,10 +353,10 @@ class BobuxAnimationTrack extends RefCounted:
 			Stopped.Fire()
 
 	func AdjustSpeed(self_or_speed: Variant = 1.0, maybe_speed: Variant = null) -> void:
-		Speed = float(maybe_speed if self_or_speed == self else self_or_speed)
+		Speed = float(maybe_speed if (self_or_speed is Object and self_or_speed == self) else self_or_speed)
 
 	func AdjustWeight(self_or_weight: Variant = 1.0, maybe_weight: Variant = null, _fade_time: Variant = 0.1) -> void:
-		WeightCurrent = float(maybe_weight if self_or_weight == self else self_or_weight)
+		WeightCurrent = float(maybe_weight if (self_or_weight is Object and self_or_weight == self) else self_or_weight)
 
 
 class BobuxRay extends RefCounted:
@@ -264,16 +376,53 @@ class BobuxRaycastParams extends RefCounted:
 	var RespectCanCollide: bool = false
 	var BruteForceAllSlow: bool = false
 
+class BobuxOverlapParams extends BobuxRaycastParams:
+	var MaxParts: int = 0
+	var Tolerance: float = 0
+
 
 class BobuxMouse extends RefCounted:
-	var Hit: BobuxCFrame = BobuxCFrame.new()
-	var Target: Variant = null
-	var X: float = 0.0
-	var Y: float = 0.0
-	var Button1Down: BobuxEvent = BobuxEvent.new()
-	var Button1Up: BobuxEvent = BobuxEvent.new()
-	var KeyDown: BobuxEvent = BobuxEvent.new()
-	var KeyUp: BobuxEvent = BobuxEvent.new()
+	var _player: Node
+	var Hit: BobuxCFrame:
+		get: return BobuxCFrame.new(Transform3D(Basis.IDENTITY, _sample()[1]))
+	var Target: Variant:
+		get: return _sample()[0]
+	var X: float:
+		get: return _position().x
+	var Y: float:
+		get: return _position().y
+	var Button1Down: BobuxEvent
+	var Button1Up: BobuxEvent
+	var KeyDown: BobuxEvent
+	var KeyUp: BobuxEvent
+	func _init(player: Node = null) -> void:
+		_player = player
+		var instance := BobuxInstance.new(player)
+		Button1Down = instance._shared_event("Mouse_Button1Down")
+		Button1Up = instance._shared_event("Mouse_Button1Up")
+		KeyDown = instance._shared_event("Mouse_KeyDown")
+		KeyUp = instance._shared_event("Mouse_KeyUp")
+	func _viewport() -> Viewport:
+		if not is_instance_valid(_player): return null
+		var character := BobuxInstance.new(_player)._bound_character()
+		return character.get_viewport() if is_instance_valid(character) else _player.get_viewport()
+	func _position() -> Vector2:
+		var viewport := _viewport()
+		if viewport != null and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			return viewport.get_visible_rect().size * 0.5
+		if viewport != null and viewport.has_meta("bobux_pointer_position"):
+			return viewport.get_meta("bobux_pointer_position")
+		return viewport.get_mouse_position() if viewport != null else Vector2.ZERO
+	func _sample() -> Array:
+		var viewport := _viewport()
+		var camera := viewport.get_camera_3d() if viewport != null else null
+		if camera == null: return [null, Vector3.ZERO]
+		var owner := BobuxInstance.new(_player)
+		var character := owner._bound_character()
+		var instance := BobuxInstance.new(character if character != null else _player)
+		var origin := camera.project_ray_origin(_position())
+		var direction := camera.project_ray_normal(_position()) * 1000
+		return instance._perform_roblox_raycast(BobuxRay.new(instance._godot_point_to_roblox(origin), instance._godot_point_to_roblox(direction)), owner.Character)
 
 
 class BobuxRandom extends RefCounted:
@@ -288,7 +437,7 @@ class BobuxRandom extends RefCounted:
 	func NextNumber(self_or_minimum: Variant = 0.0, minimum_or_maximum: Variant = 1.0, maybe_maximum: Variant = null) -> float:
 		var minimum := 0.0
 		var maximum := 1.0
-		if self_or_minimum == self:
+		if (self_or_minimum is Object and self_or_minimum == self):
 			minimum = float(minimum_or_maximum) if minimum_or_maximum != null else 0.0
 			maximum = float(maybe_maximum) if maybe_maximum != null else 1.0
 		else:
@@ -303,7 +452,7 @@ class BobuxRandom extends RefCounted:
 	func NextInteger(self_or_minimum: Variant = 0, minimum_or_maximum: Variant = 1, maybe_maximum: Variant = null) -> int:
 		var minimum := 0
 		var maximum := 1
-		if self_or_minimum == self:
+		if (self_or_minimum is Object and self_or_minimum == self):
 			minimum = int(minimum_or_maximum) if minimum_or_maximum != null else 0
 			maximum = int(maybe_maximum) if maybe_maximum != null else 1
 		else:
@@ -371,18 +520,18 @@ class BobuxDataStore extends RefCounted:
 		service_node.set_meta("_bobux_data_store_values", stores)
 
 	func GetAsync(key_or_self: Variant, maybe_key: Variant = null) -> Variant:
-		var key := str(maybe_key if key_or_self == self else key_or_self)
+		var key := str(maybe_key if (key_or_self is Object and key_or_self == self) else key_or_self)
 		return _read_bucket().get(key, null)
 
 	func SetAsync(key_or_self: Variant, key_or_value: Variant = null, maybe_value: Variant = null) -> void:
-		var key := str(key_or_value if key_or_self == self else key_or_self)
-		var value: Variant = maybe_value if key_or_self == self else key_or_value
+		var key := str(key_or_value if (key_or_self is Object and key_or_self == self) else key_or_self)
+		var value: Variant = maybe_value if (key_or_self is Object and key_or_self == self) else key_or_value
 		var bucket := _read_bucket()
 		bucket[key] = value
 		_write_bucket(bucket)
 
 	func RemoveAsync(key_or_self: Variant, maybe_key: Variant = null) -> Variant:
-		var key := str(maybe_key if key_or_self == self else key_or_self)
+		var key := str(maybe_key if (key_or_self is Object and key_or_self == self) else key_or_self)
 		var bucket := _read_bucket()
 		var previous: Variant = bucket.get(key, null)
 		bucket.erase(key)
@@ -390,8 +539,8 @@ class BobuxDataStore extends RefCounted:
 		return previous
 
 	func IncrementAsync(key_or_self: Variant, key_or_amount: Variant = 1, maybe_amount: Variant = null) -> Variant:
-		var key := str(key_or_amount if key_or_self == self else key_or_self)
-		var amount: Variant = maybe_amount if key_or_self == self else key_or_amount
+		var key := str(key_or_amount if (key_or_self is Object and key_or_self == self) else key_or_self)
+		var amount: Variant = maybe_amount if (key_or_self is Object and key_or_self == self) else key_or_amount
 		var bucket := _read_bucket()
 		var value := float(bucket.get(key, 0.0)) + float(amount if amount != null else 1.0)
 		bucket[key] = value
@@ -399,8 +548,8 @@ class BobuxDataStore extends RefCounted:
 		return value
 
 	func UpdateAsync(key_or_self: Variant, key_or_callback: Variant = null, maybe_callback: Variant = null) -> Variant:
-		var key := str(key_or_callback if key_or_self == self else key_or_self)
-		var callback: Variant = maybe_callback if key_or_self == self else key_or_callback
+		var key := str(key_or_callback if (key_or_self is Object and key_or_self == self) else key_or_self)
+		var callback: Variant = maybe_callback if (key_or_self is Object and key_or_self == self) else key_or_callback
 		var bucket := _read_bucket()
 		var previous: Variant = bucket.get(key, null)
 		var updated: Variant = previous
@@ -422,7 +571,7 @@ class BobuxDataStore extends RefCounted:
 		var page_size := 50
 		var minimum: Variant = null
 		var maximum: Variant = null
-		if self_or_ascending == self:
+		if (self_or_ascending is Object and self_or_ascending == self):
 			ascending = bool(ascending_or_page_size)
 			page_size = int(page_size_or_minimum) if page_size_or_minimum != null else 50
 			minimum = minimum_or_maximum
@@ -449,7 +598,7 @@ class BobuxDataStore extends RefCounted:
 
 class BobuxInstance extends RefCounted:
 	const DEFAULT_ROBLOX_STUD_SCALE: float = 0.5
-	const STUDIO_WORLD_COLLISION_MASK: int = 1 << 2
+	const STUDIO_WORLD_COLLISION_MASK: int = 1 | 2 | 4 | 16
 	const JOINT_CLASSES: Array[String] = [
 		"Weld", "ManualWeld", "WeldConstraint", "Motor6D", "Snap", "Motor",
 		"HingeConstraint", "BallSocketConstraint", "SpringConstraint",
@@ -578,9 +727,12 @@ class BobuxInstance extends RefCounted:
 		Equipped = _shared_event("Equipped")
 		Unequipped = _shared_event("Unequipped")
 		MouseButton1Click = _shared_event("MouseButton1Click")
-		PlayerAdded = ChildAdded
-		PlayerRemoving = ChildRemoved
+		PlayerAdded = _shared_event("PlayerAdded")
+		PlayerRemoving = _shared_event("PlayerRemoving")
 		_ensure_node_signal_bridge()
+
+	func __eq(_lua: Variant, other: Variant) -> bool:
+		return other is BobuxInstance and is_instance_valid(node) and node == other.node
 
 	func _shared_event(event_name: String) -> BobuxEvent:
 		if not is_instance_valid(node):
@@ -599,17 +751,30 @@ class BobuxInstance extends RefCounted:
 		if not is_instance_valid(node) or bool(node.get_meta("_bobux_signal_bridge", false)):
 			return
 		node.set_meta("_bobux_signal_bridge", true)
+		var bridges: Array = []
 		if node.has_signal("body_entered"):
-			node.connect("body_entered", _on_body_entered)
+			bridges.append({"signal": "body_entered", "callback": _on_body_entered})
 		if node.has_signal("child_entered_tree"):
-			node.connect("child_entered_tree", func(child: Node): ChildAdded.Fire(BobuxInstance.new(child)))
+			bridges.append({"signal": "child_entered_tree", "callback": _on_child_entered_tree})
 		if node.has_signal("child_exiting_tree"):
-			node.connect("child_exiting_tree", func(child: Node): ChildRemoved.Fire(BobuxInstance.new(child)))
+			bridges.append({"signal": "child_exiting_tree", "callback": _on_child_exiting_tree})
 		if node is BaseButton:
-			(node as BaseButton).pressed.connect(func():
-				Activated.Fire()
-				MouseButton1Click.Fire()
-			)
+			bridges.append({"signal": "pressed", "callback": _on_button_pressed})
+		for bridge in bridges:
+			node.connect(bridge.signal, bridge.callback)
+		node.set_meta("_bobux_signal_callbacks", bridges)
+
+	func _on_child_entered_tree(child: Node) -> void:
+		if not ChildAdded.connections.is_empty():
+			ChildAdded.Fire(BobuxInstance.new(child))
+
+	func _on_child_exiting_tree(child: Node) -> void:
+		if not ChildRemoved.connections.is_empty():
+			ChildRemoved.Fire(BobuxInstance.new(child))
+
+	func _on_button_pressed() -> void:
+		Activated.Fire()
+		MouseButton1Click.Fire()
 
 	func _on_body_entered(body: Node) -> void:
 		var hit_part = body
@@ -742,7 +907,8 @@ class BobuxInstance extends RefCounted:
 			"MouseButton1Up", "MouseEnter", "MouseLeave", "MouseClick", "Died",
 			"Selected", "Deselected", "Deactivated", "InputBegan", "InputChanged",
 			"InputEnded", "DeviceRotationChanged", "CharacterAdded", "Move", "Seated",
-			"JumpRequest", "DescendantAdded", "DescendantRemoving", "TouchMoved",
+			"JumpRequest", "StateChanged", "Jumping", "FreeFalling", "DescendantAdded", "DescendantRemoving", "TouchMoved",
+			"MoveToFinished", "HealthChanged", "StateEnabledChanged",
 			"TouchStarted", "TouchEnded", "Hit", "Running", "Triggered",
 			"TriggerEnded", "PromptShown", "PromptHidden", "PromptTriggered",
 			"PromptButtonHoldBegan", "PromptButtonHoldEnded",
@@ -751,20 +917,39 @@ class BobuxInstance extends RefCounted:
 		]:
 			return _shared_event(prop_str)
 		match prop_str:
+			"CurrentCamera":
+				var camera := node.get_viewport().get_camera_3d() if node.is_inside_tree() else null
+				return BobuxInstance.new(camera) if camera != null else null
+			"C0", "C1", "Transform", "WorldPivot":
+				var raw: Variant = _stored_reference(prop_str)
+				if raw is BobuxCFrame: return raw
+				if raw is Dictionary:
+					var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+					return BobuxCFrame.new(_godot_transform_to_roblox(importer._cframe_to_transform(raw, _stud_scale())))
+				return BobuxCFrame.new()
+			"PrimaryPart", "Part0", "Part1", "Attachment0", "Attachment1", "Adornee", "RespawnLocation", "Team":
+				var stored: Variant = _stored_reference(prop_str)
+				return _resolve_instance_reference(stored)
+			"KeyboardEnabled", "MouseEnabled":
+				return not OS.has_feature("mobile")
+			"TouchEnabled":
+				return DisplayServer.is_touchscreen_available()
 			"Name":
-				return node.get_meta("Name", node.get_meta("block_name", node.name))
+				return str(node.get_meta("Name", node.get_meta("block_name", node.name)))
 			"ClassName":
-				return node.get_meta("roblox_class", node.get_meta("shape_type", node.get_class()))
+				return str(node.get_meta("roblox_class", node.get_meta("shape_type", node.get_class())))
 			"Parent":
 				var p := node.get_parent()
 				return BobuxInstance.new(p) if p else null
 			"Value":
+				if str(node.get_meta("roblox_class", "")) == "ObjectValue":
+					return _resolve_instance_reference(_stored_reference("Value"))
 				if node.has_meta("Value"):
 					return node.get_meta("Value")
 				return node.get_meta("value") if node.has_meta("value") else null
 			"Position":
 				if node is Node3D:
-					var godot_position := (node as Node3D).global_position if bool(node.get_meta("bobux_character_part_proxy", false)) else (node as Node3D).position
+					var godot_position := (node as Node3D).global_position if node.is_inside_tree() else (node as Node3D).position
 					return _godot_point_to_roblox(godot_position)
 				if node is Control:
 					return (node as Control).position
@@ -774,13 +959,21 @@ class BobuxInstance extends RefCounted:
 					return roblox_basis.get_euler(EULER_ORDER_XYZ) * (180.0 / PI)
 			"CFrame":
 				if node is Node3D:
-					var frame: Transform3D = (node as Node3D).global_transform if bool(node.get_meta("bobux_character_part_proxy", false)) else (node as Node3D).transform
+					var frame: Transform3D = (node as Node3D).global_transform if node.is_inside_tree() else (node as Node3D).transform
+					frame.basis = frame.basis.orthonormalized()
 					return BobuxCFrame.new(_godot_transform_to_roblox(frame))
 			"Velocity", "AssemblyLinearVelocity":
+				if bool(node.get_meta("bobux_character_part_proxy", false)):
+					var assembly := _character_body()
+					if assembly != null:
+						return _godot_velocity_to_roblox(assembly.velocity)
 				if node is CharacterBody3D:
 					return _godot_velocity_to_roblox((node as CharacterBody3D).velocity)
 				if node is RigidBody3D:
 					return _godot_velocity_to_roblox((node as RigidBody3D).linear_velocity)
+				var physics_body := preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(node)
+				if physics_body != null:
+					return _godot_velocity_to_roblox(physics_body.linear_velocity)
 				var stored_velocity: Variant = node.get_meta("velocity", Vector3.ZERO)
 				return _godot_velocity_to_roblox(stored_velocity as Vector3) if stored_velocity is Vector3 else Vector3.ZERO
 			"Size":
@@ -800,6 +993,12 @@ class BobuxInstance extends RefCounted:
 			"Enabled":
 				if node is BaseButton:
 					return not (node as BaseButton).disabled
+				if node is GPUParticles3D:
+					return (node as GPUParticles3D).emitting
+				if node is Light3D:
+					return (node as Light3D).visible
+				if node is AudioStreamPlayer3D:
+					return (node as AudioStreamPlayer3D).playing
 				return (node as Control).visible if node is Control else true
 			"Anchored":
 				return node.get_meta("anchored", true)
@@ -814,6 +1013,10 @@ class BobuxInstance extends RefCounted:
 						return mat.albedo_color
 				return Color.WHITE
 			"Color":
+				if node is GPUParticles3D:
+					var particle_material := (node as GPUParticles3D).process_material as ParticleProcessMaterial
+					if particle_material != null:
+						return particle_material.color
 				if node is MeshInstance3D:
 					var mat := node.get_active_material(0) as StandardMaterial3D
 					if mat:
@@ -848,7 +1051,15 @@ class BobuxInstance extends RefCounted:
 				if jump_body != null and jump_body.has_method("get_humanoid_jump_power"):
 					return jump_body.call("get_humanoid_jump_power")
 				return jump_body.get("jump_velocity_setting") if jump_body != null else node.get_meta("JumpPower", 50.0)
+			"JumpHeight":
+				return node.get_meta("JumpHeight", 7.2)
+			"UseJumpPower":
+				return node.get_meta("UseJumpPower", true)
+			"Jump":
+				return node.get_meta("Jump", false)
 			"PlatformStand", "Sit", "AutoRotate":
+				if prop_str == "Sit" and str(node.get_meta("roblox_class", "")) in ["Seat", "VehicleSeat"]:
+					return Callable(self, "_seat_sit")
 				return node.get_meta(prop_str, false if prop_str != "AutoRotate" else true)
 			"TimeOfDay":
 				return node.get_meta("TimeOfDay", "14:00:00")
@@ -872,15 +1083,52 @@ class BobuxInstance extends RefCounted:
 						return node.get(native_name)
 		return null
 
+	func _resolve_instance_reference(value: Variant) -> BobuxInstance:
+		if value is BobuxInstance: return value if is_instance_valid(value.node) else null
+		if value is Node: return BobuxInstance.new(value) if is_instance_valid(value) else null
+		if value == null or str(value) in ["", "-1", "<null>"]: return null
+		var ref := str(int(value)) if value is float else str(value)
+		var cursor := node
+		while cursor != null:
+			var refs: Dictionary = cursor.get_meta("_bobux_clone_refs", {})
+			if refs.has(ref):
+				var target: Variant = instance_from_id(int(refs[ref]))
+				return BobuxInstance.new(target) if is_instance_valid(target) else null
+			cursor = cursor.get_parent()
+		if node.is_inside_tree():
+			var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+			var target: Node = engine.find_instance_by_ref(node, ref) if engine != null else null
+			if target != null: return BobuxInstance.new(target)
+		return null
+
+	func _stored_reference(key: String) -> Variant:
+		return node.get_meta(key) if node.has_meta(key) else node.get_meta("roblox_properties", {}).get(key)
+
 	func _set(property: StringName, value: Variant) -> bool:
 		if not is_instance_valid(node):
 			return false
 		var prop_str := str(property)
+		var previous: Variant = _get(property)
+		if typeof(previous) == typeof(value) and typeof(value) in [TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_VECTOR2, TYPE_VECTOR3, TYPE_COLOR]:
+			if previous == value:
+				return true
 		match prop_str:
 			"Name":
+				node.set_meta("Name", str(value))
 				node.set_meta("block_name", str(value))
 				node.name = str(value)
-				Changed.Fire("Name")
+				_notify_property_changed("Name")
+				return true
+			"Team":
+				var team := _node_from_instance_variant(value)
+				if team != null and str(team.get_meta("roblox_class", "")) != "Team": return false
+				var old_team: Variant = _resolve_instance_reference(_stored_reference("Team"))
+				node.set_meta("Team", value)
+				node.set_meta("Neutral", team == null)
+				if team != null: node.set_meta("TeamColor", team.get_meta("TeamColor", team.get_meta("roblox_properties", {}).get("TeamColor", 194)))
+				if old_team is BobuxInstance: old_team.PlayerRemoving.Fire(BobuxInstance.new(node))
+				if team != null: BobuxInstance.new(team).PlayerAdded.Fire(BobuxInstance.new(node))
+				_notify_property_changed(prop_str)
 				return true
 			"Parent":
 				var parent_node: Node = null
@@ -896,12 +1144,12 @@ class BobuxInstance extends RefCounted:
 					parent_node.add_child(node)
 					_set_template_tree_visible(node, _is_node_under_workspace(parent_node))
 					AncestryChanged.Fire(BobuxInstance.new(node), value)
-					Changed.Fire("Parent")
+					_notify_property_changed("Parent")
 					return true
 			"Value":
 				node.set_meta("value", value)
 				node.set_meta("Value", value)
-				Changed.Fire("Value")
+				_notify_property_changed("Value")
 				return true
 			"Position":
 				if node is Node3D and value is Vector3:
@@ -909,21 +1157,28 @@ class BobuxInstance extends RefCounted:
 					if bool(node.get_meta("bobux_character_part_proxy", false)):
 						var proxy_body := _character_body()
 						if proxy_body != null:
-							proxy_body.global_position += target_position - (node as Node3D).global_position
+							var destination := proxy_body.global_position + target_position - (node as Node3D).global_position
+							if proxy_body.has_method("set_lua_position"): proxy_body.set_lua_position(destination)
+							else: proxy_body.global_position = destination
 					else:
-						(node as Node3D).position = target_position
-					Changed.Fire("Position")
+						if node.is_inside_tree():
+							(node as Node3D).global_position = target_position
+						else:
+							(node as Node3D).position = target_position
+					_notify_property_changed("Position")
 					return true
 				if node is Control:
-					var control_position := _ui_value_to_vector2(value, (node as Control).get_parent() as Control)
-					(node as Control).position = control_position
-					Changed.Fire("Position")
+					var position_properties: Dictionary = node.get_meta("roblox_properties", {})
+					position_properties["Position"] = value
+					node.set_meta("roblox_properties", position_properties)
+					preload("res://addons/rbxl_importer/roblox_gui_runtime.gd")._apply_udim2_layout(node, position_properties)
+					_notify_property_changed("Position")
 					return true
 			"Rotation":
 				if node is Node3D and value is Vector3:
 					var roblox_rotation := Basis.from_euler((value as Vector3) * (PI / 180.0), EULER_ORDER_XYZ)
 					(node as Node3D).basis = _roblox_transform_to_godot(Transform3D(roblox_rotation, Vector3.ZERO)).basis
-					Changed.Fire("Rotation")
+					_notify_property_changed("Rotation")
 					return true
 			"CFrame":
 				if node is Node3D:
@@ -932,33 +1187,55 @@ class BobuxInstance extends RefCounted:
 						if bool(node.get_meta("bobux_character_part_proxy", false)):
 							var cframe_body := _character_body()
 							if cframe_body != null:
-								cframe_body.global_position += target_frame.origin - (node as Node3D).global_position
+								var destination := cframe_body.global_position + target_frame.origin - (node as Node3D).global_position
+								if cframe_body.has_method("set_lua_position"): cframe_body.set_lua_position(destination)
+								else: cframe_body.global_position = destination
+								cframe_body.global_basis = target_frame.basis.orthonormalized().scaled(cframe_body.global_basis.get_scale())
 						else:
-							(node as Node3D).transform = target_frame
-						Changed.Fire("CFrame")
+							if node.is_inside_tree():
+								target_frame.basis = target_frame.basis.scaled((node as Node3D).global_basis.get_scale())
+								(node as Node3D).global_transform = target_frame
+							else:
+								target_frame.basis = target_frame.basis.scaled((node as Node3D).scale)
+								(node as Node3D).transform = target_frame
+						_notify_property_changed("CFrame")
 						return true
 					if value is Transform3D:
 						node.transform = value
-						Changed.Fire("CFrame")
+						_notify_property_changed("CFrame")
 						return true
 					if value is Vector3:
 						(node as Node3D).position = _roblox_point_to_godot(value as Vector3)
-						Changed.Fire("CFrame")
+						_notify_property_changed("CFrame")
 						return true
 			"Velocity", "AssemblyLinearVelocity":
 				if value is Vector3:
 					var godot_velocity := _roblox_velocity_to_godot(value as Vector3)
 					node.set_meta("velocity", godot_velocity)
-					if node is CharacterBody3D:
+					var assembly := _character_body() if bool(node.get_meta("bobux_character_part_proxy", false)) or node is CharacterBody3D else null
+					if assembly != null and assembly.has_method("set_lua_linear_velocity"):
+						assembly.call("set_lua_linear_velocity", godot_velocity)
+					elif node is CharacterBody3D:
 						(node as CharacterBody3D).velocity = godot_velocity
 					elif node is RigidBody3D:
 						(node as RigidBody3D).linear_velocity = godot_velocity
-					Changed.Fire(prop_str)
+					elif node is MeshInstance3D:
+						var physics_body := preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(node, true)
+						if physics_body != null:
+							physics_body.linear_velocity = godot_velocity
+					_notify_property_changed(prop_str)
 					return true
 			"Size":
+				if node is Control:
+					var properties: Dictionary = node.get_meta("roblox_properties", {})
+					properties["Size"] = value
+					node.set_meta("roblox_properties", properties)
+					preload("res://addons/rbxl_importer/roblox_gui_runtime.gd")._apply_udim2_layout(node, properties)
+					_notify_property_changed("Size")
+					return true
 				if node is Node3D and value is Vector3:
 					(node as Node3D).scale = (value as Vector3).abs() * _stud_scale()
-					Changed.Fire("Size")
+					_notify_property_changed("Size")
 					return true
 			"Text":
 				var text_value := str(value)
@@ -973,43 +1250,45 @@ class BobuxInstance extends RefCounted:
 				var text_properties: Dictionary = node.get_meta("roblox_properties", {}) if node.get_meta("roblox_properties", {}) is Dictionary else {}
 				text_properties["Text"] = text_value
 				node.set_meta("roblox_properties", text_properties)
-				Changed.Fire("Text")
+				_notify_property_changed("Text")
 				return true
 			"Visible":
 				if node is Control:
 					(node as Control).visible = bool(value)
 					node.set_meta("Visible", bool(value))
-					Changed.Fire("Visible")
+					_notify_property_changed("Visible")
 					return true
 			"Enabled":
 				if node is BaseButton:
 					(node as BaseButton).disabled = not bool(value)
 				elif node is Control:
 					(node as Control).visible = bool(value)
+				elif node is GPUParticles3D:
+					(node as GPUParticles3D).emitting = bool(value)
+				elif node is Light3D:
+					(node as Light3D).visible = bool(value)
+				elif node is AudioStreamPlayer3D:
+					if bool(value):
+						(node as AudioStreamPlayer3D).play()
+					else:
+						(node as AudioStreamPlayer3D).stop()
 				else:
 					return false
 				node.set_meta("Enabled", bool(value))
-				Changed.Fire("Enabled")
+				_notify_property_changed("Enabled")
 				return true
-				if node is Control:
-					(node as Control).size = _ui_value_to_vector2(value, (node as Control).get_parent() as Control)
-					Changed.Fire("Size")
-					return true
 			"Health":
 				var health_body := _character_body()
 				var target_health := maxf(0.0, float(value))
 				if health_body != null:
-					var current_health := float(health_body.call("get_health")) if health_body.has_method("get_health") else float(health_body.get("current_health"))
-					if target_health < current_health and health_body.has_method("take_damage"):
-						health_body.call("take_damage", current_health - target_health)
-					else:
-						health_body.set("current_health", int(target_health))
+					if health_body.has_method("set_health"):
+						health_body.call("set_health", target_health)
 				node.set_meta("Health", target_health)
-				Changed.Fire("Health")
+				_notify_property_changed("Health")
 				return true
 			"MaxHealth":
 				node.set_meta("MaxHealth", maxf(1.0, float(value)))
-				Changed.Fire("MaxHealth")
+				_notify_property_changed("MaxHealth")
 				return true
 			"WalkSpeed":
 				var walk_body := _character_body()
@@ -1019,7 +1298,7 @@ class BobuxInstance extends RefCounted:
 					else:
 						walk_body.set("move_speed", maxf(0.0, float(value)))
 				node.set_meta("WalkSpeed", float(value))
-				Changed.Fire("WalkSpeed")
+				_notify_property_changed("WalkSpeed")
 				return true
 			"JumpPower":
 				var jump_body := _character_body()
@@ -1029,21 +1308,31 @@ class BobuxInstance extends RefCounted:
 					else:
 						jump_body.set("jump_velocity_setting", maxf(0.0, float(value)))
 				node.set_meta("JumpPower", float(value))
-				Changed.Fire("JumpPower")
+				_notify_property_changed("JumpPower")
+				return true
+			"JumpHeight", "UseJumpPower":
+				node.set_meta(prop_str, bool(value) if prop_str == "UseJumpPower" else maxf(0, float(value)))
+				_notify_property_changed(prop_str)
+				return true
+			"Jump":
+				node.set_meta("Jump", bool(value))
+				if bool(value):
+					ChangeState(3)
+				_notify_property_changed(prop_str)
 				return true
 			"PlatformStand", "Sit", "AutoRotate":
 				node.set_meta(prop_str, bool(value))
-				Changed.Fire(prop_str)
+				_notify_property_changed(prop_str)
 				return true
 			"Anchored":
 				node.set_meta("anchored", bool(value))
-				Changed.Fire("Anchored")
+				_notify_property_changed("Anchored")
 				return true
 			"CanCollide":
 				node.set_meta("can_collide", bool(value))
 				if node.has_method("_update_block_collision"):
 					node.call("_update_block_collision", node)
-				Changed.Fire("CanCollide")
+				_notify_property_changed("CanCollide")
 				return true
 			"Transparency":
 				var trans := float(value)
@@ -1052,7 +1341,7 @@ class BobuxInstance extends RefCounted:
 					material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if trans > 0.01 else BaseMaterial3D.TRANSPARENCY_DISABLED
 					material.albedo_color.a = 1.0 - trans
 				)
-				Changed.Fire("Transparency")
+				_notify_property_changed("Transparency")
 				return true
 			"BrickColor":
 				var col: Color = Color.WHITE
@@ -1062,44 +1351,54 @@ class BobuxInstance extends RefCounted:
 					var alpha := material.albedo_color.a
 					material.albedo_color = Color(col.r, col.g, col.b, alpha)
 				)
-				Changed.Fire("BrickColor")
+				_notify_property_changed("BrickColor")
 				return true
 			"Color":
 				var color_value: Color = Color.WHITE
 				if value is Color:
 					color_value = value
+				if node is GPUParticles3D:
+					var particles := node as GPUParticles3D
+					var particle_material := particles.process_material as ParticleProcessMaterial
+					if particle_material == null:
+						particle_material = ParticleProcessMaterial.new()
+						particles.process_material = particle_material
+					else:
+						particle_material = particle_material.duplicate(true) as ParticleProcessMaterial
+						particles.process_material = particle_material
+					particle_material.color = color_value
 				_mutate_mesh_materials(func(material: StandardMaterial3D):
 					var alpha := material.albedo_color.a
 					material.albedo_color = Color(color_value.r, color_value.g, color_value.b, alpha)
 				)
-				Changed.Fire("Color")
+				_notify_property_changed("Color")
 				return true
 			"TimeOfDay", "ClockTime":
 				node.set_meta(prop_str, value)
-				Changed.Fire(prop_str)
+				_notify_property_changed(prop_str)
 				return true
 		var properties: Dictionary = node.get_meta("roblox_properties", {}) if node.get_meta("roblox_properties", {}) is Dictionary else {}
 		properties[prop_str] = value
 		node.set_meta("roblox_properties", properties)
 		node.set_meta(prop_str, value)
-		Changed.Fire(prop_str)
+		_notify_property_changed(prop_str)
 		return true
 
 	func SetProperty(property_or_self: Variant, property_or_value: Variant, maybe_value: Variant = null) -> bool:
-		var property_name := str(property_or_value if property_or_self == self else property_or_self)
-		var value: Variant = maybe_value if property_or_self == self else property_or_value
+		var property_name := str(property_or_value if (property_or_self is Object and property_or_self == self) else property_or_self)
+		var value: Variant = maybe_value if (property_or_self is Object and property_or_self == self) else property_or_value
 		return _set(StringName(property_name), value)
 
 	func GetProperty(property_or_self: Variant, maybe_property: Variant = null) -> Variant:
-		var property_name := str(maybe_property if property_or_self == self else property_or_self)
+		var property_name := str(maybe_property if (property_or_self is Object and property_or_self == self) else property_or_self)
 		return _get(StringName(property_name))
 
 	func GetNode() -> Node:
 		return node
 
 	func FindFirstChild(name_or_self: Variant, name_or_recursive: Variant = null, maybe_recursive: Variant = false) -> BobuxInstance:
-		var child_name := str(name_or_recursive if name_or_self == self else name_or_self)
-		var recursive := bool(maybe_recursive if name_or_self == self else (name_or_recursive if name_or_recursive != null else false))
+		var child_name := str(name_or_recursive if (name_or_self is Object and name_or_self == self) else name_or_self)
+		var recursive := bool(maybe_recursive if (name_or_self is Object and name_or_self == self) else (name_or_recursive if name_or_recursive != null else false))
 		if not is_instance_valid(node):
 			return null
 		var child := node.find_child(child_name, recursive, false)
@@ -1108,8 +1407,26 @@ class BobuxInstance extends RefCounted:
 	func findFirstChild(name_or_self: Variant, name_or_recursive: Variant = null, maybe_recursive: Variant = false) -> BobuxInstance:
 		return FindFirstChild(name_or_self, name_or_recursive, maybe_recursive)
 
+	func FindFirstChildOfClass(class_or_self: Variant, maybe_class: Variant = null) -> BobuxInstance:
+		var requested_class := str(maybe_class if (class_or_self is Object and class_or_self == self) else class_or_self)
+		if not is_instance_valid(node):
+			return null
+		for child in node.get_children():
+			if _node_matches_roblox_class(child, requested_class, false):
+				return BobuxInstance.new(child)
+		return null
+
+	func FindFirstChildWhichIsA(class_or_self: Variant, maybe_class: Variant = null) -> BobuxInstance:
+		var requested_class := str(maybe_class if (class_or_self is Object and class_or_self == self) else class_or_self)
+		if not is_instance_valid(node):
+			return null
+		for child in node.get_children():
+			if _node_matches_roblox_class(child, requested_class, true):
+				return BobuxInstance.new(child)
+		return null
+
 	func FindFirstAncestor(name_or_self: Variant, maybe_name: Variant = null) -> BobuxInstance:
-		var ancestor_name := str(maybe_name if name_or_self == self else name_or_self)
+		var ancestor_name := str(maybe_name if (name_or_self is Object and name_or_self == self) else name_or_self)
 		var cursor := node.get_parent() if is_instance_valid(node) else null
 		while cursor != null:
 			if str(cursor.get_meta("Name", cursor.get_meta("block_name", cursor.name))) == ancestor_name:
@@ -1118,7 +1435,7 @@ class BobuxInstance extends RefCounted:
 		return null
 
 	func FindFirstAncestorOfClass(class_or_self: Variant, maybe_class: Variant = null) -> BobuxInstance:
-		var requested_class := str(maybe_class if class_or_self == self else class_or_self)
+		var requested_class := str(maybe_class if (class_or_self is Object and class_or_self == self) else class_or_self)
 		var cursor := node.get_parent() if is_instance_valid(node) else null
 		while cursor != null:
 			if _node_matches_roblox_class(cursor, requested_class, false):
@@ -1127,7 +1444,7 @@ class BobuxInstance extends RefCounted:
 		return null
 
 	func FindFirstAncestorWhichIsA(class_or_self: Variant, maybe_class: Variant = null) -> BobuxInstance:
-		var requested_class := str(maybe_class if class_or_self == self else class_or_self)
+		var requested_class := str(maybe_class if (class_or_self is Object and class_or_self == self) else class_or_self)
 		var cursor := node.get_parent() if is_instance_valid(node) else null
 		while cursor != null:
 			if _node_matches_roblox_class(cursor, requested_class, true):
@@ -1165,13 +1482,49 @@ class BobuxInstance extends RefCounted:
 
 	func Clone(_self_arg: Variant = null) -> BobuxInstance:
 		if is_instance_valid(node):
-			var dupe := node.duplicate()
+			var dupe := node.duplicate(Node.DUPLICATE_GROUPS | Node.DUPLICATE_SCRIPTS | Node.DUPLICATE_USE_INSTANTIATION)
+			_reset_clone_metadata(dupe)
+			_rekey_clone_tree(dupe)
 			dupe.set_meta("bobux_runtime_generated", true)
 			return BobuxInstance.new(dupe)
 		return null
 
 	func clone(_self_arg: Variant = null) -> BobuxInstance:
 		return Clone()
+
+	static func _reset_clone_metadata(clone_node: Node) -> void:
+		for key in clone_node.get_meta_list():
+			var name_ := str(key)
+			if name_.begins_with("_bobux_") or name_ in ["bobux_script_runtime_id", "bobux_character_body_instance_id", "bobux_character_instance_id", "bobux_vehicle_motor_id", "bobux_tool_equipped", "bobux_equipped_character_id", "bobux_bound_target_path", "bobux_lua_event_bound"]:
+				clone_node.remove_meta(key)
+		for child in clone_node.get_children(): _reset_clone_metadata(child)
+
+	static func _rekey_clone_tree(root_node: Node) -> void:
+		var pending: Array[Node] = [root_node]
+		var all: Array[Node] = []
+		var replacements := {}
+		var refs := {}
+		while not pending.is_empty():
+			var child: Node = pending.pop_back()
+			all.append(child)
+			pending.append_array(child.get_children())
+			var old_ref := str(child.get_meta("roblox_ref", ""))
+			var new_ref := "clone:%d" % child.get_instance_id()
+			if not old_ref.is_empty(): replacements[old_ref] = new_ref
+			refs[new_ref] = child.get_instance_id()
+			child.set_meta("roblox_ref", new_ref)
+		for child in all:
+			var props: Dictionary = child.get_meta("roblox_properties", {}).duplicate(true)
+			var keys := ["PrimaryPart", "Part0", "Part1", "Attachment0", "Attachment1", "Adornee"]
+			if str(child.get_meta("roblox_class", "")) == "ObjectValue": keys.append("Value")
+			for key in keys:
+				var raw: Variant = child.get_meta(key) if child.has_meta(key) else props.get(key)
+				var old := str(int(raw)) if raw is float else str(raw)
+				if replacements.has(old):
+					props[key] = replacements[old]
+					child.set_meta(key, replacements[old])
+			child.set_meta("roblox_properties", props)
+		root_node.set_meta("_bobux_clone_refs", refs)
 
 	func _is_node_under_workspace(candidate: Node) -> bool:
 		var cursor := candidate
@@ -1183,6 +1536,12 @@ class BobuxInstance extends RefCounted:
 		return false
 
 	func _set_template_tree_visible(root_node: Node, visible_in_world: bool) -> void:
+		if visible_in_world and root_node is MeshInstance3D and bool(root_node.get_meta("bobux_deferred_geometry", false)):
+			var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+			importer.scale_factor = _stud_scale()
+			importer.materialize_template_part(root_node)
+		if visible_in_world and root_node is MeshInstance3D and bool(root_node.get_meta("roblox_properties", {}).get("BobuxTemplateOnly", false)):
+			preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(root_node, true)
 		if root_node is Node3D:
 			(root_node as Node3D).visible = visible_in_world
 		if visible_in_world:
@@ -1194,7 +1553,7 @@ class BobuxInstance extends RefCounted:
 		Destroy()
 
 	func WaitForChild(name_or_self: Variant, name_or_timeout: Variant = null, maybe_timeout: Variant = 5.0) -> BobuxInstance:
-		var child_name := str(name_or_timeout if name_or_self == self else name_or_self)
+		var child_name := str(name_or_timeout if (name_or_self is Object and name_or_self == self) else name_or_self)
 		if not is_instance_valid(node):
 			return null
 		var child = node.find_child(child_name, true, false)
@@ -1205,7 +1564,7 @@ class BobuxInstance extends RefCounted:
 		return null
 
 	func IsA(class_or_self: Variant, maybe_class: Variant = null) -> bool:
-		var p_class_name := str(maybe_class if class_or_self == self else class_or_self)
+		var p_class_name := str(maybe_class if (class_or_self is Object and class_or_self == self) else class_or_self)
 		if not is_instance_valid(node):
 			return false
 		return _node_matches_roblox_class(node, p_class_name, true)
@@ -1218,25 +1577,25 @@ class BobuxInstance extends RefCounted:
 			return true
 		if candidate.has_meta("shape_type") and str(candidate.get_meta("shape_type")) == requested_class:
 			return true
-		if include_inheritance and requested_class == "BasePart" and candidate is Node3D:
-			return true
+		if include_inheritance and requested_class == "BasePart":
+			return roblox_class in ["Part", "MeshPart", "WedgePart", "CornerWedgePart", "TrussPart", "SpawnLocation", "Seat", "VehicleSeat", "UnionOperation", "NegateOperation", "IntersectOperation"] or bool(candidate.get_meta("bobux_character_part_proxy", false))
 		return candidate.is_class(requested_class)
 
 	func IsDescendantOf(parent_or_self: Variant, maybe_parent: Variant = null) -> bool:
-		var parent: BobuxInstance = maybe_parent as BobuxInstance if parent_or_self == self else parent_or_self as BobuxInstance
+		var parent: BobuxInstance = maybe_parent as BobuxInstance if (parent_or_self is Object and parent_or_self == self) else parent_or_self as BobuxInstance
 		if not is_instance_valid(node) or parent == null or not is_instance_valid(parent.node):
 			return false
 		return parent.node.is_ancestor_of(node)
 
 	func IsAncestorOf(child_or_self: Variant, maybe_child: Variant = null) -> bool:
-		var child_variant: Variant = maybe_child if child_or_self == self else child_or_self
+		var child_variant: Variant = maybe_child if (child_or_self is Object and child_or_self == self) else child_or_self
 		var child_node := _node_from_instance_variant(child_variant)
 		return is_instance_valid(node) and is_instance_valid(child_node) and node.is_ancestor_of(child_node)
 
 	func GetConnectedParts(self_or_recursive: Variant = null, maybe_recursive: Variant = null) -> Array[BobuxInstance]:
 		if not is_instance_valid(node) or not node.is_inside_tree():
 			return []
-		var recursive := bool(maybe_recursive) if self_or_recursive == self and maybe_recursive != null else bool(self_or_recursive) if self_or_recursive != null and self_or_recursive != self else false
+		var recursive := bool(maybe_recursive) if (self_or_recursive is Object and self_or_recursive == self) and maybe_recursive != null else bool(self_or_recursive) if self_or_recursive != null and not (self_or_recursive is Object and self_or_recursive == self) else false
 		var this_ref := str(node.get_meta("roblox_ref", "")).strip_edges()
 		if this_ref.is_empty():
 			return _connected_siblings_fallback(recursive)
@@ -1316,8 +1675,8 @@ class BobuxInstance extends RefCounted:
 		return str(value).strip_edges()
 
 	func FindPartOnRayResult(ray_or_self: Variant, ray_or_ignore: Variant = null, ignore_or_terrain: Variant = null, _terrain_cells_are_cubes: Variant = false) -> Array:
-		var ray: Variant = ray_or_ignore if ray_or_self == self else ray_or_self
-		var ignore: Variant = ignore_or_terrain if ray_or_self == self else ray_or_ignore
+		var ray: Variant = ray_or_ignore if (ray_or_self is Object and ray_or_self == self) else ray_or_self
+		var ignore: Variant = ignore_or_terrain if (ray_or_self is Object and ray_or_self == self) else ray_or_ignore
 		return _perform_roblox_raycast(ray, ignore)
 
 	func FindPartOnRayWithIgnoreListResult(ray_or_self: Variant, ray_or_ignore: Variant = null, ignore_or_terrain: Variant = null, _terrain_cells_are_cubes: Variant = false) -> Array:
@@ -1330,15 +1689,56 @@ class BobuxInstance extends RefCounted:
 		return FindPartOnRayWithIgnoreListResult(ray_or_self, ray_or_ignore, ignore_or_terrain, terrain_cells_are_cubes)
 
 	func Raycast(origin_or_self: Variant, origin_or_direction: Variant = null, direction_or_params: Variant = null, maybe_params: Variant = null) -> Variant:
-		var origin: Variant = origin_or_direction if origin_or_self == self else origin_or_self
-		var direction: Variant = direction_or_params if origin_or_self == self else origin_or_direction
-		var params: Variant = maybe_params if origin_or_self == self else direction_or_params
+		var origin: Variant = origin_or_direction if (origin_or_self is Object and origin_or_self == self) else origin_or_self
+		var direction: Variant = direction_or_params if (origin_or_self is Object and origin_or_self == self) else origin_or_direction
+		var params: Variant = maybe_params if (origin_or_self is Object and origin_or_self == self) else direction_or_params
 		if not (origin is Vector3) or not (direction is Vector3):
 			return null
 		var result := _perform_roblox_raycast(BobuxRay.new(origin, direction), params)
 		if result.is_empty() or result[0] == null:
 			return null
 		return {"Instance": result[0], "Position": result[1], "Normal": result[2], "Material": result[3]}
+
+	func GetPartBoundsInRadius(position_or_self: Variant, position_or_radius: Variant = null, radius_or_params: Variant = null, maybe_params: Variant = null) -> Array[BobuxInstance]:
+		var colon: bool = position_or_self is Object and position_or_self == self
+		var position_: Variant = position_or_radius if colon else position_or_self
+		var radius_: Variant = radius_or_params if colon else position_or_radius
+		var params: Variant = maybe_params if colon else radius_or_params
+		var result: Array[BobuxInstance] = []
+		if not position_ is Vector3 or not (radius_ is float or radius_ is int): return result
+		var filters: Array = []
+		var include := false
+		var max_parts := 0
+		var respect := false
+		if params is BobuxOverlapParams:
+			for value in params.FilterDescendantsInstances:
+				var filter := _node_from_instance_variant(value)
+				if filter != null: filters.append(filter)
+			include = params.FilterType == 1
+			max_parts = params.MaxParts
+			respect = params.RespectCanCollide
+		for part in preload("res://addons/roblox_runtime/roblox_spatial_query.gd").in_radius(node, _roblox_point_to_godot(position_), float(radius_) * _stud_scale(), filters, include, max_parts, respect):
+			result.append(BobuxInstance.new(part))
+		return result
+
+	func GetPartBoundsInBox(frame_or_self: Variant, frame_or_size: Variant = null, size_or_params: Variant = null, maybe_params: Variant = null) -> Array[BobuxInstance]:
+		var colon := frame_or_self is BobuxInstance
+		var frame: Variant = frame_or_size if colon else frame_or_self
+		var size_: Variant = size_or_params if colon else frame_or_size
+		var params: Variant = maybe_params if colon else size_or_params
+		var result: Array[BobuxInstance] = []
+		if not frame is BobuxCFrame or not size_ is Vector3: return result
+		var filters: Array = []
+		if params is BobuxOverlapParams:
+			for value in params.FilterDescendantsInstances:
+				var filter := _node_from_instance_variant(value)
+				if filter != null: filters.append(filter)
+		var include: bool = params.FilterType == 1 if params is BobuxOverlapParams else false
+		var count: int = params.MaxParts if params is BobuxOverlapParams else 0
+		var respect: bool = params.RespectCanCollide if params is BobuxOverlapParams else false
+		for part in preload("res://addons/roblox_runtime/roblox_spatial_query.gd").in_box(node, _roblox_transform_to_godot(frame.transform), size_ * _stud_scale(), filters, include, count, respect):
+			result.append(BobuxInstance.new(part))
+		return result
 
 	func _perform_roblox_raycast(ray_variant: Variant, ignore: Variant) -> Array:
 		if not (ray_variant is BobuxRay) or not is_instance_valid(node) or not node.is_inside_tree():
@@ -1349,7 +1749,7 @@ class BobuxInstance extends RefCounted:
 		if start.is_equal_approx(finish):
 			return [null, ray.Origin, Vector3.ZERO, "Air"]
 		var viewport := node.get_viewport()
-		var world := viewport.world_3d if viewport != null else null
+		var world := viewport.find_world_3d() if viewport != null else null
 		if world == null:
 			return [null, ray.Origin + ray.Direction, Vector3.ZERO, "Air"]
 		var query := PhysicsRayQueryParameters3D.create(start, finish)
@@ -1401,6 +1801,14 @@ class BobuxInstance extends RefCounted:
 			_collect_collision_rids(child, out)
 
 	func _part_from_raycast_collider(collider: Variant) -> Node:
+		if is_instance_valid(collider) and collider is CharacterBody3D:
+			var root_part := (collider as Node).get_node_or_null("HumanoidRootPart")
+			return root_part if root_part != null else collider
+		if is_instance_valid(collider) and collider is Node:
+			var visual_id := int(collider.get_meta("bobux_visual_instance_id", 0))
+			var visual: Variant = instance_from_id(visual_id) if visual_id != 0 else null
+			if is_instance_valid(visual):
+				return visual
 		var cursor := collider as Node if collider is Node else null
 		while cursor != null:
 			if cursor.is_in_group("studio_parts"):
@@ -1428,22 +1836,63 @@ class BobuxInstance extends RefCounted:
 			child.queue_free()
 
 	func FireServer(arg1: Variant = null, arg2: Variant = null, arg3: Variant = null) -> void:
-		if arg1 == self:
+		if (arg1 is Object and arg1 == self):
 			OnServerEvent.Fire(arg2, arg3)
 		else:
 			OnServerEvent.Fire(arg1, arg2, arg3)
 
+	# Lua packs the complete vararg list (including interior/trailing nils).
+	# RemoteEvent's server sender is supplied by the runtime, never by the payload.
+	func DispatchPacked(method_or_self: Variant, packed_or_method: Variant = null, count_or_packed: Variant = null, maybe_count: int = 0) -> Variant:
+		var colon := method_or_self is BobuxInstance
+		var method := str(packed_or_method if colon else method_or_self)
+		var packed: Variant = count_or_packed if colon else packed_or_method
+		var count := maybe_count if colon else int(count_or_packed)
+		var args: Array = []
+		if packed is Array:
+			args = packed.duplicate()
+		elif packed is Dictionary:
+			for index in range(1, count + 1):
+				args.append(packed.get(index, packed.get(float(index), null)))
+		args.resize(count)
+		if not is_instance_valid(node) or not node.is_inside_tree(): return null
+		var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+		var state: Dictionary = engine.get_local_inventory_state(node) if engine != null else {}
+		var player: Node = state.get("local_player")
+		match method:
+			"FireServer", "InvokeServer":
+				args.push_front(BobuxInstance.new(player) if is_instance_valid(player) else null)
+			"FireClient", "InvokeClient":
+				if args.is_empty(): return null
+				var recipient := _node_from_instance_variant(args.pop_front())
+				if recipient != player: return null
+		match method:
+			"FireServer": OnServerEvent.FireArgs(args)
+			"FireClient", "FireAllClients": OnClientEvent.FireArgs(args)
+			"Fire": Event.FireArgs(args)
+			"InvokeServer", "InvokeClient", "Invoke":
+				var callback_name := "OnServerInvoke" if method == "InvokeServer" else ("OnClientInvoke" if method == "InvokeClient" else "OnInvoke")
+				var callback: Variant = node.get_meta(callback_name, null)
+				if callback is Callable: return callback.callv(args)
+		return null
+
 	func FireClient(_player: Variant = null, arg1: Variant = null, arg2: Variant = null, arg3: Variant = null) -> void:
-		if _player == self:
+		if (_player is Object and _player == self):
 			OnClientEvent.Fire(arg1, arg2, arg3)
 		else:
 			OnClientEvent.Fire(arg1, arg2, arg3)
 
 	func FireAllClients(arg1: Variant = null, arg2: Variant = null, arg3: Variant = null) -> void:
-		if arg1 == self:
+		if (arg1 is Object and arg1 == self):
 			OnClientEvent.Fire(arg2, arg3)
 		else:
 			OnClientEvent.Fire(arg1, arg2, arg3)
+
+	func Fire(arg1: Variant = null, arg2: Variant = null, arg3: Variant = null, arg4: Variant = null) -> void:
+		if (arg1 is Object and arg1 == self):
+			Event.Fire(arg2, arg3, arg4)
+		else:
+			Event.Fire(arg1, arg2, arg3)
 
 	func InvokeServer(arg1: Variant = null, arg2: Variant = null, arg3: Variant = null) -> Variant:
 		var callback: Variant = node.get_meta("OnServerInvoke", null) if is_instance_valid(node) else null
@@ -1454,28 +1903,104 @@ class BobuxInstance extends RefCounted:
 		return callback.call(arg1, arg2, arg3) if callback is Callable else null
 
 	func GetAttribute(attribute_or_self: Variant, maybe_attribute_name: Variant = null) -> Variant:
-		var attribute_name := str(maybe_attribute_name if attribute_or_self == self else attribute_or_self)
+		var attribute_name := str(maybe_attribute_name if (attribute_or_self is Object and attribute_or_self == self) else attribute_or_self)
 		if not is_instance_valid(node) or attribute_name.is_empty():
 			return null
 		var meta_name := "attribute_" + attribute_name
 		return node.get_meta(meta_name) if node.has_meta(meta_name) else null
 
 	func SetAttribute(attribute_or_self: Variant, value_or_name: Variant = null, maybe_value: Variant = null) -> void:
-		var attribute_name := str(value_or_name if attribute_or_self == self else attribute_or_self)
-		var value: Variant = maybe_value if attribute_or_self == self else value_or_name
+		var attribute_name := str(value_or_name if (attribute_or_self is Object and attribute_or_self == self) else attribute_or_self)
+		var value: Variant = maybe_value if (attribute_or_self is Object and attribute_or_self == self) else value_or_name
 		if is_instance_valid(node) and not attribute_name.is_empty():
-			node.set_meta("attribute_" + attribute_name, value)
-			Changed.Fire(attribute_name)
-			_shared_event("AttributeChanged_" + attribute_name).Fire(value)
+			var meta_name := "attribute_" + attribute_name
+			var previous: Variant = node.get_meta(meta_name) if node.has_meta(meta_name) else null
+			if typeof(previous) == typeof(value) and previous == value:
+				return
+			if value == null:
+				node.remove_meta(meta_name)
+			else:
+				node.set_meta(meta_name, value)
+			var properties: Dictionary = node.get_meta("roblox_properties", {}).duplicate(true)
+			var attributes: Dictionary = properties.get("Attributes", {}).duplicate(true)
+			if value == null: attributes.erase(attribute_name)
+			else: attributes[attribute_name] = value
+			properties["Attributes"] = attributes
+			node.set_meta("roblox_properties", properties)
+			_shared_event("AttributeChanged").Fire(attribute_name)
+			_shared_event("AttributeChanged_" + attribute_name).Fire()
+
+	func GetAttributes(_self_arg: Variant = null) -> Dictionary:
+		var attributes := {}
+		if is_instance_valid(node):
+			for key in node.get_meta_list():
+				if str(key).begins_with("attribute_"):
+					attributes[str(key).trim_prefix("attribute_")] = node.get_meta(key)
+		return attributes
 
 	func GetAttributeChangedSignal(attribute_or_self: Variant, maybe_attribute_name: Variant = null) -> BobuxEvent:
-		var attribute_name := str(maybe_attribute_name if attribute_or_self == self else attribute_or_self)
+		var attribute_name := str(maybe_attribute_name if (attribute_or_self is Object and attribute_or_self == self) else attribute_or_self)
 		return _shared_event("AttributeChanged_" + attribute_name)
 
-	func GetPropertyChangedSignal(_property_name: String) -> BobuxEvent:
-		return Changed
+	func GetPropertyChangedSignal(property_or_self: Variant, maybe_property_name: Variant = null) -> BobuxEvent:
+		var property_name := str(maybe_property_name if property_or_self is BobuxInstance else property_or_self)
+		return _shared_event("PropertyChanged_" + property_name)
+
+	func _notify_property_changed(property_name: String) -> void:
+		if node.is_inside_tree() and str(node.get_meta("roblox_class", "")) in ["Weld", "ManualWeld", "WeldConstraint", "Motor6D", "Motor", "Snap"]:
+			var adapter := node.get_node_or_null("RobloxJointRuntime")
+			if adapter == null:
+				adapter = preload("res://addons/roblox_runtime/roblox_joint_runtime.gd").new()
+				adapter.name = "RobloxJointRuntime"
+				adapter.set_meta("bobux_runtime_generated", true)
+				node.add_child(adapter)
+			adapter.request_refresh()
+		if property_name == "Parent" and node.is_inside_tree():
+			var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+			if engine != null: engine.call_deferred("_start_new_player_scripts_by_id", node.get_instance_id())
+		if property_name == "Parent" and node.is_inside_tree() and str(node.get_meta("roblox_class", "")) == "Explosion" and not node.has_meta("bobux_exploded"):
+			node.set_meta("bobux_exploded", true)
+			var explosion := preload("res://addons/roblox_runtime/roblox_explosion.gd").new()
+			node.add_child(explosion)
+		if node is MeshInstance3D and node.is_inside_tree():
+			var physics_api := preload("res://addons/roblox_runtime/roblox_part_physics.gd")
+			var create_body := property_name == "Anchored" or (property_name == "Parent" and bool(node.get_meta("bobux_lua_created_part", false)))
+			var body := physics_api.body_for(node, create_body)
+			if body != null:
+				if property_name in ["Position", "CFrame", "Rotation", "Size", "Parent"]:
+					body.global_transform = Transform3D(node.global_basis.orthonormalized(), node.global_position)
+					var adapter := node.get_node_or_null("RobloxPartPhysics")
+					if adapter != null: adapter.sync_from_part()
+				if property_name in ["Anchored", "CanCollide", "CanQuery"]:
+					body.freeze = bool(node.get_meta("anchored", false))
+					body.collision_layer = 1 if bool(node.get_meta("can_collide", true)) else (16 if bool(node.get_meta("CanQuery", true)) else 0)
+					body.collision_mask = (1 | 2 | 4) if bool(node.get_meta("can_collide", true)) else 0
+					body.sleeping = false
+		_shared_event("PropertyChanged_" + property_name).Fire()
+		if property_name == "Value" and str(node.get_meta("roblox_class", "")).ends_with("Value"):
+			Changed.Fire(_get(&"Value"))
+		else:
+			Changed.Fire(property_name)
 
 	func GetPlayers(_self_arg: Variant = null) -> Array[BobuxInstance]:
+		if str(node.get_meta("roblox_class", "")) == "Players":
+			var joined: Array[BobuxInstance] = []
+			for child in node.get_children():
+				if str(child.get_meta("roblox_class", "")) == "Player" and bool(child.get_meta("bobux_player_joined", false)):
+					joined.append(BobuxInstance.new(child))
+			return joined
+		if str(node.get_meta("roblox_class", "")) == "Team":
+			var result: Array[BobuxInstance] = []
+			if not node.is_inside_tree(): return result
+			var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+			var state: Dictionary = engine.get_local_inventory_state(node)
+			var local: Node = state.get("local_player")
+			if local == null: return result
+			var players := BobuxInstance.new(local.get_parent())
+			for player in players.GetChildren():
+				var team: Variant = player._get(&"Team")
+				if team is BobuxInstance and team.node == node and not bool(player.node.get_meta("Neutral", false)): result.append(player)
+			return result
 		return GetChildren()
 
 	func GetPlayerFromCharacter(character_or_self: Variant, maybe_character: Variant = null) -> BobuxInstance:
@@ -1512,7 +2037,29 @@ class BobuxInstance extends RefCounted:
 		return BobuxInstance.new(character)
 
 	func GetMouse(_self_arg: Variant = null) -> BobuxMouse:
-		return BobuxMouse.new()
+		return BobuxMouse.new(node)
+
+	func EquipTool(tool_or_self: Variant, maybe_tool: Variant = null) -> void:
+		var tool := _node_from_instance_variant(maybe_tool if tool_or_self is BobuxInstance and tool_or_self.node == node else tool_or_self)
+		var character := _character_body()
+		if tool == null or character == null: return
+		var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+		if engine != null:
+			engine.equip_local_tool(tool, character, character)
+
+	func _seat_sit(humanoid_or_self: Variant, maybe_humanoid: Variant = null) -> void:
+		var target: Variant = maybe_humanoid if humanoid_or_self is BobuxInstance and humanoid_or_self.node == node else humanoid_or_self
+		if not target is BobuxInstance or not is_instance_valid(node): return
+		var body: Node = target._character_body()
+		if body != null and body.has_method("_enter_seat"):
+			body._enter_seat(node)
+
+	func UnequipTools(_self_arg: Variant = null) -> void:
+		var character := _character_body()
+		if character == null: return
+		var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine")
+		if engine != null:
+			engine.unequip_all_local_tools(character)
 
 	func Play(_self_arg: Variant = null) -> void:
 		if node is AudioStreamPlayer:
@@ -1538,12 +2085,33 @@ class BobuxInstance extends RefCounted:
 			return maxf(dimensions.x * dimensions.y * dimensions.z, 0.001)
 		return 1.0
 
+	func ApplyImpulse(impulse_or_self: Variant, maybe_impulse: Variant = null) -> void:
+		var impulse: Variant = maybe_impulse if impulse_or_self is BobuxInstance else impulse_or_self
+		if not impulse is Vector3 or not is_instance_valid(node): return
+		var value := _roblox_velocity_to_godot(impulse)
+		var character := _character_body()
+		if character != null and character.has_method("apply_external_impulse"):
+			character.call("apply_external_impulse", value / maxf(GetMass(), 1.0))
+			return
+		if character != null and character.has_method("set_lua_linear_velocity"):
+			character.call("set_lua_linear_velocity", character.velocity + value / maxf(GetMass(), 1.0))
+			return
+		var body := preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(node, true)
+		if body != null and not body.freeze:
+			body.apply_central_impulse(value)
+
 	func MoveTo(position_or_self: Variant, maybe_position: Variant = null) -> void:
-		var destination: Variant = maybe_position if position_or_self == self else position_or_self
+		var destination: Variant = maybe_position if (position_or_self is Object and position_or_self == self) else position_or_self
 		if not (destination is Vector3):
 			return
 		var godot_destination := _roblox_point_to_godot(destination as Vector3)
 		var body := _character_body()
+		if str(node.get_meta("roblox_class", "")) == "Humanoid":
+			if body == null:
+				body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
+			if body != null and body.has_method("move_to"):
+				body.call("move_to", godot_destination)
+			return
 		if body != null:
 			body.global_position = godot_destination
 			body.velocity = Vector3.ZERO
@@ -1552,17 +2120,57 @@ class BobuxInstance extends RefCounted:
 			(node as Node3D).global_position = godot_destination
 
 	func TakeDamage(amount_or_self: Variant, maybe_amount: Variant = null) -> void:
-		var amount := float(maybe_amount if amount_or_self == self else amount_or_self)
+		var amount := float(maybe_amount if (amount_or_self is Object and amount_or_self == self) else amount_or_self)
 		var body := _character_body()
+		if body == null and str(node.get_meta("roblox_class", "")) == "Humanoid":
+			body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
 		if body != null and body.has_method("take_damage"):
 			body.call("take_damage", amount)
 
 	func ChangeState(state_or_self: Variant, maybe_state: Variant = null) -> void:
-		var state_value: Variant = maybe_state if state_or_self == self else state_or_self
-		node.set_meta("HumanoidState", state_value)
+		var state_value: Variant = maybe_state if (state_or_self is Object and state_or_self == self) else state_or_self
+		if not GetStateEnabled(state_value):
+			return
+		var body := _character_body()
+		if body != null and body.has_method("request_humanoid_state"):
+			body.call("request_humanoid_state", int(state_value))
+
+	func SetStateEnabled(state_or_self: Variant, state_or_enabled: Variant, maybe_enabled: Variant = null) -> void:
+		var state := int(state_or_enabled if (state_or_self is Object and state_or_self == self) else state_or_self)
+		var enabled := bool(maybe_enabled if (state_or_self is Object and state_or_self == self) else state_or_enabled)
+		if is_instance_valid(node):
+			node.set_meta("bobux_state_enabled_%d" % state, enabled)
+			_shared_event("StateEnabledChanged").Fire(state, enabled)
+
+	func GetStateEnabled(state_or_self: Variant, maybe_state: Variant = null) -> bool:
+		var state := int(maybe_state if state_or_self is BobuxInstance else state_or_self)
+		return bool(node.get_meta("bobux_state_enabled_%d" % state, true)) if is_instance_valid(node) else false
 
 	func GetState(_self_arg: Variant = null) -> Variant:
-		return node.get_meta("HumanoidState", "Running") if is_instance_valid(node) else "Running"
+		var body := _character_body()
+		if body != null and body.has_method("get_runtime_humanoid_state"):
+			return body.call("get_runtime_humanoid_state")
+		var state: Variant = node.get_meta("HumanoidState", 8) if is_instance_valid(node) else 8
+		return {"Running": 8, "RunningNoPhysics": 8, "Jumping": 3, "Freefall": 5, "Landed": 7, "Dead": 15, "Climbing": 12, "Swimming": 4, "Seated": 13}.get(state, 8) if state is String else state
+
+	func IsKeyDown(key_or_self: Variant, maybe_key: Variant = null) -> bool:
+		var key := int(maybe_key if (key_or_self is Object and key_or_self == self) else key_or_self)
+		return bool((node.get_meta("_bobux_pressed_keys", {}) as Dictionary).get(key, false)) if is_instance_valid(node) else false
+
+	func GetMouseLocation(_self_arg: Variant = null) -> Vector2:
+		return node.get_viewport().get_mouse_position() if is_instance_valid(node) and node.is_inside_tree() else Vector2.ZERO
+
+	func ScreenPointToRay(x_or_self: Variant, x_or_y: Variant = 0.0, y_or_depth: Variant = 0.0, maybe_depth: float = 0.0) -> BobuxRay:
+		var colon := x_or_self is BobuxInstance
+		var point := Vector2(float(x_or_y if colon else x_or_self), float(y_or_depth if colon else x_or_y))
+		var depth := maybe_depth if colon else float(y_or_depth)
+		if not node is Camera3D or not node.is_inside_tree(): return BobuxRay.new(Vector3.ZERO, Vector3.FORWARD)
+		var direction: Vector3 = node.project_ray_normal(point)
+		var origin: Vector3 = node.project_ray_origin(point) + direction * depth * _stud_scale()
+		return BobuxRay.new(_godot_point_to_roblox(origin), _godot_point_to_roblox(direction).normalized())
+
+	func ViewportPointToRay(x_or_self: Variant, x_or_y: Variant = 0.0, y_or_depth: Variant = 0.0, maybe_depth: float = 0.0) -> BobuxRay:
+		return ScreenPointToRay(x_or_self, x_or_y, y_or_depth, maybe_depth)
 
 	func LoadAnimation(_animation_or_self: Variant = null, _maybe_animation: Variant = null) -> BobuxAnimationTrack:
 		return BobuxAnimationTrack.new()
@@ -1581,23 +2189,55 @@ class BobuxInstance extends RefCounted:
 		return bounds.size / _stud_scale()
 
 	func SetPrimaryPartCFrame(frame_or_self: Variant, maybe_frame: Variant = null) -> void:
-		var frame_value: Variant = maybe_frame if frame_or_self == self else frame_or_self
+		var frame_value: Variant = maybe_frame if (frame_or_self is Object and frame_or_self == self) else frame_or_self
 		if not (frame_value is BobuxCFrame):
 			return
 		var desired := _roblox_transform_to_godot((frame_value as BobuxCFrame).transform)
+		var primary := _resolve_instance_reference(_stored_reference("PrimaryPart"))
+		if primary != null and primary.node is Node3D and node is Node3D:
+			var primary_frame: Transform3D = primary.node.global_transform if node.is_inside_tree() else _relative_frame(primary.node, node) * Transform3D.IDENTITY
+			primary_frame.basis = primary_frame.basis.orthonormalized()
+			if node.is_inside_tree(): node.global_transform = desired * primary_frame.affine_inverse() * node.global_transform
+			else: node.transform = desired * primary_frame.affine_inverse()
+			_sync_descendant_physics()
+			return
 		if node is Node3D:
 			(node as Node3D).global_transform = desired
+			_sync_descendant_physics()
 			return
 		var first_part := _first_descendant_node3d(node)
 		if first_part != null:
 			first_part.global_transform = desired
 
 	func PivotTo(frame_or_self: Variant, maybe_frame: Variant = null) -> void:
-		SetPrimaryPartCFrame(frame_or_self, maybe_frame)
+		var frame: Variant = maybe_frame if frame_or_self is BobuxInstance else frame_or_self
+		if node is Node3D and frame is BobuxCFrame:
+			var desired := _roblox_transform_to_godot(frame.transform)
+			if node.is_inside_tree(): node.global_transform = desired
+			else: node.transform = desired
+			_sync_descendant_physics()
+
+	func _sync_descendant_physics() -> void:
+		if not node.is_inside_tree(): return
+		var pending: Array[Node] = [node]
+		while not pending.is_empty():
+			var child: Node = pending.pop_back()
+			pending.append_array(child.get_children())
+			if not child is MeshInstance3D: continue
+			var body := preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(child)
+			if body != null: body.global_transform = Transform3D(child.global_basis.orthonormalized(), child.global_position)
+
+	static func _relative_frame(part: Node3D, ancestor: Node) -> Transform3D:
+		var frame := part.transform
+		var cursor := part.get_parent()
+		while cursor != null and cursor != ancestor:
+			if cursor is Node3D: frame = cursor.transform * frame
+			cursor = cursor.get_parent()
+		return frame
 
 	func BulkMoveTo(parts_or_self: Variant, frames_or_parts: Variant = null, mode_or_frames: Variant = null, _maybe_mode: Variant = null) -> void:
-		var parts: Variant = frames_or_parts if parts_or_self == self else parts_or_self
-		var frames: Variant = mode_or_frames if parts_or_self == self else frames_or_parts
+		var parts: Variant = frames_or_parts if (parts_or_self is Object and parts_or_self == self) else parts_or_self
+		var frames: Variant = mode_or_frames if (parts_or_self is Object and parts_or_self == self) else frames_or_parts
 		if not (parts is Array) or not (frames is Array):
 			return
 		var part_array := parts as Array
@@ -1613,14 +2253,14 @@ class BobuxInstance extends RefCounted:
 				(target as Node3D).global_transform = _roblox_transform_to_godot((frame as BobuxCFrame).transform)
 
 	func TweenPosition(goal_or_self: Variant, maybe_goal: Variant = null, _direction: Variant = null, _style: Variant = null, _time: Variant = 1.0, _override: Variant = false, callback: Variant = null) -> bool:
-		var goal: Variant = maybe_goal if goal_or_self == self else goal_or_self
+		var goal: Variant = maybe_goal if (goal_or_self is Object and goal_or_self == self) else goal_or_self
 		_set(&"Position", goal)
 		if callback is Callable:
 			(callback as Callable).call()
 		return true
 
 	func TweenSize(goal_or_self: Variant, maybe_goal: Variant = null, _direction: Variant = null, _style: Variant = null, _time: Variant = 1.0, _override: Variant = false, callback: Variant = null) -> bool:
-		var goal: Variant = maybe_goal if goal_or_self == self else goal_or_self
+		var goal: Variant = maybe_goal if (goal_or_self is Object and goal_or_self == self) else goal_or_self
 		_set(&"Size", goal)
 		if callback is Callable:
 			(callback as Callable).call()
@@ -1700,7 +2340,7 @@ class BobuxInstance extends RefCounted:
 		return result
 
 	func LoadAsset(asset_or_self: Variant, maybe_asset_id: Variant = null) -> BobuxInstance:
-		var asset_id: Variant = maybe_asset_id if asset_or_self == self else asset_or_self
+		var asset_id: Variant = maybe_asset_id if (asset_or_self is Object and asset_or_self == self) else asset_or_self
 		var model := Node3D.new()
 		model.name = "Asset_%s" % str(asset_id)
 		model.set_meta("roblox_class", "Model")
@@ -1715,15 +2355,15 @@ class BobuxInstance extends RefCounted:
 		return BobuxInstance.new(model)
 
 	func GetDataStore(name_or_self: Variant, maybe_name: Variant = null, _scope: Variant = null) -> BobuxDataStore:
-		var requested_name := str(maybe_name if name_or_self == self else name_or_self)
+		var requested_name := str(maybe_name if (name_or_self is Object and name_or_self == self) else name_or_self)
 		return BobuxDataStore.new(node, requested_name, false)
 
 	func GetOrderedDataStore(name_or_self: Variant, maybe_name: Variant = null, _scope: Variant = null) -> BobuxDataStore:
-		var requested_name := str(maybe_name if name_or_self == self else name_or_self)
+		var requested_name := str(maybe_name if (name_or_self is Object and name_or_self == self) else name_or_self)
 		return BobuxDataStore.new(node, requested_name, true)
 
 	func GetTagged(tag_or_self: Variant, maybe_tag: Variant = null) -> Array[BobuxInstance]:
-		var tag := str(maybe_tag if tag_or_self == self else tag_or_self).strip_edges()
+		var tag := str(maybe_tag if (tag_or_self is Object and tag_or_self == self) else tag_or_self).strip_edges()
 		var result: Array[BobuxInstance] = []
 		if tag.is_empty() or not is_instance_valid(node) or not node.is_inside_tree():
 			return result
@@ -1742,21 +2382,21 @@ class BobuxInstance extends RefCounted:
 			_collect_tagged_nodes(child, tag, result)
 
 	func GetTags(instance_or_self: Variant = null, maybe_instance: Variant = null) -> Array:
-		var target_variant: Variant = maybe_instance if instance_or_self == self else instance_or_self
+		var target_variant: Variant = maybe_instance if (instance_or_self is Object and instance_or_self == self) else instance_or_self
 		var target := _node_from_instance_variant(target_variant)
 		if target == null:
 			target = node
 		return _read_roblox_tags(target)
 
 	func HasTag(instance_or_self: Variant, instance_or_tag: Variant = null, maybe_tag: Variant = null) -> bool:
-		var target_variant: Variant = instance_or_tag if instance_or_self == self else instance_or_self
-		var tag := str(maybe_tag if instance_or_self == self else instance_or_tag)
+		var target_variant: Variant = instance_or_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_self
+		var tag := str(maybe_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_tag)
 		var target := _node_from_instance_variant(target_variant)
 		return target != null and _node_has_roblox_tag(target, tag)
 
 	func AddTag(instance_or_self: Variant, instance_or_tag: Variant = null, maybe_tag: Variant = null) -> void:
-		var target_variant: Variant = instance_or_tag if instance_or_self == self else instance_or_self
-		var tag := str(maybe_tag if instance_or_self == self else instance_or_tag).strip_edges()
+		var target_variant: Variant = instance_or_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_self
+		var tag := str(maybe_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_tag).strip_edges()
 		var target := _node_from_instance_variant(target_variant)
 		if target == null or tag.is_empty():
 			return
@@ -1767,8 +2407,8 @@ class BobuxInstance extends RefCounted:
 			_shared_event("CollectionTagAdded_" + tag).Fire(BobuxInstance.new(target))
 
 	func RemoveTag(instance_or_self: Variant, instance_or_tag: Variant = null, maybe_tag: Variant = null) -> void:
-		var target_variant: Variant = instance_or_tag if instance_or_self == self else instance_or_self
-		var tag := str(maybe_tag if instance_or_self == self else instance_or_tag).strip_edges()
+		var target_variant: Variant = instance_or_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_self
+		var tag := str(maybe_tag if (instance_or_self is Object and instance_or_self == self) else instance_or_tag).strip_edges()
 		var target := _node_from_instance_variant(target_variant)
 		if target == null or tag.is_empty():
 			return
@@ -1779,11 +2419,11 @@ class BobuxInstance extends RefCounted:
 			_shared_event("CollectionTagRemoved_" + tag).Fire(BobuxInstance.new(target))
 
 	func GetInstanceAddedSignal(tag_or_self: Variant, maybe_tag: Variant = null) -> BobuxEvent:
-		var tag := str(maybe_tag if tag_or_self == self else tag_or_self)
+		var tag := str(maybe_tag if (tag_or_self is Object and tag_or_self == self) else tag_or_self)
 		return _shared_event("CollectionTagAdded_" + tag)
 
 	func GetInstanceRemovedSignal(tag_or_self: Variant, maybe_tag: Variant = null) -> BobuxEvent:
-		var tag := str(maybe_tag if tag_or_self == self else tag_or_self)
+		var tag := str(maybe_tag if (tag_or_self is Object and tag_or_self == self) else tag_or_self)
 		return _shared_event("CollectionTagRemoved_" + tag)
 
 	func _read_roblox_tags(target: Node) -> Array:
@@ -1817,8 +2457,8 @@ class BobuxInstance extends RefCounted:
 		return tag in _read_roblox_tags(target)
 
 	func SetCoreGuiEnabled(core_type_or_self: Variant, core_type_or_enabled: Variant = true, maybe_enabled: Variant = null) -> void:
-		var core_type: Variant = core_type_or_enabled if core_type_or_self == self else core_type_or_self
-		var enabled := bool(maybe_enabled if core_type_or_self == self else core_type_or_enabled)
+		var core_type: Variant = core_type_or_enabled if (core_type_or_self is Object and core_type_or_self == self) else core_type_or_self
+		var enabled := bool(maybe_enabled if (core_type_or_self is Object and core_type_or_self == self) else core_type_or_enabled)
 		if not is_instance_valid(node):
 			return
 		var states: Dictionary = node.get_meta("_bobux_core_gui_enabled", {}) if node.get_meta("_bobux_core_gui_enabled", {}) is Dictionary else {}
@@ -1826,7 +2466,7 @@ class BobuxInstance extends RefCounted:
 		node.set_meta("_bobux_core_gui_enabled", states)
 
 	func GetCoreGuiEnabled(core_type_or_self: Variant, maybe_core_type: Variant = null) -> bool:
-		var core_type: Variant = maybe_core_type if core_type_or_self == self else core_type_or_self
+		var core_type: Variant = maybe_core_type if (core_type_or_self is Object and core_type_or_self == self) else core_type_or_self
 		var states: Dictionary = node.get_meta("_bobux_core_gui_enabled", {}) if is_instance_valid(node) and node.get_meta("_bobux_core_gui_enabled", {}) is Dictionary else {}
 		return bool(states.get(str(core_type), true))
 
@@ -1849,7 +2489,7 @@ class BobuxInstance extends RefCounted:
 		return false
 
 	func GetProductInfo(asset_or_self: Variant, maybe_asset_id: Variant = null, _info_type: Variant = null) -> Dictionary:
-		var asset_id: Variant = maybe_asset_id if asset_or_self == self else asset_or_self
+		var asset_id: Variant = maybe_asset_id if (asset_or_self is Object and asset_or_self == self) else asset_or_self
 		return {"AssetId": asset_id, "Name": "Asset %s" % str(asset_id), "PriceInRobux": 0, "IsForSale": false}
 
 	func UserHasBadge(_user_or_self: Variant = null, _user_or_badge: Variant = null, _badge_id: Variant = null) -> bool:
@@ -1872,6 +2512,10 @@ class BobuxInstanceCreator extends RefCounted:
 		if p_class_name == "Part":
 			var mesh_inst := MeshInstance3D.new()
 			mesh_inst.name = "Part"
+			mesh_inst.set_meta("roblox_class", "Part")
+			mesh_inst.set_meta("bobux_lua_created_part", true)
+			var stud_scale := BobuxInstance.new(workspace_node)._stud_scale()
+			mesh_inst.set_meta("roblox_stud_scale", stud_scale)
 			mesh_inst.add_to_group("studio_parts")
 			mesh_inst.set_meta("shape_type", "Box")
 			mesh_inst.set_meta("block_name", "Part_" + str(randi() % 10000))
@@ -1881,7 +2525,7 @@ class BobuxInstanceCreator extends RefCounted:
 			mat.albedo_color = Color.WHITE
 			box.surface_set_material(0, mat)
 			mesh_inst.mesh = box
-			mesh_inst.scale = Vector3(4.0, 1.0, 4.0)
+			mesh_inst.scale = Vector3(4.0, 1.0, 4.0) * stud_scale
 			# Rebuild helpers / collision
 			var studio = Engine.get_main_loop().current_scene
 			if studio != null and studio.has_method("_rebuild_block_helpers"):
@@ -1891,7 +2535,11 @@ class BobuxInstanceCreator extends RefCounted:
 			if parent_variant != null:
 				part_instance._set(&"Parent", parent_variant)
 			return part_instance
-		var node := Node.new()
+		var node := RobloxDataModelClass.create_instance(p_class_name, p_class_name)
+		if node == null:
+			node = Node.new()
+		if node is Node3D:
+			node.set_meta("roblox_stud_scale", BobuxInstance.new(workspace_node)._stud_scale())
 		node.name = p_class_name
 		node.set_meta("roblox_class", p_class_name)
 		match p_class_name:
@@ -1901,6 +2549,13 @@ class BobuxInstanceCreator extends RefCounted:
 				node.set_meta("roblox_class", "RemoteEvent")
 			"BindableEvent":
 				node.set_meta("roblox_class", "BindableEvent")
+			"ClickDetector":
+				node.add_to_group("roblox_click_detectors")
+				node.set_meta("max_activation_distance", 32.0)
+			"ProximityPrompt":
+				node.add_to_group("roblox_proximity_prompts")
+				node.set_meta("max_activation_distance", 16.0)
+				node.set_meta("action_text", "Interact")
 			"BoolValue":
 				node.set_meta("value", false)
 			"IntValue":
@@ -1925,6 +2580,12 @@ class BobuxInstanceCreator extends RefCounted:
 func _ready() -> void:
 	_init_lua_engine()
 	set_process(true)
+
+func _exit_tree() -> void:
+	stop_all_scripts()
+	release_stopped_script_states()
+	_service_nodes_cache.clear()
+	_lua = null
 
 func _init_lua_engine() -> void:
 	if ClassDB.class_exists("LuaAPI"):
@@ -2116,24 +2777,42 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 		lua.set_memory_limit(SCRIPT_MEMORY_LIMIT_BYTES)
 	if lua.has_method("set_use_callables"):
 		lua.set_use_callables(true)
-	var bind_error = lua.bind_libraries(PackedStringArray(["base", "table", "string", "math", "coroutine", "utf8"]))
+	var bind_error = lua.bind_libraries(PackedStringArray(["base", "table", "string", "math", "coroutine", "utf8", "debug"]))
 	var bind_message := _lua_error_message(bind_error)
 	if not bind_message.is_empty():
 		return {"ok": false, "error": "Lua library binding failed: %s" % bind_message}
+	var runtime_id := int(options.get("_reserved_runtime_id", 0))
+	if runtime_id <= 0:
+		runtime_id = _next_script_runtime_id
+		_next_script_runtime_id += 1
+	var runtime_options := options.duplicate()
+	runtime_options["_runtime_id"] = runtime_id
+	_push_runtime_bindings(lua, context_node, runtime_options)
+	_push_lua_binding(lua, "__bobux_budget_expired", func() -> bool:
+		if not _runtime_resume_started_usec.has(runtime_id):
+			return false
+		if Time.get_ticks_usec() - int(_runtime_resume_started_usec[runtime_id]) <= SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC:
+			return false
+		_runtime_budget_exceeded[runtime_id] = true
+		return true
+	)
+	# Use native debug only to adapt value metatables, then remove it before
+	# authored code runs. Scripts receive the restricted compatibility debug API.
+	var type_setup: Variant = lua.do_string(_native_lua_type_setup())
+	var type_setup_error := _lua_error_message(type_setup)
+	if not type_setup_error.is_empty():
+		return {"ok": false, "error": type_setup_error}
+	# New coroutines inherit the private Lua hook. Throwing from Lua after the
+	# budget callback returns avoids longjmp across native Godot Ref destructors.
 	var coroutine = lua.new_coroutine()
 	if coroutine == null:
 		return {"ok": false, "error": "Could not create Lua coroutine."}
-	_push_runtime_bindings(coroutine, context_node, options)
 	var prepared_source := _prepare_scheduled_lua_source(lua_code)
 	var load_error = coroutine.load_string(prepared_source)
 	var load_message := _lua_error_message(load_error)
 	if not load_message.is_empty():
 		return {"ok": false, "error": "[LUA LOAD ERROR] %s" % load_message}
 
-	var runtime_id := int(options.get("_reserved_runtime_id", 0))
-	if runtime_id <= 0:
-		runtime_id = _next_script_runtime_id
-		_next_script_runtime_id += 1
 	var runtime := {
 		"id": runtime_id,
 		"lua": lua,
@@ -2146,7 +2825,6 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 		"last_error": "",
 	}
 	_script_runtimes[runtime_id] = runtime
-	_configure_instruction_hook(coroutine, runtime_id)
 	if not bool(options.get("_runtime_was_counted", false)):
 		_runtime_started_total += 1
 	context_node.set_meta("bobux_script_runtime_id", runtime_id)
@@ -2197,7 +2875,7 @@ func stop_script(context_or_runtime: Variant) -> void:
 	var runtime_ids: Array[int] = []
 	if context_or_runtime is int:
 		runtime_ids.append(int(context_or_runtime))
-	elif context_or_runtime is Node:
+	elif is_instance_valid(context_or_runtime) and context_or_runtime is Node:
 		var context_node := context_or_runtime as Node
 		_clear_runtime_event_connections_recursive(context_node)
 		for runtime_id_variant in _script_runtimes.keys():
@@ -2214,6 +2892,10 @@ func stop_script(context_or_runtime: Variant) -> void:
 
 
 func stop_all_scripts(root_context: Node = null) -> void:
+	for tween in _runtime_tweens.duplicate():
+		if root_context == null or not is_instance_valid(tween.target.node) or tween.target.node == root_context or root_context.is_ancestor_of(tween.target.node):
+			tween.dispose()
+			_runtime_tweens.erase(tween)
 	if root_context == null:
 		_clear_all_runtime_event_connections(get_tree().root if is_inside_tree() else null)
 		_pending_script_starts.clear()
@@ -2233,8 +2915,8 @@ func stop_all_scripts(root_context: Node = null) -> void:
 	_clear_all_runtime_event_connections(root_context)
 	var remaining_pending: Array[Dictionary] = []
 	for pending in _pending_script_starts:
-		var pending_context: Node = pending.get("context") as Node
-		if pending_context == null or not is_instance_valid(pending_context) or pending_context == root_context or root_context.is_ancestor_of(pending_context):
+		var pending_context: Variant = pending.get("context")
+		if not is_instance_valid(pending_context) or pending_context == root_context or root_context.is_ancestor_of(pending_context):
 			continue
 		remaining_pending.append(pending)
 	_pending_script_starts = remaining_pending
@@ -2245,23 +2927,25 @@ func stop_all_scripts(root_context: Node = null) -> void:
 	_module_cycle_warnings.clear()
 	for runtime_id_variant in _script_runtimes.keys().duplicate():
 		var runtime: Dictionary = _script_runtimes[runtime_id_variant]
-		var context: Node = runtime.get("context") as Node
-		if context != null and (context == root_context or root_context.is_ancestor_of(context)):
+		var context: Variant = runtime.get("context")
+		if not is_instance_valid(context) or context == root_context or root_context.is_ancestor_of(context):
 			_dispose_script_runtime(int(runtime_id_variant))
 	for runtime_id_variant in _retained_lua_states.keys().duplicate():
 		var retained: Dictionary = _retained_lua_states[runtime_id_variant]
-		var context: Node = retained.get("context") as Node
-		if context != null and (context == root_context or root_context.is_ancestor_of(context)):
+		var context: Variant = retained.get("context")
+		if not is_instance_valid(context) or context == root_context or root_context.is_ancestor_of(context):
 			_dispose_retained_lua_state(runtime_id_variant)
 
 
 func _dispose_script_runtime(runtime_id: int) -> void:
+	_task_runtime_ids.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	if not _script_runtimes.has(runtime_id):
 		return
 	var runtime: Dictionary = _script_runtimes[runtime_id]
 	_script_runtimes.erase(runtime_id)
+	_clear_script_runtime_marker(runtime.get("context"), runtime_id)
 	# LuaCoroutine owns a Ref<LuaAPI>. Drop our duplicate LuaAPI reference first,
 	# then the coroutine. Keep the state quarantined until removed scene nodes
 	# have completed their deferred destruction and released every LuaCallable.
@@ -2274,12 +2958,14 @@ func _dispose_script_runtime(runtime_id: int) -> void:
 
 
 func _dispose_retained_lua_state(runtime_id: Variant) -> void:
+	_task_runtime_ids.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	if not _retained_lua_states.has(runtime_id):
 		return
 	var retained: Dictionary = _retained_lua_states[runtime_id]
 	_retained_lua_states.erase(runtime_id)
+	_clear_script_runtime_marker(retained.get("context"), runtime_id)
 	var lua: Variant = retained.get("lua")
 	if lua != null:
 		_stopped_lua_state_quarantine.append(lua)
@@ -2287,9 +2973,19 @@ func _dispose_retained_lua_state(runtime_id: Variant) -> void:
 	retained.clear()
 
 
+func _clear_script_runtime_marker(context: Variant, runtime_id: Variant) -> void:
+	if is_instance_valid(context) and context.has_meta("bobux_script_runtime_id") and context.get_meta("bobux_script_runtime_id") == runtime_id:
+		context.remove_meta("bobux_script_runtime_id")
+
+
 func release_stopped_script_states() -> void:
 	# Call only after the stopped playtest tree has survived at least one
 	# process frame. LuaCallable destructors require their lua_State to exist.
+	for lua in _stopped_lua_state_quarantine:
+		if lua != null:
+			# Run userdata finalizers while their LuaAPI/metatable owner is alive.
+			# Closing the native state first leaves Godot proxy references behind.
+			lua.do_string("local gc, globals = collectgarbage, _G; for key in pairs(globals) do globals[key] = nil end; gc('collect'); gc('collect')")
 	_stopped_lua_state_quarantine.clear()
 
 
@@ -2301,6 +2997,7 @@ func _process(delta: float) -> void:
 	if _scripts_paused:
 		return
 	_process_pending_script_starts()
+	_process_lua_tasks()
 	_ensure_run_service_events()
 	# Do not run an ever-growing set of frame callbacks while a large imported
 	# place is still compiling. Once ready, dispatch them round-robin under one
@@ -2341,9 +3038,9 @@ func _process(delta: float) -> void:
 		if not _script_runtimes.has(runtime_id):
 			continue
 		var runtime: Dictionary = _script_runtimes[runtime_id]
-		var context: Node = runtime.get("context") as Node
-		if context == null or not is_instance_valid(context):
-			_retain_stopped_runtime(runtime_id, runtime)
+		var context := _live_node(runtime.get("context"))
+		if context == null or context.is_queued_for_deletion() or not context.is_inside_tree():
+			_dispose_script_runtime(runtime_id)
 			continue
 		if now + 0.0001 >= float(runtime.get("wake_at", 0.0)):
 			_resume_script_runtime(runtime_id)
@@ -2351,6 +3048,47 @@ func _process(delta: float) -> void:
 			if resumed >= SCRIPT_RESUME_BUDGET_PER_FRAME or Time.get_ticks_usec() - frame_started_usec >= SCRIPT_RESUME_TIME_BUDGET_USEC:
 				break
 	_scheduler_cursor = (start_index + inspected) % maxi(runtime_ids.size(), 1)
+
+
+func _process_lua_tasks() -> void:
+	var runtime_ids := _task_runtime_ids.keys()
+	if runtime_ids.is_empty():
+		return
+	var started_usec := Time.get_ticks_usec()
+	var processed := 0
+	var start_index := _task_scheduler_cursor % runtime_ids.size()
+	while processed < runtime_ids.size() and processed < SCRIPT_RESUME_BUDGET_PER_FRAME:
+		var runtime_id := int(runtime_ids[(start_index + processed) % runtime_ids.size()])
+		processed += 1
+		var runtime: Dictionary = _script_runtimes.get(runtime_id, _retained_lua_states.get(runtime_id, {}))
+		var context := _live_node(runtime.get("context"))
+		var lua: Variant = runtime.get("lua")
+		if lua == null or context == null or context.is_queued_for_deletion() or not context.is_inside_tree():
+			_dispose_script_runtime(runtime_id)
+			_dispose_retained_lua_state(runtime_id)
+			continue
+		_runtime_resume_started_usec[runtime_id] = Time.get_ticks_usec()
+		_runtime_budget_exceeded.erase(runtime_id)
+		var result: Variant = lua.call_function("__bobux_step_tasks", [])
+		_runtime_resume_started_usec.erase(runtime_id)
+		var error_message := _lua_error_message(result)
+		if not error_message.is_empty():
+			_report_task_error(runtime_id, error_message)
+			_task_runtime_ids.erase(runtime_id)
+		_runtime_budget_exceeded.erase(runtime_id)
+		if Time.get_ticks_usec() - started_usec >= SCRIPT_RESUME_TIME_BUDGET_USEC:
+			break
+	_task_scheduler_cursor = (start_index + processed) % runtime_ids.size()
+
+
+func _report_task_error(runtime_id: int, message: String) -> void:
+	var runtime: Dictionary = _script_runtimes.get(runtime_id, _retained_lua_states.get(runtime_id, {}))
+	_runtime_failed_total += 1
+	_runtime_last_errors.append("%s task: %s" % [runtime.get("source_name", "Script"), message])
+	_emit_script_message(_live_node(runtime.get("context")), message, true)
+	if _runtime_last_errors.size() > 64:
+		_runtime_last_errors.pop_front()
+	push_warning("[LuaScriptEngine] Task failed: %s" % message)
 
 
 func _resume_script_runtime(runtime_id: int) -> Dictionary:
@@ -2373,12 +3111,15 @@ func _resume_script_runtime(runtime_id: int) -> Dictionary:
 		# A script can connect callbacks before its first later error. Keep the
 		# owning Lua state alive until Stop so those callbacks never point at a
 		# closed lua_State.
+		var failed_context := _live_node(runtime.get("context"))
+		var failed_name := str(runtime.get("source_name", "Script"))
 		_retain_stopped_runtime(runtime_id, runtime)
 		_runtime_failed_total += 1
-		_runtime_last_errors.append("%s: %s" % [runtime.get("source_name", "Script"), error_message])
+		_runtime_last_errors.append("%s: %s" % [failed_name, error_message])
+		_emit_script_message(failed_context, error_message, true)
 		if _runtime_last_errors.size() > 64:
 			_runtime_last_errors.pop_front()
-		push_warning("[LuaScriptEngine] %s: %s" % [runtime.get("source_name", "Script"), error_message])
+		push_warning("[LuaScriptEngine] %s: %s" % [failed_name, error_message])
 		return {"ok": false, "error": "[LUA ERROR] %s" % error_message, "runtime_id": runtime_id}
 	if bool(coroutine.is_done()):
 		_script_runtimes.erase(runtime_id)
@@ -2388,6 +3129,7 @@ func _resume_script_runtime(runtime_id: int) -> Dictionary:
 				"lua": runtime.get("lua"),
 				"coroutine": runtime.get("coroutine"),
 				"context": runtime.get("context"),
+				"source_name": runtime.get("source_name", "Script"),
 				"realm": runtime.get("realm", "runtime"),
 			}
 		return {"ok": true, "completed": true, "runtime_id": runtime_id, "result": result}
@@ -2411,6 +3153,7 @@ func _retain_stopped_runtime(runtime_id: int, runtime: Dictionary) -> void:
 			"lua": lua,
 			"coroutine": runtime.get("coroutine"),
 			"context": runtime.get("context"),
+			"source_name": runtime.get("source_name", "Script"),
 			"realm": runtime.get("realm", "runtime"),
 		}
 	runtime["lua"] = null
@@ -2464,8 +3207,8 @@ func _process_pending_script_starts() -> void:
 	var compile_started_usec := Time.get_ticks_usec()
 	while not _pending_script_starts.is_empty():
 		var pending: Dictionary = _pending_script_starts.pop_front()
-		var context: Node = pending.get("context") as Node
-		if context == null or not is_instance_valid(context):
+		var context := _live_node(pending.get("context"))
+		if context == null or context.is_queued_for_deletion() or not context.is_inside_tree():
 			continue
 		var result := start_script(
 			str(pending.get("source", "")),
@@ -2474,6 +3217,7 @@ func _process_pending_script_starts() -> void:
 		)
 		if not bool(result.get("ok", false)):
 			_runtime_failed_total += 1
+			_emit_script_message(context, str(result.get("error", "Script compilation failed")), true)
 			_runtime_last_errors.append("%s: %s" % [
 				str((pending.get("options", {}) as Dictionary).get("source_name", context.name)),
 				str(result.get("error", "Script compilation failed")),
@@ -2488,16 +3232,27 @@ func _clear_all_runtime_event_connections(root: Node) -> void:
 		_clear_runtime_event_connections_recursive(root)
 	for event_variant in [_run_service_heartbeat, _run_service_stepped, _run_service_render_stepped]:
 		if event_variant is BobuxEvent:
-			(event_variant as BobuxEvent).connections.clear()
+			(event_variant as BobuxEvent).Disconnect()
 
 
 func _clear_runtime_event_connections_recursive(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	if node.has_meta("bobux_script_runtime_id"):
+		node.remove_meta("bobux_script_runtime_id")
+	if node.has_meta("_bobux_pressed_keys"):
+		node.remove_meta("_bobux_pressed_keys")
+	for bridge in node.get_meta("_bobux_signal_callbacks", []):
+		if node.is_connected(bridge.signal, bridge.callback):
+			node.disconnect(bridge.signal, bridge.callback)
+	if node.has_meta("_bobux_signal_callbacks"):
+		node.remove_meta("_bobux_signal_callbacks")
 	if node.has_meta("_bobux_event_registry"):
 		var registry: Variant = node.get_meta("_bobux_event_registry")
 		if registry is Dictionary:
 			for event_variant in (registry as Dictionary).values():
 				if event_variant is BobuxEvent:
-					(event_variant as BobuxEvent).connections.clear()
+					(event_variant as BobuxEvent).Disconnect()
 		node.remove_meta("_bobux_event_registry")
 		node.remove_meta("_bobux_signal_bridge")
 	_clear_runtime_callable_metadata(node)
@@ -2561,6 +3316,42 @@ func _without_runtime_callables(value: Variant, depth: int = 0) -> Variant:
 	return value
 
 
+func _owned_lua_bindings(value: Variant) -> Variant:
+	# LuaAPI's mt_Callable lacks a userdata finalizer in the shipped extension.
+	# LuaCallableExtra has one and releases captured proxies when a VM closes.
+	if value is Callable and ClassDB.class_exists("LuaCallableExtra"):
+		var wrapper: Variant = ClassDB.instantiate("LuaCallableExtra")
+		wrapper.set_info(value, 0, false, false)
+		return wrapper
+	if value is Dictionary:
+		var result := {}
+		for key in value:
+			result[key] = _owned_lua_bindings(value[key])
+		return result
+	if value is Array:
+		var result: Array = []
+		for item in value:
+			result.append(_owned_lua_bindings(item))
+		return result
+	return value
+
+func _push_lua_binding(target: Object, name: String, value: Variant) -> void:
+	target.call("push_variant", name, _owned_lua_bindings(value))
+
+func _create_roblox_tween(arg1: Variant, arg2: Variant = null, arg3: Variant = null, arg4: Variant = null) -> BobuxTween:
+	var item: Variant = arg2 if arg4 != null else arg1
+	var info: Variant = arg3 if arg4 != null else arg2
+	var goals: Variant = arg4 if arg4 != null else arg3
+	if not item is BobuxInstance or not goals is Dictionary:
+		return null
+	var tween := BobuxTween.new()
+	tween.engine = self
+	tween.target = item
+	tween.info = info if info is Dictionary else {}
+	tween.goals = goals.duplicate()
+	_runtime_tweens.append(tween)
+	return tween
+
 func _push_runtime_bindings(target: Object, context_node: Node, options: Dictionary) -> void:
 	var tree: SceneTree = null
 	if is_inside_tree():
@@ -2579,31 +3370,21 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 		service_instances[service_name] = BobuxInstance.new(service_nodes[service_name])
 	_ensure_run_service_events()
 	var is_server := bool(options.get("is_server", str(options.get("realm", "")).to_lower() in ["server", "studio"]))
-	var run_service := {
+	var run_service: Dictionary = _owned_lua_bindings({
 		"Heartbeat": _run_service_heartbeat,
 		"Stepped": _run_service_stepped,
 		"RenderStepped": _run_service_render_stepped,
 		"IsServer": func(): return is_server,
 		"IsClient": func(): return not is_server,
 		"IsStudio": func(): return str(options.get("realm", "")).to_lower() == "studio",
-	}
-	var tween_service := {
-		"Create": func(arg1: Variant, arg2: Variant = null, arg3: Variant = null, arg4: Variant = null):
-			var item: Variant = arg2 if arg4 != null else arg1
-			var target_properties: Variant = arg4 if arg4 != null else arg3
-			return {
-				"Play": func():
-					if item is BobuxInstance and target_properties is Dictionary:
-						for property_name in (target_properties as Dictionary).keys():
-							(item as BobuxInstance)._set(str(property_name), target_properties[property_name])
-			}
-	}
-	var debris_service := {
+	})
+	var tween_service: Dictionary = _owned_lua_bindings({"Create": _create_roblox_tween})
+	var debris_service: Dictionary = _owned_lua_bindings({
 		"AddItem": func(arg1: Variant, arg2: Variant = null, arg3: Variant = null):
 			var item: Variant = arg2 if arg2 is BobuxInstance else arg1
 			var lifetime := float(arg3 if arg2 is BobuxInstance and arg3 != null else (arg2 if arg2 != null and not (arg2 is BobuxInstance) else 0.0))
 			_schedule_debris_item(item, lifetime)
-	}
+	})
 	var game_proxy := {
 		"Workspace": workspace_instance,
 		"workspace": workspace_instance,
@@ -2622,29 +3403,30 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 	for service_name_variant in service_instances.keys():
 		game_proxy[str(service_name_variant)] = service_instances[service_name_variant]
 
-	target.call("push_variant", "game", game_proxy)
-	target.call("push_variant", "workspace", workspace_instance)
-	target.call("push_variant", "Instance", BobuxInstanceCreator.new(workspace_node))
-	target.call("push_variant", "Vector3", {"new": func(x: Variant = 0.0, y: Variant = 0.0, z: Variant = 0.0): return Vector3(float(x), float(y), float(z))})
-	target.call("push_variant", "Vector2", {"new": func(x: Variant = 0.0, y: Variant = 0.0): return Vector2(float(x), float(y))})
-	target.call("push_variant", "Ray", {"new": func(origin: Variant = Vector3.ZERO, direction: Variant = Vector3.ZERO): return BobuxRay.new(origin, direction)})
-	target.call("push_variant", "CFrame", _build_cframe_library())
-	target.call("push_variant", "Color3", _build_color3_library())
-	target.call("push_variant", "RaycastParams", _build_raycast_params_library())
-	target.call("push_variant", "BrickColor", _build_brick_color_library())
-	target.call("push_variant", "UDim", {"new": func(scale: Variant = 0.0, offset: Variant = 0.0): return {"scale": float(scale), "offset": float(offset)}})
-	target.call("push_variant", "UDim2", {
+	_push_lua_binding(target, "game", game_proxy)
+	_push_lua_binding(target, "workspace", workspace_instance)
+	_push_lua_binding(target, "Instance", BobuxInstanceCreator.new(workspace_node))
+	_push_lua_binding(target, "Vector3", {"new": func(x: Variant = 0.0, y: Variant = 0.0, z: Variant = 0.0): return Vector3(float(x), float(y), float(z))})
+	_push_lua_binding(target, "Vector2", {"new": func(x: Variant = 0.0, y: Variant = 0.0): return Vector2(float(x), float(y))})
+	_push_lua_binding(target, "Ray", {"new": func(origin: Variant = Vector3.ZERO, direction: Variant = Vector3.ZERO): return BobuxRay.new(origin, direction)})
+	_push_lua_binding(target, "CFrame", _build_cframe_library())
+	_push_lua_binding(target, "Color3", _build_color3_library())
+	_push_lua_binding(target, "RaycastParams", _build_raycast_params_library())
+	_push_lua_binding(target, "OverlapParams", {"new": func(_self_arg: Variant = null): return BobuxOverlapParams.new()})
+	_push_lua_binding(target, "BrickColor", _build_brick_color_library())
+	_push_lua_binding(target, "UDim", {"new": func(scale: Variant = 0.0, offset: Variant = 0.0): return {"scale": float(scale), "offset": float(offset)}})
+	_push_lua_binding(target, "UDim2", {
 		"new": func(xs: Variant = 0.0, xo: Variant = 0.0, ys: Variant = 0.0, yo: Variant = 0.0): return {"x": {"scale": float(xs), "offset": float(xo)}, "y": {"scale": float(ys), "offset": float(yo)}},
 		"fromScale": func(x: Variant = 0.0, y: Variant = 0.0): return {"x": {"scale": float(x), "offset": 0.0}, "y": {"scale": float(y), "offset": 0.0}},
 		"fromOffset": func(x: Variant = 0.0, y: Variant = 0.0): return {"x": {"scale": 0.0, "offset": float(x)}, "y": {"scale": 0.0, "offset": float(y)}},
 	})
-	target.call("push_variant", "TweenInfo", {"new": func(duration: Variant = 1.0, _style: Variant = null, _direction: Variant = null): return {"Time": float(duration)}})
-	target.call("push_variant", "Random", {
+	_push_lua_binding(target, "TweenInfo", {"new": func(duration: Variant = 1.0, style: Variant = 0, direction: Variant = 1, repeats: Variant = 0, reverses: Variant = false, delay_time: Variant = 0.0): return {"Time": float(duration), "EasingStyle": style, "EasingDirection": direction, "RepeatCount": repeats, "Reverses": reverses, "DelayTime": delay_time}})
+	_push_lua_binding(target, "Random", {
 		"new": func(seed_or_self: Variant = null, maybe_seed: Variant = null):
 			var seed_value: Variant = maybe_seed if seed_or_self is Dictionary else seed_or_self
 			return BobuxRandom.new(seed_value)
 	})
-	target.call("push_variant", "os", {
+	_push_lua_binding(target, "os", {
 		"time": func(_value: Variant = null): return int(Time.get_unix_time_from_system()),
 		"clock": func(): return Time.get_ticks_usec() / 1000000.0,
 		"difftime": func(first: Variant = 0.0, second: Variant = 0.0): return float(first) - float(second),
@@ -2652,13 +3434,31 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 			var unix_time := int(timestamp) if timestamp != null else int(Time.get_unix_time_from_system())
 			return Time.get_datetime_string_from_unix_time(unix_time, true),
 	})
-	target.call("push_variant", "Enum", _build_enum_proxy())
-	target.call("push_variant", "script", BobuxInstance.new(context_node))
-	target.call("push_variant", "print", func(value: Variant = null): print("[LUA] ", value))
-	target.call("push_variant", "warn", func(value: Variant = null): push_warning("[LUA] %s" % str(value)))
-	target.call("push_variant", "tick", func(): return Time.get_ticks_msec() / 1000.0)
-	target.call("push_variant", "require", func(module_variant: Variant): return _require_module(module_variant, context_node, options))
-	target.call("push_variant", "__bobux_set", func(item: Variant, property_name: Variant, value: Variant):
+	_push_lua_binding(target, "Enum", _build_enum_proxy())
+	_push_lua_binding(target, "script", BobuxInstance.new(context_node))
+	_push_lua_binding(target, "__bobux_log", func(message: String, is_error: bool): _emit_script_message(context_node, message, is_error))
+	_push_lua_binding(target, "tick", func(): return Time.get_ticks_msec() / 1000.0)
+	_push_lua_binding(target, "__bobux_module_source", _module_source_for_runtime)
+	var runtime_id := int(options.get("_runtime_id", 0))
+	_push_lua_binding(target, "__bobux_begin_task_slice", func() -> bool:
+		if _runtime_resume_started_usec.has(runtime_id):
+			return false
+		_runtime_resume_started_usec[runtime_id] = Time.get_ticks_usec()
+		return true
+	)
+	_push_lua_binding(target, "__bobux_end_task_slice", func(owned: bool):
+		if owned:
+			_runtime_resume_started_usec.erase(runtime_id)
+			_runtime_budget_exceeded.erase(runtime_id)
+	)
+	_push_lua_binding(target, "__bobux_tasks_active", func(active: bool):
+		if active:
+			_task_runtime_ids[runtime_id] = true
+		else:
+			_task_runtime_ids.erase(runtime_id)
+	)
+	_push_lua_binding(target, "__bobux_task_error", func(message: Variant): _report_task_error(runtime_id, str(message)))
+	_push_lua_binding(target, "__bobux_set", func(item: Variant, property_name: Variant, value: Variant):
 		_last_property_setter_calls += 1
 		_last_property_setter_target_type = type_string(typeof(item))
 		if item is Object:
@@ -2670,85 +3470,359 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 	)
 
 
-func _prepare_scheduled_lua_source(lua_code: String) -> String:
-	var rewritten := _rewrite_luau_compatibility(lua_code)
+func _emit_script_message(context: Node, message: String, is_error: bool) -> void:
+	print("[LUA] ", message)
+	if is_instance_valid(context):
+		script_message.emit(context, message, is_error)
+
+func normalize_script_source(source: String) -> String:
+	# Decode whitespace artifacts only in code, preserving literals and comments.
+	var tokens := _lua_tokens(source)
+	var entities := {"&#x20;": " ", "&#32;": " ", "&#160;": " ", "&nbsp;": " ", "&#x9;": "\t", "&#9;": "\t"}
+	for index in range(tokens.size() - 1, -1, -1):
+		var token: Dictionary = tokens[index]
+		if str(token.text) != "&":
+			continue
+		for entity in entities:
+			if source.substr(int(token.start), str(entity).length()).to_lower() == entity:
+				source = source.left(int(token.start)) + str(entities[entity]) + source.substr(int(token.start) + str(entity).length())
+				break
+	return source
+
+func _prepare_lua_body(lua_code: String) -> String:
+	var lexer = preload("res://addons/roblox_studio/roblox_lua_lexer.gd")
+	var protected: Dictionary = lexer.protect_strings(_replace_luau_backtick_strings(normalize_script_source(lua_code)))
+	var rewritten := _rewrite_luau_compatibility(protected.source)
 	rewritten = _rewrite_lua_property_assignments(rewritten)
 	rewritten = _rewrite_lua_multi_return_calls(rewritten)
 	# Classic Roblox scripts used lowercase RBXScriptSignal:connect(). On a
 	# RefCounted proxy that spelling otherwise resolves to Godot Object.connect
 	# and attempts to connect a signal with an empty name.
-	rewritten = rewritten.replace(":connect(", ":Connect(")
-	rewritten = rewritten.replace(":disconnect(", ":Disconnect(")
+	return lexer.restore_strings(_rewrite_lua_async_calls(rewritten), protected.literals)
+
+func _native_lua_type_setup() -> String:
+	return """
+do
+    local getmeta = debug.getmetatable
+    local types = {}
+    local function vector_type(sample, name)
+        local meta = getmeta(sample)
+        types[meta] = name
+        local index, multiply = meta.__index, meta.__mul
+		local names = {X='x', Y='y', Z='z', Dot='dot', Cross='cross', Lerp='lerp', Angle='angle_to', FuzzyEq='is_equal_approx', Abs='abs', Sign='sign', Floor='floor', Ceil='ceil', Max='max', Min='min'}
+        meta.__index = function(value, key)
+			if key == 'Magnitude' or key == 'magnitude' then return index(value, 'length')() end
+			if key == 'Unit' or key == 'unit' then return index(value, 'normalized')() end
+            local member = index(value, names[key] or key)
+			if type(member) == 'function' then
+				-- Godot's vector methods are already bound. Strip Lua's colon
+                -- self argument and retain value while the bound method lives.
+                return function(first, ...)
+                    if first == value then return member(...) end
+                    return member(first, ...)
+                end
+            end
+            return member
+        end
+        meta.__unm = function(value) return value * -1 end
+		meta.__mul = function(a, b) if type(a) == 'number' then return multiply(b, a) end return multiply(a, b) end
+    end
+	vector_type(Vector3.new(), 'Vector3')
+	vector_type(Vector2.new(), 'Vector2')
+    Vector3.zero, Vector3.one = Vector3.new(), Vector3.new(1, 1, 1)
+    Vector3.xAxis, Vector3.yAxis, Vector3.zAxis = Vector3.new(1,0,0), Vector3.new(0,1,0), Vector3.new(0,0,1)
+    Vector2.zero, Vector2.one = Vector2.new(), Vector2.new(1,1)
+    local color_meta = getmeta(Color3.new())
+	types[color_meta] = 'Color3'
+    local color_index = color_meta.__index
+    color_meta.__index = function(value, key)
+		local member = color_index(value, ({R='r', G='g', B='b', Lerp='lerp'})[key] or key)
+		if type(member) == 'function' then
+            return function(first, ...)
+                if first == value then return member(...) end
+                return member(first, ...)
+            end
+        end
+        return member
+    end
+    typeof = function(value)
+        local kind = type(value)
+		if kind ~= 'userdata' then return kind end
+        local known = types[getmeta(value)]
+        if known then return known end
+        local ok, class = pcall(function() return value.ClassName end)
+		if ok and class ~= nil then return 'Instance' end
+        local frame, position = pcall(function() return value.LookVector end)
+		if frame and position ~= nil then return 'CFrame' end
+        return kind
+    end
+    local budget_expired, raise = __bobux_budget_expired, error
+    if budget_expired then
+        local sethook = debug.sethook
+        local hook = function()
+			if budget_expired() then raise('Script execution budget exceeded', 0) end
+        end
+		sethook(hook, '', 1000)
+		__bobux_install_hook = function() sethook(hook, '', 1000) end
+        local create = coroutine.create
+        coroutine.create = function(callback)
+            local thread = create(callback)
+			sethook(thread, hook, '', 1000)
+            return thread
+        end
+    end
+    __bobux_budget_expired = nil
+    debug = nil
+end
+"""
+
+
+func _prepare_scheduled_lua_source(lua_code: String) -> String:
+	var rewritten := _prepare_lua_body(lua_code)
 	var prelude := """
-local __bobux_raw_coroutine_yield = coroutine.yield
+if __bobux_install_hook then __bobux_install_hook(); __bobux_install_hook = nil end
+local function __bobux_print(is_error, ...)
+    local values = {}
+	for index = 1, select('#', ...) do
+        values[index] = tostring(select(index, ...))
+    end
+	__bobux_log(table.concat(values, '\\t'), is_error)
+end
+function print(...) __bobux_print(false, ...) end
+function warn(...) __bobux_print(true, ...) end
+-- Android and older LuaAPI builds may omit the coroutine library. Roblox
+-- scripts must still start, even when that optional native library is absent.
+coroutine = coroutine or {}
+local __bobux_raw_coroutine_yield = type(coroutine.yield) == 'function' and coroutine.yield or nil
+local __bobux_unpack = table.unpack or unpack
+coroutine.create = coroutine.create or function(callback)
+	return {__bobux_callback = callback, __bobux_status = 'suspended'}
+end
+coroutine.resume = coroutine.resume or function(thread, ...)
+	if type(thread) ~= 'table' or type(thread.__bobux_callback) ~= 'function' then
+		return false, 'invalid coroutine'
+    end
+	if thread.__bobux_status == 'dead' then return false, 'cannot resume dead coroutine' end
+	thread.__bobux_status = 'running'
+    local result = {pcall(thread.__bobux_callback, ...)}
+	thread.__bobux_status = 'dead'
+    return __bobux_unpack(result)
+end
+coroutine.status = coroutine.status or function(thread)
+	return type(thread) == 'table' and (thread.__bobux_status or 'dead') or 'dead'
+end
+coroutine.wrap = function(callback)
+    local thread = coroutine.create(callback)
+    return function(...)
+        local result = {coroutine.resume(thread, ...)}
+        if not result[1] then error(result[2]) end
+        table.remove(result, 1)
+        return __bobux_unpack(result)
+    end
+end
 function wait(seconds)
-    return __bobux_raw_coroutine_yield(tonumber(seconds) or 0.03)
+    local duration = math.max(tonumber(seconds) or 0.03, 0)
+    local started = os.clock()
+    if __bobux_raw_coroutine_yield ~= nil then
+        __bobux_raw_coroutine_yield(duration)
+        return os.clock() - started
+    end
+    return duration
 end
 task = task or {}
 task.wait = wait
-function spawn(callback, ...)
-	if type(callback) == 'function' then return callback(...) end
+local __bobux_tasks = {}
+local function __bobux_pack(...) return {n = select('#', ...), ...} end
+local function __bobux_dispatch(receiver, method, ...)
+	if type(receiver) == 'table' then return receiver[method](receiver, ...) end
+	return receiver:DispatchPacked(method, {...}, select('#', ...))
 end
-task.spawn = spawn
-task.defer = spawn
-function delay(_seconds, callback, ...)
-	if type(callback) == 'function' then return callback(...) end
+function __bobux_fire_server(receiver, ...) return __bobux_dispatch(receiver, 'FireServer', ...) end
+function __bobux_fire_client(receiver, ...) return __bobux_dispatch(receiver, 'FireClient', ...) end
+function __bobux_fire_all_clients(receiver, ...) return __bobux_dispatch(receiver, 'FireAllClients', ...) end
+function __bobux_fire(receiver, ...) return __bobux_dispatch(receiver, 'Fire', ...) end
+function __bobux_invoke_server(receiver, ...) return __bobux_dispatch(receiver, 'InvokeServer', ...) end
+function __bobux_invoke_client(receiver, ...) return __bobux_dispatch(receiver, 'InvokeClient', ...) end
+function __bobux_invoke(receiver, ...) return __bobux_dispatch(receiver, 'Invoke', ...) end
+local __bobux_begin_slice, __bobux_end_slice = __bobux_begin_task_slice, __bobux_end_task_slice
+__bobux_begin_task_slice, __bobux_end_task_slice = nil, nil
+local function __bobux_resume_task(entry)
+    if entry.cancelled then return end
+    local args = entry.args
+    entry.args = {n = 0}
+    local owned_slice = __bobux_begin_slice()
+    local ok, duration = coroutine.resume(entry.thread, __bobux_unpack(args, 1, args.n))
+    __bobux_end_slice(owned_slice)
+    if not ok then
+        __bobux_task_error(tostring(duration))
+        entry.cancelled = true
+	elseif coroutine.status(entry.thread) == 'dead' then
+        entry.cancelled = true
+    else
+        entry.wake_at = os.clock() + math.max(tonumber(duration) or 0, 0)
+    end
 end
-task.delay = delay
+local function __bobux_schedule_task(callback, duration, immediately, ...)
+	assert(type(callback) == 'function' or type(callback) == 'thread', 'task expects a function or thread')
+    local entry = {args = __bobux_pack(...), wake_at = os.clock() + duration}
+    local thread
+	if type(callback) == 'thread' then
+        thread = callback
+    else
+        thread = coroutine.create(function(...)
+            local results = __bobux_pack(callback(...))
+            -- Native exported callbacks may leave values on their origin
+			-- thread's stack. Record completion rather than infer it from that
+			-- stack via coroutine.status when deciding whether to resume.
+			entry.cancelled = true
+			return __bobux_unpack(results, 1, results.n)
+		end)
+	end
+	entry.thread = thread
+	table.insert(__bobux_tasks, entry)
+	__bobux_tasks_active(true)
+	if immediately then __bobux_resume_task(entry) end
+	return thread
+end
+function task.spawn(callback, ...) return __bobux_schedule_task(callback, 0, true, ...) end
+function task.defer(callback, ...) return __bobux_schedule_task(callback, 0, false, ...) end
+function task.delay(seconds, callback, ...)
+	return __bobux_schedule_task(callback, math.max(tonumber(seconds) or 0, 0), false, ...)
+end
+function task.cancel(thread)
+	for _, entry in ipairs(__bobux_tasks) do
+		if entry.thread == thread then entry.cancelled = true end
+	end
+end
+function __bobux_step_tasks()
+	local now, count = os.clock(), #__bobux_tasks
+	for index = 1, count do
+		local entry = __bobux_tasks[index]
+		if not entry.cancelled and entry.wake_at <= now then __bobux_resume_task(entry) end
+		if os.clock() - now > 0.002 then break end
+	end
+	for index = #__bobux_tasks, 1, -1 do
+		if __bobux_tasks[index].cancelled then table.remove(__bobux_tasks, index) end
+	end
+	__bobux_tasks_active(#__bobux_tasks > 0)
+end
+spawn = task.spawn
+delay = task.delay
+local __bobux_modules, __bobux_loading = {}, {}
+function require(module)
+	local descriptor = __bobux_module_source(module)
+	assert(descriptor.error == nil, descriptor.error)
+	local key = descriptor.key
+	if __bobux_modules[key] ~= nil then return __bobux_modules[key] end
+	assert(not __bobux_loading[key], 'Circular ModuleScript require: ' .. descriptor.name)
+	__bobux_loading[key] = true
+	local factory, load_error = load('return function(script) ' .. descriptor.source .. '\\nend', '@' .. descriptor.name, 't')
+	if factory == nil then __bobux_loading[key] = nil; error(load_error, 2) end
+	local module_function = factory()
+	local results = __bobux_pack(pcall(module_function, module))
+	__bobux_loading[key] = nil
+	if not results[1] then error(results[2], 2) end
+	assert(results.n == 2 and results[2] ~= nil, 'ModuleScript must return exactly one non-nil value: ' .. descriptor.name)
+	__bobux_modules[key] = results[2]
+	return results[2]
+end
+function __bobux_connect(signal, callback)
+	if type(signal) == 'table' then return signal:Connect(callback) end
+	-- LuaAPI stores the exporting coroutine's lua_State pointer in a Callable.
+	-- Retain that thread through the registered function's upvalue until the
+	-- connection is released; a completed task may otherwise be collected.
+	local origin = coroutine.running()
+	return signal:Connect(function(...)
+		if origin then task.spawn(callback, ...) end
+	end)
+end
+function __bobux_once(signal, callback)
+	if type(signal) == 'table' then return signal:Once(callback) end
+	local origin = coroutine.running()
+	return signal:Once(function(...)
+		if origin then task.spawn(callback, ...) end
+	end)
+end
+function __bobux_disconnect(connection, ...)
+	if type(connection) == 'table' then
+		return (connection.disconnect or connection.Disconnect)(connection, ...)
+	end
+	return connection:Disconnect(...)
+end
+function __bobux_wait_for_child(parent, name, timeout)
+	if type(parent) == 'table' then return parent:WaitForChild(name, timeout) end
+	local started = os.clock()
+	while true do
+		local child = parent:FindFirstChild(name)
+		if child ~= nil then return child end
+		if timeout ~= nil and os.clock() - started >= timeout then return nil end
+		task.wait(0)
+	end
+end
+function __bobux_signal_wait(signal, ...)
+	if type(signal) == 'table' then return signal:Wait(...) end
+	local received
+	local origin = coroutine.running()
+	local connection = signal:Once(function(...)
+		if origin then received = __bobux_pack(...) end
+	end)
+	while received == nil do task.wait(0) end
+	return __bobux_unpack(received, 1, received.n)
+end
 typeof = typeof or type
 function newproxy(with_metatable)
-    local proxy = {}
-    if with_metatable then setmetatable(proxy, {}) end
-    return proxy
+	local proxy = {}
+	if with_metatable then setmetatable(proxy, {}) end
+	return proxy
 end
 debug = debug or {}
 debug.info = debug.info or function() return '' end
 debug.traceback = debug.traceback or function(message) return tostring(message or '') end
 debug.setmemorycategory = debug.setmemorycategory or function(_category) end
 table.clone = table.clone or function(source)
-    local result = {}
-    if source ~= nil then for key, value in pairs(source) do result[key] = value end end
-    return result
+	local result = {}
+	if source ~= nil then for key, value in pairs(source) do result[key] = value end end
+	return result
 end
 table.clear = table.clear or function(source)
-    if source ~= nil then for key in pairs(source) do source[key] = nil end end
+	if source ~= nil then for key in pairs(source) do source[key] = nil end end
 end
 table.find = table.find or function(source, needle)
-    if source ~= nil then for key, value in pairs(source) do if value == needle then return key end end end
-    return nil
+	if source ~= nil then for key, value in pairs(source) do if value == needle then return key end end end
+	return nil
 end
 table.create = table.create or function(count, value)
-    local result = {}
-    for index = 1, tonumber(count) or 0 do result[index] = value end
-    return result
+	local result = {}
+	for index = 1, tonumber(count) or 0 do result[index] = value end
+	return result
 end
 table.freeze = table.freeze or function(source) return source end
 math.clamp = math.clamp or function(value, minimum, maximum)
-    return math.max(tonumber(minimum) or 0, math.min(tonumber(maximum) or 0, tonumber(value) or 0))
+	return math.max(tonumber(minimum) or 0, math.min(tonumber(maximum) or 0, tonumber(value) or 0))
 end
 math.round = math.round or function(value) return math.floor((tonumber(value) or 0) + 0.5) end
 string.split = string.split or function(value, separator)
 	value = tostring(value or '')
 	separator = tostring(separator or ',')
 	if separator == '' then return {value} end
-    local result, start = {}, 1
-    while true do
-        local first, last = string.find(value, separator, start, true)
-        if first == nil then table.insert(result, string.sub(value, start)); break end
-        table.insert(result, string.sub(value, start, first - 1))
-        start = last + 1
-    end
-    return result
+	local result, start = {}, 1
+	while true do
+		local first, last = string.find(value, separator, start, true)
+		if first == nil then table.insert(result, string.sub(value, start)); break end
+		table.insert(result, string.sub(value, start, first - 1))
+		start = last + 1
+	end
+	return result
 end
 local function __bobux_unpack_raycast(result)
-    if result == nil then return nil, nil, nil, nil end
-    return result[1], result[2], result[3], result[4]
+	if result == nil then return nil, nil, nil, nil end
+	return result[1], result[2], result[3], result[4]
 end
 function __bobux_find_part_on_ray(workspace_proxy, ray, ignore, terrain_cells_are_cubes)
-    return __bobux_unpack_raycast(workspace_proxy:FindPartOnRayResult(ray, ignore, terrain_cells_are_cubes))
+	return __bobux_unpack_raycast(workspace_proxy:FindPartOnRayResult(ray, ignore, terrain_cells_are_cubes))
 end
 function __bobux_find_part_on_ray_with_ignore_list(workspace_proxy, ray, ignore, terrain_cells_are_cubes)
-    return __bobux_unpack_raycast(workspace_proxy:FindPartOnRayWithIgnoreListResult(ray, ignore, terrain_cells_are_cubes))
+	return __bobux_unpack_raycast(workspace_proxy:FindPartOnRayWithIgnoreListResult(ray, ignore, terrain_cells_are_cubes))
 end
 """
 	return prelude + "\n" + rewritten
@@ -3117,6 +4191,25 @@ func _schedule_debris_item(item: Variant, lifetime: float) -> void:
 	)
 
 
+func _module_source_for_runtime(module_variant: Variant) -> Dictionary:
+	# Keep functions, metatables, cyclic class tables and dependencies inside the
+	# caller's Lua state. Converting module return tables to Godot Variants loses
+	# identity and recursively walks class tables until the native bridge crashes.
+	if not (module_variant is BobuxInstance) or not is_instance_valid(module_variant.node):
+		return {"error": "require expects a ModuleScript instance; asset-ID require is unavailable."}
+	var module_node: Node = module_variant.node
+	if str(module_node.get_meta("roblox_class", "")) != "ModuleScript":
+		return {"error": "require expects a ModuleScript instance."}
+	var source := str(module_node.get_meta("code", module_node.get_meta("lua_source", "")))
+	if source.to_utf8_buffer().size() > MAX_SCRIPT_SOURCE_BYTES:
+		return {"error": "ModuleScript exceeds the source size limit."}
+	return {
+		"key": str(module_node.get_instance_id()),
+		"name": str(module_node.get_path()) if module_node.is_inside_tree() else str(module_node.name),
+		"source": _prepare_lua_body(source),
+	}
+
+
 func _require_module(module_variant: Variant, context_node: Node, options: Dictionary) -> Variant:
 	if not (module_variant is BobuxInstance):
 		return module_variant
@@ -3237,7 +4330,7 @@ func install_roblox_manifest(manifest_variant: Variant, context_node: Node) -> D
 		main_scene = context_node.get_tree().root
 	var workspace_node := _resolve_workspace_node(main_scene, context_node)
 	var service_nodes := _ensure_roblox_service_nodes(main_scene, workspace_node)
-	var node_by_ref: Dictionary = {}
+	var node_by_ref: Dictionary = {"-1": _find_roblox_data_model_for_workspace(main_scene, workspace_node)}
 	_index_nodes_by_roblox_ref(workspace_node, node_by_ref)
 	for service_node_variant in service_nodes.values():
 		if service_node_variant is Node:
@@ -3248,7 +4341,7 @@ func install_roblox_manifest(manifest_variant: Variant, context_node: Node) -> D
 			continue
 		var service: Dictionary = service_variant
 		var ref := str(service.get("ref", "")).strip_edges()
-		var service_name := str(service.get("name", service.get("class", ""))).strip_edges()
+		var service_name := str(service.get("class", service.get("name", ""))).strip_edges()
 		if ref.is_empty() or service_name.is_empty():
 			continue
 		var service_node: Node = service_nodes.get(service_name, null) as Node
@@ -3257,13 +4350,16 @@ func install_roblox_manifest(manifest_variant: Variant, context_node: Node) -> D
 		if service_node != null:
 			service_node.set_meta("roblox_ref", ref)
 			service_node.set_meta("roblox_class", str(service.get("class", service_name)))
+			if service.has("properties"):
+				service_node.set_meta("roblox_properties", service.properties)
+				_apply_manifest_properties_to_node(service_node, service.properties)
 			node_by_ref[ref] = service_node
 	var entries: Array[Dictionary] = []
 	_append_manifest_entries(entries, manifest.get("gui", []))
 	_append_manifest_entries(entries, manifest.get("tools", []))
 	_append_manifest_entries(entries, manifest.get("scripts", []))
-	_append_manifest_entries(entries, manifest.get("storage_libraries", []))
 	_append_manifest_entries(entries, manifest.get("instances", []))
+	_append_manifest_entries(entries, manifest.get("storage_libraries", []))
 	var unique_entries: Array[Dictionary] = []
 	var seen_entry_refs: Dictionary = {}
 	for entry in entries:
@@ -3326,7 +4422,7 @@ func install_roblox_manifest_async(manifest_variant: Variant, context_node: Node
 		main_scene = context_node.get_tree().root
 	var workspace_node := _resolve_workspace_node(main_scene, context_node)
 	var service_nodes := _ensure_roblox_service_nodes(main_scene, workspace_node)
-	var node_by_ref: Dictionary = {}
+	var node_by_ref: Dictionary = {"-1": _find_roblox_data_model_for_workspace(main_scene, workspace_node)}
 	await _index_nodes_by_roblox_ref_async(workspace_node, node_by_ref, tree, maxi(batch_size, 32))
 	for service_node_variant in service_nodes.values():
 		if service_node_variant is Node:
@@ -3337,7 +4433,7 @@ func install_roblox_manifest_async(manifest_variant: Variant, context_node: Node
 			continue
 		var service: Dictionary = service_variant
 		var ref := str(service.get("ref", "")).strip_edges()
-		var service_name := str(service.get("name", service.get("class", ""))).strip_edges()
+		var service_name := str(service.get("class", service.get("name", ""))).strip_edges()
 		if ref.is_empty() or service_name.is_empty():
 			continue
 		var service_node: Node = service_nodes.get(service_name, null) as Node
@@ -3346,14 +4442,17 @@ func install_roblox_manifest_async(manifest_variant: Variant, context_node: Node
 		if service_node != null:
 			service_node.set_meta("roblox_ref", ref)
 			service_node.set_meta("roblox_class", str(service.get("class", service_name)))
+			if service.has("properties"):
+				service_node.set_meta("roblox_properties", service.properties)
+				_apply_manifest_properties_to_node(service_node, service.properties)
 			node_by_ref[ref] = service_node
 
 	var entries: Array[Dictionary] = []
 	_append_manifest_entries(entries, manifest.get("gui", []))
 	_append_manifest_entries(entries, manifest.get("tools", []))
 	_append_manifest_entries(entries, manifest.get("scripts", []))
-	_append_manifest_entries(entries, manifest.get("storage_libraries", []))
 	_append_manifest_entries(entries, manifest.get("instances", []))
+	_append_manifest_entries(entries, manifest.get("storage_libraries", []))
 	var unique_entries: Array[Dictionary] = []
 	var seen_entry_refs: Dictionary = {}
 	for entry in entries:
@@ -3422,9 +4521,8 @@ func install_roblox_manifest_async(manifest_variant: Variant, context_node: Node
 			processed_since_yield = 0
 			await tree.process_frame
 	var pending_count := 0
-	for waiting in waiting_by_parent_ref.values():
-		if waiting is Array:
-			pending_count += (waiting as Array).size()
+	for ref in entry_by_ref:
+		if not node_by_ref.has(ref): pending_count += 1
 	var hierarchy_result := await _restore_manifest_hierarchy_async(
 		manifest.get("hierarchy", []), node_by_ref, tree, safe_batch_size
 	)
@@ -3546,6 +4644,10 @@ func _ensure_manifest_entry_node(parent_node: Node, entry: Dictionary) -> Node:
 
 func _create_manifest_entry_node(entry: Dictionary) -> Node:
 	var roblox_class := str(entry.get("class", "Instance")).strip_edges()
+	if bool(entry.get("properties", {}).get("BobuxDeferredGeometry", false)):
+		var part := MeshInstance3D.new()
+		part.add_to_group("studio_parts")
+		return part
 	return RobloxDataModelClass.create_instance(roblox_class, str(entry.get("name", roblox_class)))
 
 func _apply_manifest_entry_metadata(node: Node, entry: Dictionary) -> void:
@@ -3584,6 +4686,8 @@ func _apply_manifest_entry_metadata(node: Node, entry: Dictionary) -> void:
 
 
 func _apply_manifest_properties_to_node(node: Node, properties: Dictionary) -> void:
+	for attribute in properties.get("Attributes", {}):
+		node.set_meta("attribute_" + str(attribute), properties.Attributes[attribute])
 	if node is Node3D:
 		var node_3d := node as Node3D
 		node_3d.position = _vector3_from_manifest_value(properties.get("BobuxPosition", properties.get("Position", [0.0, 0.0, 0.0])), node_3d.position)
@@ -3592,7 +4696,24 @@ func _apply_manifest_properties_to_node(node: Node, properties: Dictionary) -> v
 		if bool(properties.get("BobuxTemplateOnly", false)):
 			node_3d.visible = false
 	if node is MeshInstance3D:
-		_apply_manifest_part_appearance(node as MeshInstance3D, properties)
+		node.set_meta("anchored", bool(properties.get("Anchored", true)))
+		node.set_meta("can_collide", bool(properties.get("CanCollide", true)))
+		node.set_meta("transparency", float(properties.get("Transparency", 0.0)))
+		node.set_meta("bobux_deferred_geometry", bool(properties.get("BobuxDeferredGeometry", false)) or bool(properties.get("BobuxTemplateOnly", false)))
+		if not bool(properties.get("BobuxDeferredGeometry", false)):
+			_apply_manifest_part_appearance(node as MeshInstance3D, properties)
+		var mesh_path := str(properties.get("BobuxMeshResource", ""))
+		if not mesh_path.is_empty() and FileAccess.file_exists(mesh_path):
+			var mesh: Variant = ResourceLoader.load(mesh_path)
+			if mesh is Mesh:
+				node.mesh = mesh.duplicate(true)
+				node.material_override = null
+				node.set_meta("bobux_mesh_resource_asset", mesh_path)
+				node.set_meta("roblox_mesh_applied", true)
+	if node is AudioStreamPlayer3D:
+		var sound_path := str(properties.get("SoundId", ""))
+		if FileAccess.file_exists(sound_path): node.stream = preload("res://addons/roblox_runtime/audio_file_loader.gd").load_stream(sound_path, not bool(properties.get("Looped", false)))
+		node.volume_db = linear_to_db(maxf(float(properties.get("Volume", 1.0)), 0.0001))
 	if node is Control:
 		var control := node as Control
 		var roblox_class := str(node.get_meta("roblox_class", ""))
@@ -3776,6 +4897,7 @@ func bind_gui_controls(gui_root: Node, context_node: Node) -> Dictionary:
 					if player_gui != null:
 						_index_nodes_by_roblox_ref(player_gui, indexed)
 	var bound := _bind_gui_controls_recursive(gui_root, indexed)
+	_register_live_gui(gui_root, context_node)
 	return {"ok": true, "bound": bound, "indexed": indexed.size(), "refs": indexed.keys()}
 
 
@@ -3783,6 +4905,7 @@ func bind_gui_controls_async(gui_root: Node, context_node: Node, batch_size: int
 	if gui_root == null:
 		return {"ok": false, "bound": 0}
 	var tree := gui_root.get_tree() if gui_root.is_inside_tree() else null
+	_register_live_gui(gui_root, context_node)
 	var indexed: Dictionary = {}
 	if context_node != null:
 		await _index_nodes_by_roblox_ref_async(context_node, indexed, tree, batch_size)
@@ -3852,6 +4975,19 @@ func fire_roblox_instance_event(target: Node, event_name: String, args: Array = 
 	return true
 
 
+func _register_live_gui(gui_root: Node, context: Node) -> void:
+	if not gui_root is Control or gui_root.has_node("LivePlayerGui"):
+		return
+	var state := get_local_inventory_state(context)
+	var player := _live_node(state.get("local_player"))
+	if player == null: return
+	var sync: Node = preload("res://addons/roblox_runtime/roblox_live_gui.gd").new()
+	sync.name = "LivePlayerGui"
+	sync.engine = self
+	sync.host = gui_root
+	sync.player_gui = player.get_node_or_null("PlayerGui")
+	gui_root.add_child(sync)
+
 func _bind_gui_controls_recursive(node: Node, indexed: Dictionary) -> int:
 	var bound := 0
 	if node is BaseButton and not bool(node.get_meta("bobux_lua_event_bound", false)):
@@ -3916,8 +5052,14 @@ func _safe_manifest_node_name(raw_name: String) -> String:
 	return clean
 
 func _rewrite_lua_property_assignments(lua_code: String) -> String:
+	# A semicolon ends a statement, not the property's value expression.
+	# Token offsets exclude quoted text/comments; keep table field separators.
+	var separators := _lua_tokens(lua_code)
+	separators.reverse()
+	for token in separators:
+		if token.text == ";": lua_code = lua_code.left(token.end) + "\n" + lua_code.substr(token.end)
 	var regex := RegEx.new()
-	var compile_error := regex.compile("^([\\t ]*)([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)\\.(Name|Parent|Value|Position|Rotation|CFrame|Velocity|AssemblyLinearVelocity|Size|Anchored|CanCollide|Transparency|BrickColor|Color|Reflectance|TimeOfDay|ClockTime)\\s*=\\s*(?!=)(.+)$")
+	var compile_error := regex.compile("^([\\t ]*)([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)\\.(Name|Parent|Value|Position|Rotation|CFrame|Velocity|AssemblyLinearVelocity|Size|Anchored|CanCollide|Transparency|BrickColor|Color|Reflectance|Enabled|Visible|TimeOfDay|ClockTime)\\s*=\\s*(?!=)(.+)$")
 	if compile_error != OK:
 		return lua_code
 	var rewritten: Array[String] = []
@@ -3984,6 +5126,60 @@ func _rewrite_lua_property_assignments(lua_code: String) -> String:
 	if pending_assignment_balance > 0 and not rewritten.is_empty():
 		rewritten[rewritten.size() - 1] += ")"
 	return "\n".join(rewritten)
+
+func _lua_tokens(source: String) -> Array[Dictionary]:
+	return preload("res://addons/roblox_studio/roblox_lua_lexer.gd").tokens(source)
+
+
+func _lua_receiver_start(tokens: Array[Dictionary], end_index: int) -> int:
+	var cursor := end_index
+	while cursor >= 0:
+		var token := str(tokens[cursor].text)
+		if token in [")", "]"]:
+			var opening := "(" if token == ")" else "["
+			var depth := 1
+			cursor -= 1
+			while cursor >= 0 and depth > 0:
+				if tokens[cursor].text == token:
+					depth += 1
+				elif tokens[cursor].text == opening:
+					depth -= 1
+				cursor -= 1
+			if depth != 0:
+				return -1
+			if cursor >= 0 and (bool(tokens[cursor].identifier) or tokens[cursor].text in [")", "]"]):
+				continue
+			return cursor + 1
+		if not bool(tokens[cursor].identifier):
+			return -1
+		if cursor >= 2 and tokens[cursor - 1].text in [".", ":"]:
+			cursor -= 2
+			continue
+		return cursor
+	return -1
+
+
+func _rewrite_lua_async_calls(source: String) -> String:
+	var helpers := {"Connect": "__bobux_connect", "connect": "__bobux_connect", "Once": "__bobux_once", "disconnect": "__bobux_disconnect", "WaitForChild": "__bobux_wait_for_child", "Wait": "__bobux_signal_wait", "wait": "__bobux_signal_wait"}
+	helpers.merge({"FireServer": "__bobux_fire_server", "FireClient": "__bobux_fire_client", "FireAllClients": "__bobux_fire_all_clients", "Fire": "__bobux_fire", "InvokeServer": "__bobux_invoke_server", "InvokeClient": "__bobux_invoke_client", "Invoke": "__bobux_invoke"})
+	var tokens := _lua_tokens(source)
+	var replacements: Array[Dictionary] = []
+	for index in range(1, tokens.size() - 2):
+		if tokens[index].text != ":" or not helpers.has(tokens[index + 1].text) or tokens[index + 2].text != "(":
+			continue
+		var receiver_start := _lua_receiver_start(tokens, index - 1)
+		if receiver_start < 0:
+			continue
+		# Insert helper before the receiver, then replace :Method( separately.
+		# Nested/chained calls therefore never overlap another replacement span.
+		replacements.append({"start": int(tokens[receiver_start].start), "end": int(tokens[receiver_start].start), "text": str(helpers[tokens[index + 1].text]) + "("})
+		var has_arguments: bool = index + 3 < tokens.size() and tokens[index + 3].text != ")"
+		replacements.append({"start": int(tokens[index].start), "end": int(tokens[index + 2].end), "text": ", " if has_arguments else ""})
+	replacements.sort_custom(func(first: Dictionary, second: Dictionary): return int(first.start) > int(second.start))
+	for replacement in replacements:
+		source = source.left(int(replacement.start)) + str(replacement.text) + source.substr(int(replacement.end))
+	return source
+
 
 func _rewrite_lua_multi_return_calls(lua_code: String) -> String:
 	var rewritten := lua_code
@@ -4126,14 +5322,29 @@ func _ensure_roblox_service_nodes(main_scene: Node, workspace_node: Node) -> Dic
 
 
 func _service_cache_is_valid(cached: Dictionary, workspace_node: Node, services: Dictionary) -> bool:
-	var cached_workspace: Node = cached.get("workspace", null) as Node
-	var cached_root: Node = cached.get("root", null) as Node
+	var cached_workspace := _live_node(cached.get("workspace"))
+	var cached_root := _live_node(cached.get("root"))
 	if cached_workspace != workspace_node or cached_root == null or not is_instance_valid(cached_root):
 		return false
 	for service_variant in services.values():
-		if not (service_variant is Node) or not is_instance_valid(service_variant):
+		if not is_instance_valid(service_variant) or not (service_variant is Node):
 			return false
 	return true
+
+func _live_node(value: Variant) -> Node:
+	# `as Node` itself throws for a freed Object; check the Variant first.
+	return value as Node if is_instance_valid(value) and value is Node else null
+
+func _live_service_caches() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for key in _service_nodes_cache.keys():
+		var cached: Dictionary = _service_nodes_cache[key]
+		var workspace_node := _live_node(cached.get("workspace"))
+		if workspace_node == null or not _service_cache_is_valid(cached, workspace_node, cached.get("services", {})):
+			_service_nodes_cache.erase(key)
+			continue
+		result.append(cached)
+	return result
 
 
 func _ensure_service_on_data_model(root: Node, service_name: String) -> Node:
@@ -4248,6 +5459,10 @@ func bind_local_player_character(character_node: Node) -> void:
 	var local_player := players_service.get_node_or_null("LocalPlayer")
 	if local_player == null:
 		return
+	if not bool(local_player.get_meta("bobux_player_joined", false)):
+		local_player.set_meta("bobux_player_joined", true)
+		_assign_initial_team(local_player, services.get("Teams"))
+		BobuxInstance.new(players_service).PlayerAdded.Fire(BobuxInstance.new(local_player))
 	local_player.set_meta("bobux_character_instance_id", character_node.get_instance_id())
 	character_node.set_meta("bobux_player_instance_id", local_player.get_instance_id())
 	character_node.set_meta("roblox_class", "Model")
@@ -4257,7 +5472,92 @@ func bind_local_player_character(character_node: Node) -> void:
 		var starter_character_scripts := starter_player.get_node_or_null("StarterCharacterScripts")
 		if starter_character_scripts != null:
 			_clone_missing_children(starter_character_scripts, character_node)
+	refresh_local_team_spawns(character_node, true)
 	BobuxInstance.new(local_player)._shared_event("CharacterAdded").Fire(BobuxInstance.new(character_node))
+
+
+func _assign_initial_team(player: Node, teams: Node) -> void:
+	if teams == null or player.has_meta("Team"): return
+	var best: Node = null
+	var count := 2147483647
+	for team in teams.get_children():
+		if str(team.get_meta("roblox_class", "")) != "Team": continue
+		if not bool(team.get_meta("AutoAssignable", team.get_meta("roblox_properties", {}).get("AutoAssignable", true))): continue
+		var members := BobuxInstance.new(team).GetPlayers().size()
+		if members < count:
+			best = team
+			count = members
+	if best != null: BobuxInstance.new(player)._set(&"Team", BobuxInstance.new(best))
+
+
+func refresh_local_team_spawns(character: Node, place_initial: bool = false) -> void:
+	if not is_instance_valid(character) or not character.is_inside_tree(): return
+	var player := _live_node(instance_from_id(int(character.get_meta("bobux_player_instance_id", 0))))
+	if player == null: return
+	var workspace := _resolve_workspace_node(character.get_tree().root, character)
+	if workspace == null: return
+	var wrapper := BobuxInstance.new(player)
+	var team: Variant = wrapper._get(&"Team")
+	var color: Variant = player.get_meta("TeamColor", 194)
+	if team is BobuxInstance: color = team._get(&"TeamColor")
+	var neutral := bool(player.get_meta("Neutral", team == null))
+	var preferred: Variant = wrapper._get(&"RespawnLocation")
+	var points: Array[Vector3] = []
+	var pending: Array[Node] = [workspace]
+	while not pending.is_empty():
+		var candidate: Node = pending.pop_back()
+		pending.append_array(candidate.get_children())
+		if str(candidate.get_meta("roblox_class", "")) != "SpawnLocation" or not candidate is Node3D: continue
+		var props: Dictionary = candidate.get_meta("roblox_properties", {})
+		if not bool(candidate.get_meta("Enabled", props.get("Enabled", true))): continue
+		var spawn_neutral := bool(candidate.get_meta("Neutral", props.get("Neutral", true)))
+		var spawn_color: Variant = candidate.get_meta("TeamColor", props.get("TeamColor", 194))
+		if not spawn_neutral and (neutral or _brick_color_from_variant(spawn_color) != _brick_color_from_variant(color)): continue
+		var center: Vector3 = candidate.global_position
+		if candidate is MeshInstance3D:
+			var bounds: AABB = candidate.global_transform * candidate.get_aabb()
+			center = Vector3(bounds.get_center().x, bounds.end.y + 0.12, bounds.get_center().z)
+		if preferred is BobuxInstance and preferred.node == candidate:
+			points.assign([center])
+			break
+		points.append(center)
+	if points.is_empty(): return
+	if character.has_method("configure_spawn_points"): character.configure_spawn_points(points)
+	if place_initial and character.has_method("set_lua_position"):
+		character.set_lua_position(points[0])
+		character.set_initial_spawn_position(points[0])
+
+
+func collect_live_player_scripts(context_node: Node, character: Node = null) -> Array[Node]:
+	var state := get_local_inventory_state(context_node, character)
+	var pending: Array[Node] = []
+	for key in ["local_player", "character"]:
+		var node := _live_node(state.get(key))
+		if node != null:
+			pending.append(node)
+	var result: Array[Node] = []
+	var seen := {}
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		if seen.has(node.get_instance_id()):
+			continue
+		seen[node.get_instance_id()] = true
+		if str(node.get_meta("roblox_class", "")) in ["Script", "LocalScript"] and not bool(node.get_meta("disabled", false)):
+			result.append(node)
+		pending.append_array(node.get_children())
+	return result
+
+func start_new_player_scripts(context_node: Node, character: Node = null) -> void:
+	if not is_instance_valid(context_node) or not context_node.is_inside_tree(): return
+	for script_node in collect_live_player_scripts(context_node, character):
+		if script_node.has_meta("bobux_script_runtime_id"): continue
+		var source := str(script_node.get_meta("code", script_node.get_meta("lua_source", "")))
+		if source.is_empty(): continue
+		start_script(source, script_node, {"realm": "client" if str(script_node.get_meta("roblox_class", "Script")) == "LocalScript" else "server", "retain": true})
+
+func _start_new_player_scripts_by_id(id: int) -> void:
+	var context: Variant = instance_from_id(id)
+	if is_instance_valid(context): start_new_player_scripts(context)
 
 
 func get_local_inventory_state(context_node: Node = null, character_override: Node = null) -> Dictionary:
@@ -4323,7 +5623,8 @@ func equip_local_tool(tool_node: Node, context_node: Node = null, character_over
 	tool_node.set_meta("bobux_equipped_character_id", character.get_instance_id())
 	_set_inventory_tool_tree_visible(tool_node, true)
 	_position_equipped_tool(tool_node)
-	BobuxInstance.new(tool_node).Equipped.Fire(BobuxMouse.new())
+	start_new_player_scripts(character, character)
+	BobuxInstance.new(tool_node).Equipped.Fire(BobuxMouse.new(state.get("local_player")))
 	return true
 
 
@@ -4362,7 +5663,71 @@ func activate_local_tool(tool_node: Node, context_node: Node = null) -> bool:
 	var character: Node = state.get("character", null)
 	if character == null or tool_node.get_parent() != character:
 		return false
+	var now_msec := Time.get_ticks_msec()
+	var cooldown_seconds := clampf(float(tool_node.get_meta("bobux_tool_cooldown", 0.0)), 0.0, 10.0)
+	var last_activation_msec := int(tool_node.get_meta("bobux_tool_last_activation_msec", 0))
+	if cooldown_seconds > 0.0 and now_msec - last_activation_msec < roundi(cooldown_seconds * 1000.0):
+		return false
+	tool_node.set_meta("bobux_tool_last_activation_msec", now_msec)
 	BobuxInstance.new(tool_node).Activated.Fire()
+	var damage := clampf(float(tool_node.get_meta("bobux_tool_damage", 0.0)), 0.0, 200.0)
+	if damage > 0.0 and character is Node3D:
+		_apply_local_tool_damage(tool_node, character as Node3D, damage)
+	return true
+
+
+func _apply_local_tool_damage(tool_node: Node, character: Node3D, damage: float) -> bool:
+	if tool_node == null or character == null or not character.is_inside_tree():
+		return false
+	var stud_scale := maxf(float(character.get_meta("roblox_stud_scale", 1.0)), 0.25)
+	var attack_range := clampf(float(tool_node.get_meta("bobux_tool_range", 5.0)), 1.0, 24.0) * stud_scale
+	var attack_origin := character.global_position + Vector3.UP * 2.2 * stud_scale
+	var attack_forward := -character.global_transform.basis.z
+	var visuals := character.get_node_or_null("Visuals") as Node3D
+	if visuals != null:
+		# The block avatar mesh faces its local +Z direction.
+		attack_forward = visuals.global_transform.basis.z
+	attack_forward.y = 0.0
+	if attack_forward.length_squared() <= 0.001:
+		attack_forward = Vector3.FORWARD
+	else:
+		attack_forward = attack_forward.normalized()
+
+	var scene := get_tree().current_scene
+	if scene == null:
+		return false
+	var target: CharacterBody3D = null
+	var target_distance := INF
+	for candidate_variant in scene.find_children("*", "CharacterBody3D", true, false):
+		if not candidate_variant is CharacterBody3D:
+			continue
+		var candidate := candidate_variant as CharacterBody3D
+		if candidate == character or not candidate.has_method("take_damage"):
+			continue
+		var offset := candidate.global_position + Vector3.UP * stud_scale * 1.8 - attack_origin
+		var distance := offset.length()
+		if distance > attack_range or distance >= target_distance:
+			continue
+		var direction := offset.normalized() if distance > 0.001 else attack_forward
+		# Very close contacts count even when the camera is turning. Longer hits
+		# must remain in the forward hemisphere like a Roblox melee Tool.
+		if distance > 1.45 * stud_scale and direction.dot(attack_forward) < 0.05:
+			continue
+		target = candidate
+		target_distance = distance
+	if target == null:
+		return false
+
+	var handle := _find_tool_handle(tool_node)
+	var hit_part: Node = target.get_node_or_null("HumanoidRootPart")
+	if hit_part == null:
+		hit_part = target
+	if handle != null:
+		notify_part_touched(handle, hit_part)
+	var root_scene := get_tree().current_scene
+	if root_scene != null and root_scene.has_method("request_lua_tool_damage"):
+		return bool(root_scene.call("request_lua_tool_damage", target, damage, character))
+	target.call("take_damage", damage)
 	return true
 
 func unbind_local_player_character(character_node: Node = null) -> void:
@@ -4379,12 +5744,77 @@ func unbind_local_player_character(character_node: Node = null) -> void:
 		return
 	var bound_id := int(local_player.get_meta("bobux_character_instance_id", 0))
 	if character_node == null or not is_instance_valid(character_node) or bound_id == character_node.get_instance_id():
+		if bool(local_player.get_meta("bobux_player_joined", false)):
+			BobuxInstance.new(players_service).PlayerRemoving.Fire(BobuxInstance.new(local_player))
+		local_player.remove_meta("bobux_player_joined")
 		local_player.remove_meta("bobux_character_instance_id")
 
 func notify_part_touched(touched_part: Node, hit_part: Node) -> void:
 	if touched_part == null or hit_part == null or not is_instance_valid(touched_part) or not is_instance_valid(hit_part):
 		return
 	BobuxInstance.new(touched_part).Touched.Fire(BobuxInstance.new(hit_part))
+
+func notify_jump_request(character: Node) -> void:
+	# Dispatch only to the DataModel bound to this local character, including
+	# Studio's isolated play viewport. Do not create services on every input.
+	for cached in _live_service_caches():
+		var services: Dictionary = cached.get("services", {})
+		var players: Node = services.get("Players") as Node
+		if not is_instance_valid(players):
+			continue
+		var local_player := players.get_node_or_null("LocalPlayer")
+		if local_player == null or int(local_player.get_meta("bobux_character_instance_id", 0)) != character.get_instance_id():
+			continue
+		_fire_existing_runtime_event(services.get("UserInputService") as Node, "JumpRequest", [])
+
+func _input(event: InputEvent) -> void:
+	if _scripts_paused or _service_nodes_cache.is_empty():
+		return
+	var data := RobloxInputBridge.event_data(event)
+	if data.is_empty():
+		return
+	for cached in _live_service_caches():
+		var services: Dictionary = cached.get("services", {})
+		var players := _live_node(services.get("Players"))
+		var input_service := _live_node(services.get("UserInputService"))
+		if not is_instance_valid(players) or not is_instance_valid(input_service):
+			continue
+		var local_player := players.get_node_or_null("LocalPlayer")
+		var character_id := int(local_player.get_meta("bobux_character_instance_id", 0)) if local_player != null else 0
+		var character := instance_from_id(character_id) as Node if character_id != 0 else null
+		if not is_instance_valid(character) or not character.is_inside_tree() or character.is_queued_for_deletion():
+			continue
+		if event is InputEventMouse and character.get_viewport() == get_viewport():
+			character.get_viewport().set_meta("bobux_pointer_position", event.position)
+		var focus := get_viewport().gui_get_focus_owner()
+		var character_focus := character.get_viewport().gui_get_focus_owner()
+		var processed := bool(character.get_meta("bobux_system_menu_open", false)) or (is_instance_valid(focus) and focus.is_visible_in_tree() and (focus is LineEdit or focus is TextEdit)) or (is_instance_valid(character_focus) and character_focus.is_visible_in_tree() and (character_focus is LineEdit or character_focus is TextEdit))
+		if data.UserInputType == 8:
+			var keys: Dictionary = input_service.get_meta("_bobux_pressed_keys", {})
+			if data.UserInputState == 0: keys[int(data.KeyCode)] = true
+			else: keys.erase(int(data.KeyCode))
+			input_service.set_meta("_bobux_pressed_keys", keys)
+		var event_name: String = {0: "InputBegan", 1: "InputChanged", 2: "InputEnded"}[int(data.UserInputState)]
+		_fire_existing_runtime_event(input_service, event_name, [RobloxInputBridge.InputObject.new(data), processed])
+		if data.UserInputType == 0 and data.UserInputState in [0, 2]:
+			_fire_existing_runtime_event(local_player, "Mouse_Button1Down" if data.UserInputState == 0 else "Mouse_Button1Up", [])
+		elif data.UserInputType == 8 and data.UserInputState in [0, 2] and not processed:
+			_fire_existing_runtime_event(local_player, "Mouse_KeyDown" if data.UserInputState == 0 else "Mouse_KeyUp", [String.chr(int(data.KeyCode)).to_lower()])
+
+func notify_humanoid_state_changed(humanoid: Node, previous: int, next_state: int) -> void:
+	_fire_existing_runtime_event(humanoid, "StateChanged", [previous, next_state])
+	for signal_state in {"Jumping": 3, "FreeFalling": 5}:
+		var state_id: int = {"Jumping": 3, "FreeFalling": 5}[signal_state]
+		if previous == state_id or next_state == state_id:
+			_fire_existing_runtime_event(humanoid, signal_state, [next_state == state_id])
+
+func _fire_existing_runtime_event(target: Node, event_name: String, args: Array) -> void:
+	if not is_instance_valid(target):
+		return
+	var registry: Dictionary = target.get_meta("_bobux_event_registry", {})
+	var event: Variant = registry.get(event_name)
+	if event != null:
+		event.callv("Fire", args)
 
 func _clone_missing_children(source: Node, target: Node) -> void:
 	if source == null or target == null:
@@ -4516,6 +5946,10 @@ func _reparent_inventory_node(node: Node, new_parent: Node) -> void:
 func _set_inventory_tool_tree_visible(root_node: Node, visible_in_world: bool) -> void:
 	if root_node == null or not is_instance_valid(root_node):
 		return
+	if visible_in_world and root_node is MeshInstance3D and bool(root_node.get_meta("bobux_deferred_geometry", false)):
+		var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+		importer.scale_factor = BobuxInstance.new(root_node)._stud_scale()
+		importer.materialize_template_part(root_node)
 	if root_node is Node3D:
 		(root_node as Node3D).visible = visible_in_world
 	root_node.set_meta("BobuxTemplateOnly", not visible_in_world)
@@ -4527,18 +5961,26 @@ func _position_equipped_tool(tool_node: Node) -> void:
 	if not (tool_node is Node3D):
 		return
 	var tool_root := tool_node as Node3D
-	tool_root.transform = Transform3D.IDENTITY
+	var character := tool_node.get_parent()
+	var hand_frame := Transform3D(Basis.IDENTITY, Vector3(1.55, 2.72, -0.62))
+	if is_instance_valid(character) and character.has_method("get_tool_hand_transform"):
+		hand_frame = character.call("get_tool_hand_transform")
 	var properties: Dictionary = tool_node.get_meta("roblox_properties", {}) if tool_node.get_meta("roblox_properties", {}) is Dictionary else {}
 	var grip_position := _vector3_from_manifest_value(properties.get("GripPos", properties.get("GripPosition", Vector3.ZERO)), Vector3.ZERO)
-	var target_position := Vector3(1.55, 2.72, -0.62) + grip_position * 0.5
+	var grip := Transform3D(Basis.IDENTITY, grip_position)
+	var grip_value: Variant = properties.get("Grip")
+	if grip_value is BobuxCFrame:
+		grip = grip_value.transform
+	else:
+		var forward := _vector3_from_manifest_value(properties.get("GripForward", Vector3.FORWARD), Vector3.FORWARD)
+		var up := _vector3_from_manifest_value(properties.get("GripUp", Vector3.UP), Vector3.UP)
+		if forward.length_squared() > 0.001 and forward.cross(up).length_squared() > 0.001:
+			grip.basis = Basis.looking_at(forward, up)
+	var desired := hand_frame * grip.affine_inverse()
 	var handle := _find_tool_handle(tool_node)
 	if handle != null and handle != tool_root:
-		tool_root.position = target_position - handle.position
-	else:
-		tool_root.position = target_position
-	var grip_forward := _vector3_from_manifest_value(properties.get("GripForward", Vector3(0.0, 0.0, -1.0)), Vector3(0.0, 0.0, -1.0))
-	if grip_forward.length_squared() > 0.001:
-		tool_root.rotation.y = atan2(grip_forward.x, -grip_forward.z)
+		desired.origin -= desired.basis * handle.position
+	tool_root.transform = desired
 
 
 func _find_tool_handle(root_node: Node) -> Node3D:
@@ -4570,6 +6012,9 @@ func _create_cframe(
 	r10: Variant = null, r11: Variant = null, r12: Variant = null,
 	r20: Variant = null, r21: Variant = null, r22: Variant = null
 ) -> BobuxCFrame:
+	if x is Vector3:
+		if y is Vector3: return _create_cframe_look_at(x, y)
+		return BobuxCFrame.new(Transform3D(Basis.IDENTITY, x))
 	var basis := Basis.IDENTITY
 	if r00 != null and r01 != null and r02 != null and r10 != null and r11 != null and r12 != null and r20 != null and r21 != null and r22 != null:
 		# Roblox provides a row-major rotation matrix; Godot Basis stores columns.
@@ -4703,14 +6148,11 @@ func _build_enum_proxy() -> Dictionary:
 			"EmotesMenu": 4, "SelfView": 5, "Captures": 6, "All": 7
 		},
 		"UserInputType": {
-			"MouseButton1": 0, "MouseButton2": 1, "MouseMovement": 2,
+			"MouseButton1": 0, "MouseButton2": 1, "MouseButton3": 2, "MouseWheel": 3, "MouseMovement": 4,
 			"Touch": 7, "Keyboard": 8, "Gamepad1": 12
 		},
-		"KeyCode": {
-			"Unknown": 0, "Backspace": 8, "Tab": 9, "Return": 13,
-			"Space": 32, "A": 97, "D": 100, "E": 101, "Q": 113,
-			"S": 115, "W": 119, "LeftShift": 304, "RightShift": 303
-		},
+		"UserInputState": {"Begin": 0, "Change": 1, "End": 2, "Cancel": 3, "None": 4},
+		"KeyCode": RobloxInputBridge.key_codes(),
 		"HumanoidStateType": {
 			"Running": 8, "Jumping": 3, "Freefall": 5, "Landed": 7,
 			"Climbing": 12, "Swimming": 4, "Seated": 13, "Dead": 15

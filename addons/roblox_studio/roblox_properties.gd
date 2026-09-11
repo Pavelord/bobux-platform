@@ -102,10 +102,6 @@ func build_into(container: VBoxContainer, node: Node, studio: Node) -> void:
 # ── Section helpers ──────────────────────────────────────────────────────────
 
 func _add_section(container: VBoxContainer, title: String) -> VBoxContainer:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 0)
-	section.set_meta("section_title", title)
-
 	var header_btn := Button.new()
 	header_btn.text = "v " + title
 	header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -124,11 +120,11 @@ func _add_section(container: VBoxContainer, title: String) -> VBoxContainer:
 	header_btn.add_theme_stylebox_override("normal", header_style)
 	header_btn.add_theme_stylebox_override("hover", header_style)
 	header_btn.add_theme_stylebox_override("pressed", header_style)
-	header_btn.set_meta("section", section)
 	header_btn.pressed.connect(_toggle_section.bind(header_btn))
 	container.add_child(header_btn)
 
 	var body := VBoxContainer.new()
+	body.set_meta("section_title", title)
 	body.add_theme_constant_override("separation", 0)
 	body.visible = true
 	header_btn.set_meta("body", body)
@@ -743,6 +739,7 @@ func _on_tags_changed(value: String, node: Node) -> void:
 
 
 func _set_node_attribute(node: Node, key: String, value: Variant) -> void:
+	node.set_meta("attribute_" + key, value)
 	var attributes := _get_node_attributes(node)
 	attributes[key] = value
 	node.set_meta("roblox_attributes", attributes)
@@ -753,6 +750,7 @@ func _set_node_attribute(node: Node, key: String, value: Variant) -> void:
 
 
 func _remove_node_attribute(node: Node, key: String) -> void:
+	if node.has_meta("attribute_" + key): node.remove_meta("attribute_" + key)
 	var attributes := _get_node_attributes(node)
 	attributes.erase(key)
 	node.set_meta("roblox_attributes", attributes)

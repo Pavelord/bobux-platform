@@ -19,7 +19,7 @@ func _initialize() -> void:
 	var before := _terrain_cell_count(workspace)
 	var folder := "user://validation/terrain_persistence"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
-	studio._save_map(folder)
+	await studio._save_map(folder)
 
 	var serialized_cells := _serialized_terrain_cell_count(folder + "/map_data.json")
 	studio._clear_authored_terrain_for_load()
@@ -67,11 +67,15 @@ func _serialized_terrain_cell_count(path: String) -> int:
 	var entries: Variant = (manifest as Dictionary).get("instances", [])
 	if not (entries is Array):
 		return -1
+	var serialized_classes: Array[String] = []
 	for entry in entries:
+		if entry is Dictionary:
+			serialized_classes.append(str((entry as Dictionary).get("class", "")))
 		if entry is Dictionary and str((entry as Dictionary).get("class", "")) == "Terrain":
 			var properties: Variant = (entry as Dictionary).get("properties", {})
 			if properties is Dictionary and (properties as Dictionary).get("Cells", []) is Array:
 				return ((properties as Dictionary).get("Cells", []) as Array).size()
+	print("[validate_terrain_persistence] terrain missing from manifest; classes=%s" % [str(serialized_classes)])
 	return -1
 
 

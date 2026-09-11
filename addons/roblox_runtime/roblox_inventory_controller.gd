@@ -23,6 +23,11 @@ var _inventory_panel: Panel = null
 var _inventory_grid: GridContainer = null
 var _empty_label: Label = null
 var _mobile_use_button: Button = null
+var _player_list: PanelContainer = null
+var _player_list_text: Label = null
+var show_local_player_list: bool = false
+var _proximity_button: Button
+var _system_menu_open: bool = false
 
 
 func configure(lua_engine: Node, context_node: Node, character_provider: Callable = Callable()) -> void:
@@ -44,6 +49,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_proximity_overlay()
 	_refresh_accumulator += delta
 	if _refresh_accumulator < REFRESH_INTERVAL_SECONDS:
 		return
@@ -52,10 +58,16 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _is_text_input_focused():
+	if _system_menu_open or _is_text_input_focused():
 		return
+
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event := event as InputEventKey
+		if key_event.keycode == KEY_TAB and show_local_player_list:
+			_player_list.visible = not _player_list.visible
+			refresh_now(true)
+			get_viewport().set_input_as_handled()
+			return
 		if key_event.keycode == KEY_QUOTELEFT:
 			toggle_inventory()
 			get_viewport().set_input_as_handled()
@@ -74,6 +86,31 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 
+func _update_proximity_overlay() -> void:
+	if not is_instance_valid(_proximity_button): return
+	_proximity_button.hide()
+	if _system_menu_open: return
+	if not _character_provider.is_valid() or not is_instance_valid(_context_node): return
+	var character: Variant = _character_provider.call()
+	if not is_instance_valid(character) or not character is CharacterBody3D: return
+	var prompt: Node = preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").nearest_prompt(_context_node, character)
+	if prompt == null: return
+	var anchor := prompt.get_parent()
+	while anchor != null and not anchor is Node3D: anchor = anchor.get_parent()
+	var camera: Camera3D = character.get_viewport().get_camera_3d()
+	if anchor == null or camera == null: return
+	var position_ := preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").prompt_position(prompt)
+	var props: Dictionary = prompt.get_meta("roblox_properties", {})
+	if camera.is_position_behind(position_): return
+	var viewport_size: Vector2 = character.get_viewport().get_visible_rect().size
+	if viewport_size.x < 2 or viewport_size.y < 2 or -camera.to_local(position_).z < camera.near: return
+	var screen: Vector2 = camera.unproject_position(position_)
+	if screen.x < 0 or screen.y < 0 or screen.x > viewport_size.x or screen.y > viewport_size.y: return
+	_proximity_button.text = "[E] %s" % str(prompt.get_meta("ActionText", props.get("ActionText", "Взаимодействовать")))
+	_proximity_button.size = _proximity_button.get_combined_minimum_size().max(Vector2(180, 44))
+	_proximity_button.position = screen - _proximity_button.size * 0.5
+	_proximity_button.show()
+
 func toggle_inventory() -> void:
 	set_inventory_visible(not is_inventory_visible())
 
@@ -81,10 +118,22 @@ func toggle_inventory() -> void:
 func set_inventory_visible(value: bool) -> void:
 	if _inventory_panel == null:
 		return
+	value = value and not _system_menu_open
 	_inventory_panel.visible = value
 	if value:
 		refresh_now(true)
 	inventory_visibility_changed.emit(value)
+
+
+func set_system_menu_open(value: bool) -> void:
+	_system_menu_open = value
+	if value:
+		set_inventory_visible(false)
+		var focused := get_viewport().gui_get_focus_owner()
+		if is_instance_valid(focused) and _root.is_ancestor_of(focused):
+			focused.release_focus()
+	if is_instance_valid(_root):
+		_root.visible = not value
 
 
 func is_inventory_visible() -> bool:
@@ -94,16 +143,32 @@ func is_inventory_visible() -> bool:
 func refresh_now(force_rebuild: bool = false) -> void:
 	if _lua_engine == null or not is_instance_valid(_lua_engine) or not _lua_engine.has_method("get_local_inventory_state"):
 		return
-	var context := _context_node if is_instance_valid(_context_node) else get_tree().current_scene
+	if not is_instance_valid(_context_node) or _context_node.is_queued_for_deletion():
+		return
+	var context := _context_node
 	var character: Node = null
 	if not _character_provider.is_null() and _character_provider.is_valid():
 		var candidate: Variant = _character_provider.call()
 		if candidate is Node and is_instance_valid(candidate):
 			character = candidate as Node
+	_update_proximity_overlay()
 	var state_variant: Variant = _lua_engine.call("get_local_inventory_state", context, character)
 	if not (state_variant is Dictionary):
 		return
 	var state := state_variant as Dictionary
+	_lua_engine.start_new_player_scripts(context, character)
+	if show_local_player_list and _player_list_text != null:
+		var local_player: Node = state.get("local_player")
+		var rows: Array[String] = ["Players"]
+		if is_instance_valid(local_player):
+			for entry in local_player.get_parent().get_children():
+				var row := str(entry.get_meta("DisplayName", entry.name))
+				var stats := entry.get_node_or_null("leaderstats")
+				if stats != null:
+					for stat in stats.get_children():
+						row += "   %s: %s" % [stat.name, str(stat.get_meta("Value", stat.get_meta("value", 0)))]
+				rows.append(row)
+		_player_list_text.text = "\n".join(rows)
 	var tools: Array = state.get("tools", []) if state.get("tools", []) is Array else []
 	var equipped: Node = state.get("equipped_tool", null) as Node
 	var signature_parts: Array[String] = []
@@ -129,9 +194,13 @@ func refresh_now(force_rebuild: bool = false) -> void:
 
 
 func activate_equipped_tool() -> bool:
+	if _system_menu_open: return false
 	if _equipped_tool_id <= 0 or not _tool_by_instance_id.has(_equipped_tool_id):
 		return false
-	var tool := _tool_by_instance_id[_equipped_tool_id] as Node
+	var candidate: Variant = _tool_by_instance_id[_equipped_tool_id]
+	if not is_instance_valid(candidate):
+		return false
+	var tool := candidate as Node
 	if tool == null or not is_instance_valid(tool) or not _lua_engine.has_method("activate_local_tool"):
 		return false
 	return bool(_lua_engine.call("activate_local_tool", tool, _context_node))
@@ -143,6 +212,37 @@ func _build_interface() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
+	_proximity_button = Button.new()
+	_proximity_button.name = "ProximityAction"
+	_proximity_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	_proximity_button.size = Vector2(220, 44)
+	_proximity_button.visible = false
+	_proximity_button.focus_mode = Control.FOCUS_NONE
+	_proximity_button.pressed.connect(func():
+		var character: Variant = _character_provider.call() if _character_provider.is_valid() else null
+		if is_instance_valid(character):
+			preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").activate_nearest_prompt(_context_node, character, _lua_engine)
+	)
+	_root.add_child(_proximity_button)
+	var backpack_button := Button.new()
+	backpack_button.name = "OpenBackpack"
+	backpack_button.text = "Inventory [`]"
+	backpack_button.position = Vector2(12, 12)
+	backpack_button.focus_mode = Control.FOCUS_NONE
+	backpack_button.pressed.connect(toggle_inventory)
+	_root.add_child(backpack_button)
+	_player_list = PanelContainer.new()
+	_player_list.name = "PlayerList"
+	_player_list.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_player_list.offset_left = -310
+	_player_list.offset_top = 52
+	_player_list.offset_right = -12
+	_player_list.add_theme_stylebox_override("panel", _panel_style())
+	_player_list.visible = false
+	_root.add_child(_player_list)
+	_player_list_text = Label.new()
+	_player_list_text.add_theme_font_size_override("font_size", 18)
+	_player_list.add_child(_player_list_text)
 
 	_hotbar = HBoxContainer.new()
 	_hotbar.name = "Hotbar"
@@ -299,7 +399,10 @@ func _rebuild_inventory_grid(tools: Array) -> void:
 func _on_tool_pressed(tool_instance_id: int) -> void:
 	if not _tool_by_instance_id.has(tool_instance_id) or _lua_engine == null:
 		return
-	var tool := _tool_by_instance_id[tool_instance_id] as Node
+	var raw_tool: Variant = _tool_by_instance_id[tool_instance_id]
+	if not is_instance_valid(raw_tool) or not is_instance_valid(_context_node):
+		return
+	var tool := raw_tool as Node
 	if tool == null or not is_instance_valid(tool):
 		return
 	var character: Node = null

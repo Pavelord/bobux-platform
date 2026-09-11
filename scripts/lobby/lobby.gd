@@ -7,6 +7,9 @@ const AVATAR_PREVIEW_INPUT_OVERLAY_SCRIPT: Script = preload("res://scripts/ui/av
 const CREATION_HUB_SCENE: PackedScene = preload("res://scenes/creation_hub/creation_hub.tscn")
 const MODEL_EDITOR_SCENE: PackedScene = preload("res://scenes/model_editor/model_editor.tscn")
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
+const BOBLOX_SHOP_SCRIPT := preload("res://scripts/lobby/boblox_shop.gd")
+var _boblox_shop: Control
+var _bricks_club_button: Button
 
 # --- Tab Navigation ---
 @onready var main_tabs: TabContainer = %MainTabs
@@ -103,7 +106,6 @@ var _lobby_pending_friend_request_ids: Dictionary = {}
 var _lobby_friend_request_popup: Panel = null
 var _lobby_friend_request_sender_id: String = ""
 var _model_publish_dialog: ConfirmationDialog = null
-var _lobby_close_button: Button = null
 var _studio_overlay: Control = null
 var _creator_page_generation: int = 0
 var _inventory_ui_built: bool = false
@@ -132,6 +134,10 @@ var _remote_game_icon_texture_cache: Dictionary = {}
 var _remote_game_icon_loading: Dictionary = {}
 var _remote_game_icon_waiters: Dictionary = {}
 var _remote_game_icon_active_downloads: int = 0
+var _lobby_exiting: bool = false
+var _home_layout_columns: int = 0
+var _home_layout_entries: Array = []
+var _home_render_generation: int = 0
 var _published_map_ids_cache: Dictionary = {}
 var _published_game_records_cache: Dictionary = {}
 var _home_friends_scroll_offset: float = 0.0
@@ -204,6 +210,17 @@ enum Tab { HOME = 0, PROFILE = 1, AVATAR = 2, FRIENDS = 3, INVENTORY = 4, MESSAG
 
 var _game_details_return_tab: int = Tab.HOME
 
+func _exit_tree() -> void:
+	_lobby_exiting = true
+	_discover_refresh_token += 1
+	_home_render_generation += 1
+	for child in get_children():
+		if child is HTTPRequest:
+			child.cancel_request()
+	_remote_game_icon_waiters.clear()
+	_remote_game_icon_loading.clear()
+	_remote_game_icon_active_downloads = 0
+
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_lobby_bootstrap_active = true
@@ -214,7 +231,8 @@ func _ready() -> void:
 	
 	LOBBY_STYLER_SCRIPT.apply_2016_theme(self)
 	_apply_bobux_branding()
-	_ensure_lobby_close_button()
+	_install_boblox_shop()
+	preload("res://scripts/lobby/lobby_chrome.gd").apply(self)
 	if Engine.has_singleton("ProfileBuilder") or true:
 		var pb = load("res://scripts/lobby/profile_builder.gd")
 		if pb: pb.build(self)
@@ -396,7 +414,6 @@ func _add_mobile_beta_home_banner() -> void:
 	home_content.move_child(banner, 1)
 
 func _process(delta: float) -> void:
-	_update_lobby_close_button_visibility()
 	_poll_lobby_presence_heartbeat_if_needed()
 	_poll_lobby_friend_requests_if_needed()
 	_sweep_smart_play_hover_cards(delta)
@@ -431,40 +448,6 @@ func _sweep_smart_play_hover_cards(delta: float) -> void:
 		var hover_style: StyleBoxFlat = entry.get("hover_style", null) as StyleBoxFlat
 		if normal_style != null and hover_style != null:
 			panel.add_theme_stylebox_override("panel", hover_style if pointer_inside else normal_style)
-
-func _ensure_lobby_close_button() -> void:
-	if _lobby_close_button != null and is_instance_valid(_lobby_close_button):
-		return
-	_lobby_close_button = Button.new()
-	_lobby_close_button.name = "FullscreenCloseButton"
-	_lobby_close_button.text = "X"
-	_lobby_close_button.tooltip_text = "Close Bobux"
-	_lobby_close_button.visible = false
-	_lobby_close_button.z_index = 900
-	_lobby_close_button.custom_minimum_size = Vector2(42, 34)
-	_lobby_close_button.focus_mode = Control.FOCUS_NONE
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.18, 0.18, 0.18, 0.82)
-	normal.corner_radius_bottom_left = 6
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color(0.82, 0.12, 0.12, 0.96)
-	_lobby_close_button.add_theme_stylebox_override("normal", normal)
-	_lobby_close_button.add_theme_stylebox_override("hover", hover)
-	_lobby_close_button.add_theme_stylebox_override("pressed", hover)
-	_lobby_close_button.add_theme_color_override("font_color", Color.WHITE)
-	_lobby_close_button.pressed.connect(func() -> void:
-		get_tree().quit()
-	)
-	add_child(_lobby_close_button)
-
-func _update_lobby_close_button_visibility() -> void:
-	if _lobby_close_button == null or not is_instance_valid(_lobby_close_button):
-		return
-	var viewport_size: Vector2 = get_viewport_rect().size
-	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
-	_lobby_close_button.position = Vector2(viewport_size.x - 46.0, 0.0)
-	var hover_corner := mouse_pos.x >= viewport_size.x - 96.0 and mouse_pos.y <= 64.0
-	_lobby_close_button.visible = hover_corner
 
 func _poll_lobby_presence_heartbeat_if_needed() -> void:
 	if _scene_change_in_progress or _presence_heartbeat_in_flight or _lobby_bootstrap_active:
@@ -602,7 +585,7 @@ func _decorate_buttons_recursive(node: Node) -> void:
 		_decorate_buttons_recursive(child)
 
 func _decorate_lobby_button(button: Button) -> void:
-	if button == null or button.has_meta("roblox_button_fx"):
+	if button == null or button.has_meta("roblox_button_fx") or button.has_meta("classic_flat"):
 		return
 	if button.name.begins_with("Nav") and ("Btn" in button.name):
 		return
@@ -676,10 +659,44 @@ func _switch_tab(idx: int) -> void:
 	elif idx == Tab.INVENTORY:
 		_ensure_inventory_view_initialized()
 		call_deferred("_refresh_inventory_async")
+	elif idx == Tab.MESSAGES:
+		_ensure_messages_initialized()
 	elif idx == Tab.GAMES:
 		call_deferred("_refresh_games_view")
 	elif idx == Tab.CATALOG:
 		_ensure_catalog_ui_initialized()
+	elif is_instance_valid(_boblox_shop) and idx == _boblox_shop.get_index():
+		_boblox_shop.call("refresh")
+
+func _install_boblox_shop() -> void:
+	_boblox_shop = BOBLOX_SHOP_SCRIPT.new()
+	_boblox_shop.set("preview_only", bool(get_meta("boblox_preview", false)))
+	_boblox_shop.name = "BobloxView"
+	main_tabs.add_child(_boblox_shop)
+	_boblox_shop.connect("account_updated", _on_boblox_account_updated)
+	var nav := get_node_or_null("TopBar/HBox/Nav4") as Button
+	if nav:
+		nav.text = "Boblox"
+		nav.pressed.connect(func(): _open_boblox_shop(1))
+	var upgrade := get_node_or_null("Body/HBox/Sidebar/UpgradeBtn") as Button
+	if upgrade:
+		upgrade.text = "Вступить в клуб"
+		upgrade.pressed.connect(func(): _open_boblox_shop(0))
+
+func _open_boblox_shop(section: int) -> void:
+	_switch_tab(_boblox_shop.get_index())
+	_boblox_shop.call("select_section", section)
+
+func _on_boblox_account_updated(account: Dictionary) -> void:
+	var nav := get_node_or_null("TopBar/HBox/Nav4") as Button
+	if nav: nav.text = "Boblox"
+	var wallet := get_node_or_null("TopBar/HBox/HeaderBobloxBalance") as Button
+	if wallet: wallet.text = "B$ %d%s" % [int(account.get("balance", 0)), "*" if account.get("test", false) else ""]
+	var tier := str(account.get("membership", {}).get("tier", "BC"))
+	if tier not in ["BC", "BBC", "PBC", "TBC"]: tier = "BC"
+	var upgrade := get_node_or_null("Body/HBox/Sidebar/UpgradeBtn") as Button
+	if upgrade:
+		upgrade.text = "Вступить в клуб" if tier == "BC" else "%s · Мой клуб" % tier
 
 func _schedule_home_dashboard_refresh(force_refresh: bool = false) -> void:
 	if force_refresh:
@@ -1260,11 +1277,8 @@ func _bootstrap_cloud_lobby() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
 		# BUGFIX: desktop starts windowed; F11 is the explicit fullscreen toggle.
-		var current_mode := DisplayServer.window_get_mode()
-		if current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-		else:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		var fullscreen := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+		ClientPreferences.update("fullscreen", not fullscreen)
 		get_viewport().set_input_as_handled()
 
 func _apply_bobux_branding() -> void:
@@ -1312,6 +1326,13 @@ func _build_home_dashboard() -> void:
 		return
 	_style_home_scroll_surface()
 	_clear_container(home_content)
+	home_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	home_content.custom_minimum_size.x = 0.0
+	var home_view := home_content.get_parent() as Control
+	if not home_view.resized.is_connected(_queue_home_layout_refresh):
+		home_view.resized.connect(_queue_home_layout_refresh)
+	if not get_viewport().size_changed.is_connected(_queue_home_layout_refresh):
+		get_viewport().size_changed.connect(_queue_home_layout_refresh)
 
 	var uname: String = UserSession.username if UserSession.is_logged_in else "Player"
 	
@@ -1319,8 +1340,8 @@ func _build_home_dashboard() -> void:
 	header_hbox.add_theme_constant_override("separation", 18)
 	home_content.add_child(header_hbox)
 
-	var home_avatar := _create_home_header_avatar_preview(140)
-	home_avatar.custom_minimum_size = Vector2(140, 140)
+	var home_avatar := _create_home_header_avatar_preview(120)
+	home_avatar.custom_minimum_size = Vector2(120, 120)
 	header_hbox.add_child(home_avatar)
 
 	var header_name_box := VBoxContainer.new()
@@ -1395,7 +1416,7 @@ func _build_home_dashboard() -> void:
 	var creator_scroll := ScrollContainer.new()
 	creator_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	creator_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	creator_scroll.custom_minimum_size = Vector2(0, 204)
+	creator_scroll.custom_minimum_size = Vector2(0, 242)
 	creator_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	creator_panel_parts["content"].add_child(creator_scroll)
 
@@ -1432,12 +1453,24 @@ func _create_home_game_grid(columns: int = 3) -> GridContainer:
 	return grid
 
 func _get_home_game_grid_columns() -> int:
-	var width: float = get_viewport_rect().size.x
-	if _is_mobile_beta():
-		var mobile_available := maxf(320.0, width - 28.0)
-		return clampi(int(floor((mobile_available + 10.0) / 158.0)), 2, 3)
-	var desktop_available := maxf(560.0, width - 270.0)
-	return clampi(int(floor((desktop_available + 10.0) / 158.0)), 4, 10)
+	var home_view := get_node_or_null("Body/HBox/MainTabs/HomeView") as Control
+	var available := home_view.size.x - 32.0 if is_instance_valid(home_view) else get_viewport_rect().size.x - 220.0
+	if is_instance_valid(home_view):
+		# Existing grid minima may still describe the old, wider window. Bound
+		# by the viewport so those minima cannot prevent columns from shrinking.
+		available = minf(available, get_viewport_rect().size.x - home_view.global_position.x - 40.0)
+	return maxi(1, int(floor((available + 12.0) / 160.0)))
+
+func _queue_home_layout_refresh() -> void:
+	_refresh_home_layout.call_deferred()
+
+func _refresh_home_layout() -> void:
+	if _lobby_exiting or not is_inside_tree(): return
+	var columns := _get_home_game_grid_columns()
+	if columns == _home_layout_columns: return
+	_home_layout_columns = columns
+	if not _home_layout_entries.is_empty():
+		_render_home_game_sections(_home_layout_entries, _discover_refresh_token)
 
 func _ensure_all_tabs_exist() -> void:
 	if main_tabs == null: return
@@ -1647,13 +1680,13 @@ func _refresh_games_view() -> void:
 
 func _create_dashboard_panel(parent: Node, title_text: String, subtitle_text: String, min_height: float = 220.0, action_text: String = "Refresh", action_callback: Callable = Callable()) -> Dictionary:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, min_height)
+	panel.custom_minimum_size = Vector2.ZERO if title_text != "Friends" else Vector2(0, 164)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	var band_style := StyleBoxFlat.new()
-	band_style.bg_color = Color(0.955, 0.958, 0.965, 1)
-	band_style.border_width_top = 1
-	band_style.border_width_bottom = 1
+	band_style.bg_color = Color.WHITE if title_text == "Friends" else Color.TRANSPARENT
+	band_style.border_width_top = 0
+	band_style.border_width_bottom = 0
 	band_style.border_color = Color(0.87, 0.875, 0.89, 1)
 	panel.add_theme_stylebox_override("panel", band_style)
 	parent.add_child(panel)
@@ -1686,9 +1719,21 @@ func _create_dashboard_panel(parent: Node, title_text: String, subtitle_text: St
 	if not action_text.strip_edges().is_empty():
 		var action_btn := Button.new()
 		action_btn.text = action_text
-		action_btn.flat = true
+		action_btn.flat = false
+		action_btn.set_meta("classic_flat", true)
+		var action_style := StyleBoxFlat.new()
+		action_style.bg_color = Color("#00a2e8")
+		action_style.content_margin_left = 14
+		action_style.content_margin_right = 14
+		action_style.content_margin_top = 4
+		action_style.content_margin_bottom = 4
+		action_btn.add_theme_stylebox_override("normal", action_style)
+		var hover_style := action_style.duplicate() as StyleBoxFlat
+		hover_style.bg_color = Color("#008fce")
+		action_btn.add_theme_stylebox_override("hover", hover_style)
+		action_btn.add_theme_stylebox_override("pressed", hover_style)
 		action_btn.focus_mode = Control.FOCUS_NONE
-		action_btn.add_theme_color_override("font_color", Color(0.086, 0.357, 0.678, 1))
+		action_btn.add_theme_color_override("font_color", Color.WHITE)
 		action_btn.add_theme_font_size_override("font_size", 13)
 		if action_callback.is_valid():
 			action_btn.pressed.connect(action_callback)
@@ -1698,6 +1743,8 @@ func _create_dashboard_panel(parent: Node, title_text: String, subtitle_text: St
 
 	var subtitle := Label.new()
 	subtitle.text = subtitle_text
+	subtitle.hide()
+	title.tooltip_text = subtitle_text
 	subtitle.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1))
 	subtitle.add_theme_font_size_override("font_size", 12)
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -5080,11 +5127,11 @@ func _refresh_home_friends_section() -> void:
 
 	var friends: Array = CloudAPI._extract_array_payload(friends_result.get("data", []))
 	friends.sort_custom(func(a: Dictionary, b: Dictionary):
-		var active_a: bool = not _resolve_active_server_for_profile(a, server_map_by_user).is_empty()
-		var active_b: bool = not _resolve_active_server_for_profile(b, server_map_by_user).is_empty()
-		if active_a == active_b:
+		var rank_a: int = _get_friend_presence_rank(a, server_map_by_user)
+		var rank_b: int = _get_friend_presence_rank(b, server_map_by_user)
+		if rank_a == rank_b:
 			return str(a.get("username", "")).to_lower() < str(b.get("username", "")).to_lower()
-		return active_a and not active_b
+		return rank_a < rank_b
 	)
 	_home_friends_cache = friends.duplicate(true)
 	_home_friends_active_lookup_cache = server_map_by_user.duplicate(true)
@@ -7027,27 +7074,39 @@ func _home_game_entries_signature(entries: Array, limit: int, show_active_player
 			"thumbnail": str(entry.get("thumbnail", entry.get("thumbnail_url", entry.get("icon_url", "")))),
 			"active": int(entry.get("active_players", 0)) if show_active_players else -1,
 			"visits": int(entry.get("visits", entry.get("visits_count", entry.get("plays", 0)))),
+			"rating_positive": int(entry.get("rating_positive", -1)),
+			"rating_negative": int(entry.get("rating_negative", 0)),
 			"likes": int(entry.get("likes", entry.get("likes_count", 0)))
 		})
 	return JSON.stringify(signature_rows).sha256_text()
 
 func _render_home_game_sections(entries: Array, refresh_token: int) -> void:
-	if refresh_token != _discover_refresh_token:
+	if refresh_token != _discover_refresh_token or _lobby_exiting or not is_inside_tree():
 		return
+	_home_layout_entries = entries.duplicate()
+	_home_layout_columns = _get_home_game_grid_columns()
+	_home_render_generation += 1
+	var generation := _home_render_generation
 	var recommended_entries: Array = _get_recommended_home_entries(entries)
 	var new_entries: Array = _get_new_home_entries(entries)
 	var all_entries: Array = _get_all_home_entries(entries)
 	var compact_columns: int = _get_home_game_grid_columns()
 	var recommended_limit: int = compact_columns
+	recommended_entries = _fill_home_entries_to_limit(recommended_entries, all_entries, compact_columns)
 	new_entries = _fill_home_entries_to_limit(new_entries, all_entries, compact_columns)
 	await _populate_home_game_grid(recommended_cards_grid, recommended_entries, recommended_limit, refresh_token, recommended_status_label, "No recommended experiences yet.", true)
+	if generation != _home_render_generation or not is_inside_tree(): return
 	_refresh_bobux_creator_section(entries, refresh_token)
 	await _populate_home_game_grid(new_cards_grid, new_entries, compact_columns, refresh_token, new_status_label, "No new experiences yet.", true)
+	if generation != _home_render_generation or not is_inside_tree(): return
 	await _populate_home_game_grid(all_cards_grid, all_entries, 0, refresh_token, all_status_label, "No published experiences found yet.", true)
 
 func _populate_home_game_grid(grid: GridContainer, entries: Array, limit: int, refresh_token: int, status_label: Label, empty_text: String, show_active_players: bool) -> void:
-	if grid == null or refresh_token != _discover_refresh_token:
+	if not is_instance_valid(grid) or refresh_token != _discover_refresh_token or not is_inside_tree():
 		return
+	var generation := int(grid.get_meta("populate_generation", 0)) + 1
+	grid.set_meta("populate_generation", generation)
+	entries = _fill_home_entries_to_limit(entries, [], entries.size())
 	var content_signature := _home_game_entries_signature(entries, limit, show_active_players)
 	if _home_game_container_matches_signature(grid, content_signature):
 		grid.columns = _get_home_game_grid_columns()
@@ -7066,7 +7125,7 @@ func _populate_home_game_grid(grid: GridContainer, entries: Array, limit: int, r
 	var added_count: int = 0
 	var target_count: int = entries.size() if limit <= 0 else mini(entries.size(), limit)
 	for entry_variant in entries:
-		if refresh_token != _discover_refresh_token or grid == null:
+		if refresh_token != _discover_refresh_token or not is_instance_valid(grid) or not is_inside_tree() or int(grid.get_meta("populate_generation", 0)) != generation:
 			return
 		if limit > 0 and added_count >= limit:
 			break
@@ -7077,6 +7136,7 @@ func _populate_home_game_grid(grid: GridContainer, entries: Array, limit: int, r
 				status_label.text = "Loaded %d/%d experience(s)" % [added_count, target_count]
 			if added_count % 2 == 0:
 				await get_tree().process_frame
+	if not is_inside_tree() or not is_instance_valid(grid) or int(grid.get_meta("populate_generation", 0)) != generation: return
 	if status_label:
 		status_label.text = "%d of %d experience(s) shown" % [added_count, entries.size()]
 	grid.set_meta("bobux_content_signature", content_signature)
@@ -7206,7 +7266,7 @@ func _get_game_entry_recommendation_key(entry: Dictionary) -> String:
 	for key in ["map_id", "id", "cloud_map_id", "cloud_version_id"]:
 		var value := str(entry.get(key, "")).strip_edges()
 		if not value.is_empty():
-			return "%s:%s" % [key, value]
+			return "map:%s" % value
 	return str(entry.get("name", "")).strip_edges().to_lower()
 
 func _game_entry_has_uploaded_preview(entry: Dictionary) -> bool:
@@ -7754,8 +7814,15 @@ func _get_profile_status_text(profile: Dictionary, join_server_info: Dictionary 
 		return "Playing %s" % current_game
 	return "Online" if str(profile.get("status", "")).strip_edges().to_lower() == "online" else "Offline"
 
+func _get_friend_presence_rank(profile: Dictionary, active_server_lookup: Dictionary) -> int:
+	if not _resolve_active_server_for_profile(profile, active_server_lookup).is_empty():
+		return 0
+	if _is_profile_presence_fresh(profile) and str(profile.get("status", "")).strip_edges().to_lower() == "online":
+		return 1
+	return 2
+
 func _is_profile_presence_fresh(profile: Dictionary) -> bool:
-	var updated_at: String = str(profile.get("updated_at", "")).strip_edges()
+	var updated_at: String = str(profile.get("updated_at", profile.get("last_seen_at", ""))).strip_edges()
 	if updated_at.is_empty():
 		return false
 	var updated_unix: int = int(Time.get_unix_time_from_datetime_string(updated_at))
@@ -7784,6 +7851,8 @@ func _make_game_entry_from_cloud_map(map_record: Dictionary) -> Dictionary:
 		"owner_name": str(map_record.get("owner_name", "")).strip_edges(),
 		"creator": str(map_record.get("owner_name", "")).strip_edges(),
 		"likes": int(map_record.get("likes_count", map_record.get("likes", 0))),
+		"rating_positive": int(map_record.get("rating_positive", -1)),
+		"rating_negative": int(map_record.get("rating_negative", 0)),
 		"visits": int(map_record.get("visits_count", map_record.get("visits", 0))),
 		"created_at": str(map_record.get("created_at", "")).strip_edges(),
 		"updated_at": str(map_record.get("updated_at", "")).strip_edges(),
@@ -9627,10 +9696,12 @@ func _try_apply_cached_remote_game_icon(url: String, texture_rect: Variant) -> b
 	return true
 
 func _retry_remote_game_icon_load(url: String, texture_rect: Variant, attempt: int) -> void:
+	if _lobby_exiting or not is_inside_tree(): return
 	if attempt >= 3:
 		_remote_game_icon_waiters.erase(url)
 		return
 	await get_tree().create_timer(0.8 + (0.7 * float(attempt))).timeout
+	if _lobby_exiting or not is_inside_tree(): return
 	var retry_target := _first_valid_remote_game_icon_waiter(url)
 	if retry_target == null and is_instance_valid(texture_rect) and texture_rect is TextureRect:
 		retry_target = texture_rect as TextureRect
@@ -9676,7 +9747,8 @@ func _apply_remote_game_icon_to_waiters(url: String, texture: Texture2D) -> void
 		if waiter_rect != null and is_instance_valid(waiter_rect):
 			waiter_rect.texture = texture
 
-func _load_remote_game_icon_async(url: String, texture_rect: TextureRect, attempt: int = 0) -> void:
+func _load_remote_game_icon_async(url: String, texture_rect: Variant, attempt: int = 0) -> void:
+	if _lobby_exiting or not is_inside_tree() or not is_instance_valid(texture_rect): return
 	var clean_url: String = url.strip_edges()
 	if clean_url.is_empty() or texture_rect == null:
 		return
@@ -9701,6 +9773,7 @@ func _load_remote_game_icon_async(url: String, texture_rect: TextureRect, attemp
 			_retry_remote_game_icon_load(clean_url, texture_rect, attempt)
 			return
 		await get_tree().create_timer(0.12).timeout
+		if _lobby_exiting or not is_inside_tree(): return
 	_remote_game_icon_active_downloads += 1
 	var request := HTTPRequest.new()
 	request.use_threads = true
@@ -9715,6 +9788,7 @@ func _load_remote_game_icon_async(url: String, texture_rect: TextureRect, attemp
 		_retry_remote_game_icon_load(clean_url, texture_rect, attempt)
 		return
 	var result: Array = await request.request_completed
+	if _lobby_exiting or not is_inside_tree(): return
 	_remote_game_icon_active_downloads = maxi(0, _remote_game_icon_active_downloads - 1)
 	_remote_game_icon_loading.erase(clean_url)
 	request.queue_free()
@@ -10366,8 +10440,9 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 	panel.set_meta("bobux_game_name", str(game_info.get("name", "Untitled Experience")))
 	var mobile_card: bool = _is_mobile_beta()
 	var card_width: float = 148.0 if mobile_card else 148.0
-	var card_height: float = 188.0
+	var card_height: float = 224.0
 	panel.custom_minimum_size = Vector2(card_width, card_height)
+	# More room adds columns; it must never turn a square cover into a wide card.
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	panel.clip_contents = true
@@ -10380,6 +10455,9 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 	normal_card_style.border_width_right = 1
 	normal_card_style.border_width_bottom = 1
 	normal_card_style.border_color = Color(0.79, 0.80, 0.82, 1)
+	normal_card_style.shadow_color = Color(0, 0, 0, 0.12)
+	normal_card_style.shadow_size = 2
+	normal_card_style.shadow_offset = Vector2(0, 1)
 	normal_card_style.corner_radius_top_left = 2
 	normal_card_style.corner_radius_top_right = 2
 	normal_card_style.corner_radius_bottom_left = 2
@@ -10405,9 +10483,9 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 6)
-	margin.add_theme_constant_override("margin_top", 6)
-	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_left", 1)
+	margin.add_theme_constant_override("margin_top", 1)
+	margin.add_theme_constant_override("margin_right", 1)
 	margin.add_theme_constant_override("margin_bottom", 6)
 	panel.add_child(margin)
 
@@ -10422,13 +10500,13 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 	# but it must never be able to remove the Play button beneath the pointer.
 	var media_host := Control.new()
 	media_host.name = "MediaHost"
-	media_host.custom_minimum_size = Vector2(0, 96.0)
+	media_host.custom_minimum_size = Vector2(0, card_width - 2)
 	media_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	media_host.mouse_filter = Control.MOUSE_FILTER_STOP
 	media_host.gui_input.connect(click_opens_details)
 	root.add_child(media_host)
 
-	var icon_widget := _create_game_icon_widget(game_info, 96.0)
+	var icon_widget := _create_game_icon_widget(game_info, card_width - 2)
 	icon_widget.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	media_host.add_child(icon_widget)
@@ -10482,10 +10560,19 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 			_defer_smart_play_card_hover_exit(panel, play_overlay, normal_card_style, hover_card_style)
 		)
 
+	var body_margin := MarginContainer.new()
+	body_margin.name = "CardDetails"
+	body_margin.add_theme_constant_override("margin_left", 7)
+	body_margin.add_theme_constant_override("margin_right", 7)
+	root.add_child(body_margin)
+	var details := VBoxContainer.new()
+	details.add_theme_constant_override("separation", 2)
+	body_margin.add_child(details)
 	var title := Button.new()
+	title.name = "GameTitle"
 	title.text = str(game_info.get("name", "Untitled Experience"))
 	title.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	title.custom_minimum_size = Vector2(0, 29)
+	title.custom_minimum_size = Vector2(0, 23)
 	title.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.focus_mode = Control.FOCUS_NONE
@@ -10498,7 +10585,7 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 	title.add_theme_stylebox_override("hover", title_style)
 	title.add_theme_stylebox_override("pressed", title_style)
 	title.pressed.connect(open_details)
-	root.add_child(title)
+	details.add_child(title)
 
 	var descriptor := Label.new()
 	descriptor.add_theme_color_override("font_color", Color(0.46, 0.46, 0.46, 1))
@@ -10506,21 +10593,31 @@ func _create_smart_play_card(game_info: Dictionary, show_active_players: bool, k
 	var active_players: int = int(game_info.get("active_players", 0))
 	var visits: int = int(game_info.get("visits", game_info.get("visits_count", game_info.get("plays", 0))))
 	var likes: int = int(game_info.get("likes", game_info.get("likes_count", 0)))
-	descriptor.text = "%d playing  |  %d visits" % [active_players, visits] if show_active_players else "%d visits  |  %d likes" % [visits, likes]
+	descriptor.name = "OnlineCount"
+	descriptor.text = "%s Playing" % _compact_count(active_players)
+	descriptor.tooltip_text = "%d игроков онлайн · %d посещений" % [active_players, visits]
 	descriptor.max_lines_visible = 1
 	descriptor.custom_minimum_size = Vector2(0, 16)
 	descriptor.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	descriptor.mouse_filter = Control.MOUSE_FILTER_STOP
 	descriptor.gui_input.connect(click_opens_details)
-	root.add_child(descriptor)
+	details.add_child(descriptor)
 
+	var rating := preload("res://scripts/lobby/game_rating_bar.gd").new()
+	rating.name = "GameRating"
+	rating.configure(game_info)
+	rating.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details.add_child(rating)
+	rating.gui_input.connect(click_opens_details)
 	return panel
 
 func _defer_smart_play_card_hover_exit(panel: Panel, play_overlay: Panel, normal_style: StyleBoxFlat, hover_style: StyleBoxFlat) -> void:
+	if _lobby_exiting or not is_inside_tree(): return
 	# A child button causes a transient mouse_exited on its parent. Re-check on
 	# the next frame so the Play button remains clickable while the pointer is
 	# anywhere inside the card.
 	await get_tree().create_timer(0.08).timeout
+	if _lobby_exiting or not is_inside_tree(): return
 	if not is_instance_valid(panel) or not is_instance_valid(play_overlay):
 		return
 	# Local coordinates remain correct inside scaled roots and ScrollContainers.
@@ -10705,207 +10802,11 @@ func _show_game_details_popup(_trigger: Control, game_info: Dictionary) -> void:
 	home_friend_popup.show()
 
 func _show_game_details_page(game_info: Dictionary) -> void:
-	var details_view := main_tabs.get_node_or_null("GameDetailsView") if main_tabs != null else null
-	if details_view == null:
-		return
 	if main_tabs.current_tab != Tab.GAME_DETAILS:
 		_game_details_return_tab = main_tabs.current_tab
 	if home_friend_popup != null:
 		home_friend_popup.hide()
-	if details_view is ScrollContainer:
-		var details_scroll := details_view as ScrollContainer
-		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		details_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	for child in details_view.get_children():
-		child.queue_free()
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_bottom", 28)
-	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details_view.add_child(margin)
-
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 14)
-	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(root)
-
-	var nav_row := HBoxContainer.new()
-	nav_row.add_theme_constant_override("separation", 12)
-	root.add_child(nav_row)
-	var back_btn := Button.new()
-	back_btn.text = "< Back"
-	back_btn.custom_minimum_size = Vector2(150, 34)
-	back_btn.pressed.connect(func(): _switch_tab(_game_details_return_tab))
-	nav_row.add_child(back_btn)
-	var breadcrumb := Label.new()
-	breadcrumb.text = "Games / %s" % str(game_info.get("name", "Untitled Experience"))
-	breadcrumb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	breadcrumb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	breadcrumb.add_theme_font_size_override("font_size", 13)
-	breadcrumb.add_theme_color_override("font_color", Color(0.45, 0.47, 0.5, 1))
-	nav_row.add_child(breadcrumb)
-
-	var hero_panel := Panel.new()
-	hero_panel.custom_minimum_size = Vector2(0, 385)
-	hero_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
-	root.add_child(hero_panel)
-
-	var hero_margin := MarginContainer.new()
-	hero_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hero_margin.add_theme_constant_override("margin_left", 18)
-	hero_margin.add_theme_constant_override("margin_top", 18)
-	hero_margin.add_theme_constant_override("margin_right", 18)
-	hero_margin.add_theme_constant_override("margin_bottom", 18)
-	hero_panel.add_child(hero_margin)
-
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 24)
-	hero_margin.add_child(top_row)
-
-	var hero := _create_game_icon_widget(game_info)
-	hero.custom_minimum_size = Vector2(640, 330)
-	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(hero)
-
-	var side := VBoxContainer.new()
-	side.custom_minimum_size = Vector2(285, 0)
-	side.add_theme_constant_override("separation", 10)
-	top_row.add_child(side)
-
-	var title := Label.new()
-	title.text = str(game_info.get("name", "Untitled Experience")).strip_edges()
-	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color(0.12, 0.12, 0.12, 1))
-	side.add_child(title)
-
-	var creator_name: String = str(game_info.get("owner_name", game_info.get("creator", "Bobux"))).strip_edges()
-	if creator_name.is_empty():
-		creator_name = "Bobux"
-	var creator := Label.new()
-	creator.text = "By %s" % creator_name
-	creator.add_theme_font_size_override("font_size", 14)
-	creator.add_theme_color_override("font_color", Color(0.08, 0.52, 0.77, 1))
-	side.add_child(creator)
-
-	var stats_line := Label.new()
-	stats_line.text = "%d playing now  |  %d visits" % [
-		int(game_info.get("active_players", 0)),
-		int(game_info.get("visits", game_info.get("visits_count", 0)))
-	]
-	stats_line.add_theme_font_size_override("font_size", 13)
-	stats_line.add_theme_color_override("font_color", Color(0.42, 0.44, 0.48, 1))
-	side.add_child(stats_line)
-
-	var side_spacer := Control.new()
-	side_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	side.add_child(side_spacer)
-
-	var play_button := Button.new()
-	play_button.text = "Play"
-	play_button.custom_minimum_size = Vector2(0, 56)
-	play_button.add_theme_stylebox_override("normal", _make_primary_button_style(Color(0.24, 0.76, 0.45, 1.0)))
-	play_button.add_theme_stylebox_override("hover", _make_primary_button_style(Color(0.29, 0.82, 0.5, 1.0)))
-	play_button.add_theme_stylebox_override("pressed", _make_primary_button_style(Color(0.2, 0.66, 0.39, 1.0)))
-	play_button.add_theme_color_override("font_color", Color.WHITE)
-	play_button.add_theme_font_size_override("font_size", 18)
-	play_button.pressed.connect(func(): _start_smart_play_for_game(game_info))
-	side.add_child(play_button)
-
-	var reactions := HBoxContainer.new()
-	reactions.add_theme_constant_override("separation", 12)
-	side.add_child(reactions)
-	var like_count: int = int(game_info.get("likes", game_info.get("likes_count", 0)))
-	var like_btn := Button.new()
-	like_btn.text = "Like %d" % like_count
-	like_btn.custom_minimum_size = Vector2(116, 34)
-	like_btn.pressed.connect(func():
-		like_btn.disabled = true
-		var map_id: String = str(game_info.get("map_id", "")).strip_edges()
-		if CloudAPI != null and CloudAPI.is_configured() and not map_id.is_empty():
-			var like_result: Dictionary = await CloudAPI.like_map(map_id, like_count)
-			if bool(like_result.get("ok", false)):
-				var response_data: Dictionary = like_result.get("data", {}) if like_result.get("data", {}) is Dictionary else {}
-				var confirmed_likes: int = int(response_data.get("likes_count", like_count))
-				game_info["likes"] = confirmed_likes
-				game_info["likes_count"] = confirmed_likes
-				var confirmed_liked := bool(response_data.get("liked", false)) or bool(response_data.get("already_liked", false))
-				like_btn.text = "%s %d" % ["Liked" if confirmed_liked else "Like", confirmed_likes]
-			like_btn.disabled = false
-		else:
-			like_btn.disabled = false
-	)
-	reactions.add_child(like_btn)
-	var favorite_label := Label.new()
-	favorite_label.text = "Fav %s" % str(game_info.get("favorites", 0))
-	favorite_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	favorite_label.add_theme_font_size_override("font_size", 13)
-	favorite_label.add_theme_color_override("font_color", Color(0.45, 0.47, 0.5, 1))
-	reactions.add_child(favorite_label)
-
-	var tab_bar := HBoxContainer.new()
-	tab_bar.add_theme_constant_override("separation", 0)
-	root.add_child(tab_bar)
-	for tab_name in ["About", "Store", "Leaderboards", "Servers"]:
-		tab_bar.add_child(_create_game_details_tab_label(tab_name, tab_name == "About"))
-
-	var description_panel := Panel.new()
-	description_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
-	description_panel.custom_minimum_size = Vector2(0, 170)
-	root.add_child(description_panel)
-	var desc_margin := MarginContainer.new()
-	desc_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	desc_margin.add_theme_constant_override("margin_left", 16)
-	desc_margin.add_theme_constant_override("margin_top", 14)
-	desc_margin.add_theme_constant_override("margin_right", 16)
-	desc_margin.add_theme_constant_override("margin_bottom", 14)
-	description_panel.add_child(desc_margin)
-	var desc_root := VBoxContainer.new()
-	desc_root.add_theme_constant_override("separation", 10)
-	desc_margin.add_child(desc_root)
-	var desc_title := Label.new()
-	desc_title.text = "Description"
-	desc_title.add_theme_font_size_override("font_size", 21)
-	desc_title.add_theme_color_override("font_color", Color(0.18, 0.18, 0.18, 1))
-	desc_root.add_child(desc_title)
-	var desc_text := Label.new()
-	desc_text.text = str(game_info.get("description", "A retro Bobux experience.")).strip_edges()
-	if desc_text.text.is_empty():
-		desc_text.text = "A retro Bobux experience."
-	desc_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_text.add_theme_font_size_override("font_size", 13)
-	desc_text.add_theme_color_override("font_color", Color(0.31, 0.32, 0.34, 1))
-	desc_root.add_child(desc_text)
-	var stats_row := HBoxContainer.new()
-	stats_row.add_theme_constant_override("separation", 18)
-	desc_root.add_child(stats_row)
-	_add_game_detail_stat(stats_row, "Visits", str(game_info.get("visits", game_info.get("visits_count", 0))))
-	_add_game_detail_stat(stats_row, "Created", _format_game_date(str(game_info.get("created_at", game_info.get("updated_at", "")))))
-	_add_game_detail_stat(stats_row, "Updated", _format_game_date(str(game_info.get("updated_at", ""))))
-	_add_game_detail_stat(stats_row, "Max Players", str(game_info.get("max_players", NetworkManager.MAX_CLIENTS if NetworkManager != null else 10)))
-	_add_game_detail_stat(stats_row, "Genre", str(game_info.get("genre", "All")))
-
-	var servers_panel := Panel.new()
-	servers_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
-	servers_panel.custom_minimum_size = Vector2(0, 92)
-	root.add_child(servers_panel)
-	var servers_margin := MarginContainer.new()
-	servers_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	servers_margin.add_theme_constant_override("margin_left", 16)
-	servers_margin.add_theme_constant_override("margin_top", 14)
-	servers_margin.add_theme_constant_override("margin_right", 16)
-	servers_margin.add_theme_constant_override("margin_bottom", 14)
-	servers_panel.add_child(servers_margin)
-	var servers_label := Label.new()
-	servers_label.text = "Servers: %d player(s) online right now." % int(game_info.get("active_players", 0))
-	servers_label.add_theme_font_size_override("font_size", 15)
-	servers_label.add_theme_color_override("font_color", Color(0.28, 0.29, 0.32, 1))
-	servers_margin.add_child(servers_label)
-
+	preload("res://scripts/lobby/game_details_builder.gd").build(self, game_info, _game_details_return_tab)
 	_switch_tab(Tab.GAME_DETAILS)
 
 func _create_game_details_tab_label(tab_name: String, selected: bool) -> Label:
@@ -11065,3 +10966,21 @@ func _resolve_game_icon_path(game_info: Dictionary) -> String:
 				_local_game_icon_path_cache[icon_cache_key] = cached_folder_icon_path
 				return cached_folder_icon_path
 	return ""
+
+func _ensure_messages_initialized() -> void:
+	var view := main_tabs.get_node("MessagesView")
+	var messages := view.get_node_or_null("FriendsMessages")
+	if messages == null:
+		for child in view.get_children():
+			view.remove_child(child)
+			child.queue_free()
+		messages = preload("res://scripts/lobby/friends_messages.gd").new()
+		messages.name = "FriendsMessages"
+		messages.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		view.add_child(messages)
+	messages.call("refresh_friends")
+
+static func _compact_count(value: int) -> String:
+	if value >= 1000000: return "%.1fM" % (float(value) / 1000000)
+	if value >= 1000: return "%.1fK" % (float(value) / 1000)
+	return str(value)

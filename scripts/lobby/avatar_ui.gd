@@ -6,10 +6,10 @@ const SHIRT_TEMPLATE_REFERENCE_PATH := "res://assets/avatar/shirt_template_refer
 const PANTS_TEMPLATE_REFERENCE_PATH := "res://assets/avatar/pants_template_reference.jpg"
 const AVATAR_TEMPLATE_PROCESSOR: Script = preload("res://scripts/avatar/avatar_template_processor.gd")
 const AVATAR_PREVIEW_INPUT_OVERLAY_SCRIPT: Script = preload("res://scripts/ui/avatar_preview_input_overlay.gd")
-const AVATAR_ITEM_CARD_WIDTH := 144
-const AVATAR_ITEM_CARD_HEIGHT := 214
-const AVATAR_ITEM_PREVIEW_WIDTH := 132
-const AVATAR_ITEM_PREVIEW_HEIGHT := 128
+const AVATAR_ITEM_CARD_WIDTH := 132
+const AVATAR_ITEM_CARD_HEIGHT := 196
+const AVATAR_ITEM_PREVIEW_WIDTH := 122
+const AVATAR_ITEM_PREVIEW_HEIGHT := 118
 const AVATAR_ITEM_PREVIEW_TEXTURE_SIZE := 512
 const BODY_PARTS := [
 	{"label": "Head", "key": "head", "player_key": "head_color"},
@@ -38,7 +38,7 @@ const BODY_PALETTE := [
 ]
 
 var lobby: Control
-var current_category := "Body"
+var current_category := "Recent"
 var wardrobe_container: GridContainer
 var wearing_container: GridContainer
 var template_status_label: Label
@@ -74,6 +74,7 @@ func init(parent_lobby: Control) -> void:
 	if avatar_view == null:
 		return
 	_prepare_avatar_surface(avatar_view)
+	_apply_responsive_avatar_layout(avatar_view)
 	_install_preview_background(avatar_view)
 	_preview_player = _find_child_recursive(avatar_view, "PreviewPlayer")
 	_build_left_avatar_controls(avatar_view)
@@ -214,22 +215,53 @@ func _prepare_avatar_surface(avatar_view: Control) -> void:
 		content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 
-func _get_avatar_content(avatar_view: Control) -> HBoxContainer:
+func _get_avatar_content(avatar_view: Control) -> BoxContainer:
 	var scene_main_row := avatar_view.get_node_or_null("Content/MainRow")
-	if scene_main_row is HBoxContainer:
+	if scene_main_row is BoxContainer:
 		return scene_main_row
 	var scene_content := avatar_view.get_node_or_null("Content")
-	if scene_content is HBoxContainer:
+	if scene_content is BoxContainer:
 		return scene_content
 	var direct := avatar_view.get_node_or_null("AvatarMargin/Content")
-	if direct is HBoxContainer:
+	if direct is BoxContainer:
 		return direct
 	for child in avatar_view.get_children():
 		if child is MarginContainer:
 			var nested := (child as Node).get_node_or_null("Content")
-			if nested is HBoxContainer:
+			if nested is BoxContainer:
 				return nested
 	return null
+
+
+func _apply_responsive_avatar_layout(avatar_view: Control) -> void:
+	var current := _get_avatar_content(avatar_view)
+	if current == null:
+		return
+	var wants_vertical := _uses_compact_avatar_layout()
+	if (wants_vertical and current is VBoxContainer) or (not wants_vertical and current is HBoxContainer):
+		return
+	var parent := current.get_parent()
+	if parent == null:
+		return
+	var replacement: BoxContainer = VBoxContainer.new() if wants_vertical else HBoxContainer.new()
+	replacement.name = "%sResponsive" % current.name
+	replacement.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	replacement.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	replacement.add_theme_constant_override("separation", 18)
+	var old_index := current.get_index()
+	parent.add_child(replacement)
+	parent.move_child(replacement, old_index)
+	for child in current.get_children():
+		child.reparent(replacement)
+	parent.remove_child(current)
+	current.free()
+	replacement.name = "MainRow"
+
+
+func _uses_compact_avatar_layout() -> bool:
+	if is_instance_valid(lobby) and bool(lobby.get_meta("bobux_compact_layout_override", false)):
+		return true
+	return OS.has_feature("mobile") or (is_instance_valid(lobby) and minf(lobby.size.x, lobby.get_viewport_rect().size.x) < 820.0)
 
 
 func _install_preview_background(avatar_view: Control) -> void:
@@ -239,17 +271,20 @@ func _install_preview_background(avatar_view: Control) -> void:
 	var preview_panel := _get_preview_panel(content)
 	if preview_panel == null:
 		return
-	if preview_panel.get_node_or_null("BobuxAvatarRoomBg") != null:
-		return
+	var old_bg := preview_panel.get_node_or_null("BobuxAvatarRoomBg")
+	if old_bg != null:
+		preview_panel.remove_child(old_bg)
+		old_bg.free()
+	preview_panel.add_theme_stylebox_override("panel", _make_panel_style(Color.WHITE, Color(0.78, 0.79, 0.81, 1), 1, 3))
 	var bg := TextureRect.new()
 	bg.name = "BobuxAvatarRoomBg"
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	bg.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	var texture := _load_texture_from_any_path(AVATAR_ROOM_BG_PATH)
-	if texture is Texture2D:
-		bg.texture = texture
+	var room_texture := _load_texture_from_any_path(AVATAR_ROOM_BG_PATH)
+	if room_texture != null:
+		bg.texture = room_texture
 	preview_panel.clip_contents = true
 	preview_panel.add_child(bg)
 	preview_panel.move_child(bg, 0)
@@ -379,7 +414,7 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 	orbit_controls.add_child(reset_orbit_btn)
 
 
-func _get_preview_panel(content: HBoxContainer) -> Control:
+func _get_preview_panel(content: BoxContainer) -> Control:
 	var direct := content.get_node_or_null("LeftColumn/PreviewPanel")
 	if direct is Control:
 		return direct
@@ -399,16 +434,14 @@ func _build_left_avatar_controls(avatar_view: Control) -> void:
 	if not (left_col is VBoxContainer):
 		return
 
-	# Re-parent PreviewPanel to Content/MainRow to place it in the center (between left and right columns)
+	# Keep preview and body controls together, matching the classic Avatar Editor.
 	var preview_panel = left_col.get_node_or_null("PreviewPanel")
 	if preview_panel != null:
-		left_col.remove_child(preview_panel)
-		content.add_child(preview_panel)
-		content.move_child(preview_panel, 1) # Put in the center column
-		preview_panel.custom_minimum_size = Vector2(360, 360)
-		preview_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		preview_panel.custom_minimum_size = Vector2(0, 360) if _uses_compact_avatar_layout() else Vector2(330, 390)
+		preview_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	left_col.custom_minimum_size = Vector2(220, 0)
+	left_col.custom_minimum_size = Vector2(0, 0) if _uses_compact_avatar_layout() else Vector2(340, 0)
+	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL if _uses_compact_avatar_layout() else Control.SIZE_SHRINK_BEGIN
 	
 	# Hide unused PC-only label components in the left column
 	for node_name in ["RedrawLabel", "AvatarTypeLabel", "TypeRow", "TypeNote", "ColorsTitle", "ColorsSubtitle"]:
@@ -499,7 +532,7 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 		right_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		right_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		content.add_child(right_col)
-	right_col.custom_minimum_size = Vector2(420, 560)
+	right_col.custom_minimum_size = Vector2(0, 560)
 	for child in right_col.get_children():
 		right_col.remove_child(child)
 		child.queue_free()
@@ -507,7 +540,7 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	block.name = "BobuxWardrobeBlock"
 	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	block.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	block.add_theme_stylebox_override("panel", _make_panel_style(Color(1, 1, 1, 0.94), Color(0.08, 0.08, 0.08, 0.95), 2, 8))
+	block.add_theme_stylebox_override("panel", _make_panel_style(Color.WHITE, Color(0.82, 0.83, 0.85, 1), 1, 3))
 	right_col.add_child(block)
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 12)
@@ -515,31 +548,59 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	outer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	block.add_child(outer)
 	var title := Label.new()
-	title.text = "Catalog"
+	title.text = ""
+	title.visible = false
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.08, 0.08, 0.08))
 	outer.add_child(title)
+	var top_row := HBoxContainer.new()
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_child(top_row)
+	var hint := Label.new()
+	hint.text = "Explore the Catalog to find more clothes!"
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35))
+	top_row.add_child(hint)
+	var get_more := Button.new()
+	get_more.text = "Get More"
+	get_more.pressed.connect(func(): lobby.call("_switch_tab", 11))
+	top_row.add_child(get_more)
 	var tabs := HFlowContainer.new()
 	tabs.add_theme_constant_override("separation", 8)
 	outer.add_child(tabs)
 	_category_buttons.clear()
-	for category_name in ["Body", "Clothes", "Accessories", "Face"]:
+	var tab_specs := [
+		{"label": "Recent", "category": "Recent"},
+		{"label": "Characters", "category": "Body"},
+		{"label": "Clothing", "category": "Clothes"},
+		{"label": "Accessories", "category": "Accessories"},
+		{"label": "Head & Body", "category": "Face"},
+		{"label": "Animations", "category": "Animations"},
+	]
+	for tab_spec in tab_specs:
+		var category_name := str(tab_spec["category"])
 		var button := Button.new()
-		button.text = category_name
+		button.text = str(tab_spec["label"])
 		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(92, 36)
 		button.pressed.connect(_on_category_pressed.bind(category_name))
 		tabs.add_child(button)
 		_category_buttons[category_name] = button
+	var breadcrumb := Label.new()
+	breadcrumb.name = "AvatarBreadcrumb"
+	breadcrumb.text = "Recent > Recently Added"
+	breadcrumb.add_theme_color_override("font_color", Color(0.27, 0.27, 0.27))
+	outer.add_child(breadcrumb)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(scroll)
 	wardrobe_container = GridContainer.new()
+	wardrobe_container.name = "WardrobeGrid"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	wardrobe_container.columns = 2
+	wardrobe_container.columns = 2 if _uses_compact_avatar_layout() else 5
 	wardrobe_container.add_theme_constant_override("h_separation", 12)
 	wardrobe_container.add_theme_constant_override("v_separation", 12)
 	wardrobe_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -574,7 +635,7 @@ func _ensure_file_dialog(owner_node: Node) -> void:
 func _group_catalog() -> void:
 	_categorized_items.clear()
 	_local_visual_item_payloads.clear()
-	for category_name in ["Body", "Clothes", "Accessories", "Face"]:
+	for category_name in ["Recent", "Body", "Clothes", "Accessories", "Face", "Animations"]:
 		_categorized_items[category_name] = []
 	_register_local_visual_item("Face", "classic_smile", "Classic Smile", "face_texture_path", str(_user_avatar_data.get("face_texture_path", GameState.DEFAULT_FACE_TEXTURE_PATH)), GameState.DEFAULT_FACE_TEXTURE_PATH)
 	_register_local_visual_item("Accessories", "bobux_chest_badge", "Bobux Chest Badge", "chest_badge_texture_path", GameState.DEFAULT_CHEST_BADGE_TEXTURE_PATH, GameState.DEFAULT_CHEST_BADGE_TEXTURE_PATH)
@@ -617,6 +678,15 @@ func _group_catalog() -> void:
 			category_name = "Accessories"
 		_categorized_items[category_name].append(item)
 		included_item_ids[item_id] = true
+	var recent_items: Array = []
+	for source_category in ["Clothes", "Accessories", "Face", "Body"]:
+		for recent_item in _categorized_items.get(source_category, []):
+			recent_items.append(recent_item)
+			if recent_items.size() >= 30:
+				break
+		if recent_items.size() >= 30:
+			break
+	_categorized_items["Recent"] = recent_items
 
 
 func _register_local_visual_item(category_name: String, item_id: String, display_name: String, avatar_key: String, texture_path: String, preview_path: String) -> void:
@@ -760,15 +830,16 @@ func _create_item_card(item: Dictionary) -> Control:
 	var preview := TextureRect.new()
 	preview.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, AVATAR_ITEM_PREVIEW_HEIGHT)
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	var texture := _load_texture_for_item(item)
-	if texture is Texture2D:
-		preview.texture = texture
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	if not _local_visual_item_payloads.has(item_id):
+		var renderer := lobby.get_node_or_null("WardrobeThumbnailRenderer")
+		if renderer == null:
+			renderer = preload("res://scripts/lobby/catalog_thumbnail_renderer.gd").new()
+			renderer.name = "WardrobeThumbnailRenderer"
+			lobby.add_child(renderer)
+		renderer.request_preview(item, preview)
 	else:
-		var placeholder = load("res://assets/avatar/bobux_chest_badge.png")
-		if placeholder is Texture2D:
-			preview.texture = placeholder
-		_load_remote_texture_for_item_async(item, preview)
+		preview.texture = _load_texture_for_item(item)
 	box.add_child(preview)
 	var title := Label.new()
 	title.text = str(item.get("name", item.get("title", item_id)))
@@ -873,6 +944,10 @@ func _get_default_visual_texture_for_key(avatar_key: String) -> String:
 
 func _on_category_pressed(category_name: String) -> void:
 	current_category = category_name
+	var avatar_view := lobby.get_node_or_null("%MainTabs/AvatarView")
+	var breadcrumb := _find_child_recursive(avatar_view, "AvatarBreadcrumb") as Label if avatar_view != null else null
+	if breadcrumb != null:
+		breadcrumb.text = "%s > Recently Added" % category_name
 	_refresh_ui()
 
 
@@ -1295,12 +1370,12 @@ func _get_owned_equipped_item_ids(sanitize_avatar_data: bool) -> Array:
 	var resolved: Array = []
 	if not _is_cloud_ownership_context_ready():
 		for raw_id in equipped:
-			var pending_id := str(raw_id).strip_edges()
+			var pending_id := _avatar_item_id_from_variant(raw_id)
 			if not pending_id.is_empty() and not (pending_id in resolved):
 				resolved.append(pending_id)
 		return resolved
 	for raw_id in equipped:
-		var item_id := str(raw_id).strip_edges()
+		var item_id := _avatar_item_id_from_variant(raw_id)
 		if item_id.is_empty() or item_id in resolved:
 			continue
 		var item := _get_cloud_catalog_item_by_id(item_id)
@@ -1311,6 +1386,12 @@ func _get_owned_equipped_item_ids(sanitize_avatar_data: bool) -> Array:
 		_user_avatar_data["equipped"] = resolved.duplicate()
 	_sync_cached_equipped_avatar_item_payloads()
 	return resolved
+
+
+func _avatar_item_id_from_variant(raw_item: Variant) -> String:
+	if raw_item is Dictionary:
+		return str((raw_item as Dictionary).get("id", (raw_item as Dictionary).get("item_id", ""))).strip_edges()
+	return str(raw_item).strip_edges()
 
 
 func _is_cloud_item_owned(item: Dictionary) -> bool:

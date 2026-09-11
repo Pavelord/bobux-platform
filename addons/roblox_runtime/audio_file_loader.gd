@@ -7,6 +7,8 @@ static func load_stream(path: String, disable_loop: bool = false) -> AudioStream
 		return null
 	var stream: AudioStream = null
 	match resolved_path.get_extension().to_lower():
+		"wav":
+			stream = AudioStreamWAV.load_from_file(resolved_path)
 		"ogg":
 			stream = AudioStreamOggVorbis.load_from_file(resolved_path)
 		"mp3":

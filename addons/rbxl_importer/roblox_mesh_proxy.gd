@@ -111,6 +111,10 @@ static func _make_cone_mesh() -> Mesh:
 	mesh.height = 1.0
 	mesh.radial_segments = 12
 	mesh.rings = 1
+	# CylinderMesh caps are configurable. Set them explicitly so proxy cones do
+	# not depend on engine-version defaults and remain opaque from every angle.
+	mesh.cap_top = true
+	mesh.cap_bottom = true
 	return mesh
 
 
@@ -187,11 +191,15 @@ static func _make_wedge_mesh() -> Mesh:
 		Vector3(0.5, 0.5, 0.5),
 	])
 	var indices := PackedInt32Array([
-		0, 2, 1, 1, 2, 3,
-		2, 4, 3, 3, 4, 5,
-		0, 1, 4, 1, 5, 4,
-		0, 4, 2,
-		1, 3, 5,
+		# Bottom (-Y)
+		0, 1, 2, 1, 3, 2,
+		# Full-height face (+Z)
+		2, 3, 4, 3, 5, 4,
+		# Slope (+Y/-Z)
+		0, 4, 1, 1, 4, 5,
+		# Triangular end caps (-X, +X)
+		0, 2, 4,
+		1, 5, 3,
 	])
 	return _mesh_from_arrays(verts, indices)
 

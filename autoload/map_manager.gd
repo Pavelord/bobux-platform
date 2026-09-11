@@ -20,23 +20,19 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 			matches_selected_folder = (
 				(not clean_map_id.is_empty() and (clean_map_id == GameState.selected_map or clean_map_id == selected_folder_name or clean_map_id == selected_cloud_map_id))
 				or (clean_map_id.is_empty() and not clean_map_name.is_empty() and clean_map_name == selected_display_name)
-				or (not clean_cloud_version_id.is_empty() and clean_cloud_version_id == selected_cloud_version_id)
 			)
+			matches_selected_folder = matches_selected_folder and (clean_cloud_version_id.is_empty() or clean_cloud_version_id == selected_cloud_version_id)
 		if matches_selected_folder:
-			return {
-				"ok": true,
-				"folder": GameState.selected_map_folder,
-				"cloud_version_id": clean_cloud_version_id if not clean_cloud_version_id.is_empty() else selected_cloud_version_id
-			}
+			selected_folder = GameState.selected_map_folder
+			if clean_cloud_version_id.is_empty():
+				clean_cloud_version_id = selected_cloud_version_id
 
 	var is_builtin_map: bool = clean_map_id.is_empty() or clean_map_id == "classic" or clean_map_id == "untitled"
-	if not clean_map_id.is_empty() and not is_builtin_map:
+	if selected_folder.is_empty() and not clean_map_id.is_empty() and not is_builtin_map:
 		selected_folder = CloudAPI.get_cached_map_folder(clean_map_id, clean_cloud_version_id)
 		if selected_folder.is_empty():
 			if CloudAPI == null or not CloudAPI.is_configured():
-				# Fall back to built-in map instead of failing entirely
-				push_warning("[MapManager] Cloud API not configured. Falling back to built-in map.")
-				is_builtin_map = true
+				return _map_load_failure(clean_map_id, "Cloud API is unavailable; the server map cannot be downloaded.")
 			else:
 				var download_result: Dictionary = await CloudAPI.download_map_with_cache(
 					clean_map_id,
@@ -44,14 +40,14 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 					clean_map_name if not clean_map_name.is_empty() else "Cloud Map"
 				)
 				if not bool(download_result.get("ok", false)):
-					# Fall back to built-in map instead of disconnecting
-					push_warning("[MapManager] Cloud map download failed for '%s': %s. Falling back to built-in map." % [clean_map_id, str(download_result.get("error", "unknown"))])
-					is_builtin_map = true
+					return _map_load_failure(clean_map_id, "Could not download the server map: %s" % str(download_result.get("error", "unknown")))
 				else:
 					selected_folder = str(download_result.get("folder", "")).strip_edges()
 					if clean_cloud_version_id.is_empty():
 						clean_cloud_version_id = str(download_result.get("cloud_version_id", clean_cloud_version_id)).strip_edges()
 
+	if not is_builtin_map and (selected_folder.is_empty() or not FileAccess.file_exists(selected_folder.path_join("map_data.json"))):
+		return _map_load_failure(clean_map_id, "The downloaded server map is missing map_data.json.")
 	if clean_map_name.is_empty() and not selected_folder.is_empty():
 		var cached_meta: Dictionary = _read_local_map_metadata(selected_folder)
 		clean_map_name = str(cached_meta.get("name", "")).strip_edges()
@@ -84,6 +80,12 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 		"folder": selected_folder
 	}
 	map_loaded.emit(clean_map_id, result)
+	return result
+
+func _map_load_failure(map_id: String, message: String) -> Dictionary:
+	# Joining a different fallback world leaves authoritative spawns in thin air.
+	var result := {"ok": false, "map_id": map_id, "error": message}
+	map_loaded.emit(map_id, result)
 	return result
 
 func _read_local_map_metadata(folder_path: String) -> Dictionary:

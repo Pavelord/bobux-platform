@@ -1,0 +1,18 @@
+[
+  {
+    "source": "https://api.polyhaven.com/files/wooden_crate",
+    "reason": "Official API returned HTTP 403; files and archive license could not be validated. No assets imported.",
+    "checked_at": "2026-09-06"
+  },
+  {
+    "source": "https://opengameart.org/content/gunshot-sounds",
+    "download_url": "https://opengameart.org/sites/default/files/sounds.zip",
+    "reason": "License conflict: source page says CC0, archive sounds/creativecommons.txt says Creative Commons Attribution 3.0 (CC BY 3.0). Entire pack skipped.",
+    "checked_at": "2026-09-06"
+  },
+  {
+    "source": "https://freesound.org/docs/api/",
+    "reason": "Optional API integration not configured; no authenticated downloads attempted.",
+    "checked_at": "2026-09-06"
+  }
+]

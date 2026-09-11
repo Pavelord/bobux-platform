@@ -5,7 +5,7 @@ const AVATAR_PREVIEW_CACHE_DIR: String = "user://cache/friend_avatar_previews"
 const AVATAR_PREVIEW_RENDER_SIZE: int = 320
 const AVATAR_PREVIEW_RENDER_SETTLE_SECONDS: float = 0.45
 const AVATAR_PREVIEW_RENDER_BATCH_SIZE: int = 4
-const AVATAR_PREVIEW_RENDER_REVISION: String = "portrait_v12_real_avatar"
+const AVATAR_PREVIEW_RENDER_REVISION: String = "portrait_v15_right_bust"
 
 static var _avatar_preview_queue: Array = []
 static var _avatar_preview_pending: Dictionary = {}
@@ -267,11 +267,11 @@ static func _populate_tabbed_async(lobby, friends_view: Control, build_token: in
 	var active_lookup: Dictionary = _build_member_server_lookup(active_servers)
 	var friends: Array = _extract_array_payload(friends_result.get("data", [])) if bool(friends_result.get("ok", false)) else []
 	friends.sort_custom(func(a: Dictionary, b: Dictionary):
-		var active_a: bool = not _resolve_active_server_for_profile(a, active_lookup).is_empty()
-		var active_b: bool = not _resolve_active_server_for_profile(b, active_lookup).is_empty()
-		if active_a == active_b:
+		var rank_a: int = _profile_presence_rank(a, active_lookup)
+		var rank_b: int = _profile_presence_rank(b, active_lookup)
+		if rank_a == rank_b:
 			return str(a.get("username", "")).to_lower() < str(b.get("username", "")).to_lower()
-		return active_a and not active_b
+		return rank_a < rank_b
 	)
 	state["friends"] = friends
 	state["active_lookup"] = active_lookup
@@ -421,11 +421,11 @@ static func _populate_async(lobby, friends_view: Control, build_token: int, summ
 		requests_status.text = incoming_load_error if not incoming_load_error.is_empty() else "%d incoming request(s)" % incoming_requests.size()
 
 	friends.sort_custom(func(a: Dictionary, b: Dictionary):
-		var active_a: bool = not _resolve_active_server_for_profile(a, active_server_lookup).is_empty()
-		var active_b: bool = not _resolve_active_server_for_profile(b, active_server_lookup).is_empty()
-		if active_a == active_b:
+		var rank_a: int = _profile_presence_rank(a, active_server_lookup)
+		var rank_b: int = _profile_presence_rank(b, active_server_lookup)
+		if rank_a == rank_b:
 			return str(a.get("username", "")).to_lower() < str(b.get("username", "")).to_lower()
-		return active_a and not active_b
+		return rank_a < rank_b
 	)
 	for friend_variant in friends:
 		if not (friend_variant is Dictionary):
@@ -1021,6 +1021,20 @@ static func _resolve_active_server_for_profile(profile: Dictionary, active_serve
 	return server_match if server_match is Dictionary else {}
 
 
+static func _profile_presence_rank(profile: Dictionary, active_server_lookup: Dictionary) -> int:
+	if not _resolve_active_server_for_profile(profile, active_server_lookup).is_empty():
+		return 0
+	if str(profile.get("status", "")).strip_edges().to_lower() != "online":
+		return 2
+	var updated_at: String = str(profile.get("updated_at", profile.get("last_seen_at", ""))).strip_edges()
+	if updated_at.is_empty():
+		return 2
+	var updated_unix: int = int(Time.get_unix_time_from_datetime_string(updated_at))
+	if updated_unix <= 0:
+		return 2
+	return 1 if Time.get_unix_time_from_system() - updated_unix <= 180.0 else 2
+
+
 static func _game_info_from_server(server: Dictionary) -> Dictionary:
 	return {
 		"name": str(server.get("map_name", "Friend's Game")).strip_edges(),
@@ -1206,6 +1220,13 @@ static func _install_avatar_texture(holder: Control, texture: Texture2D) -> void
 	texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Control.clip_contents is rectangular, even when its StyleBox is round.
+	# Mask the portrait itself so shoulders and accessories stay inside the ring.
+	var shader := Shader.new()
+	shader.code = "shader_type canvas_item; void fragment(){ vec4 c=texture(TEXTURE,UV); float d=length(UV-vec2(0.5)); c.a*=1.0-smoothstep(0.48,0.493,d); COLOR=c; }"
+	var mask := ShaderMaterial.new()
+	mask.shader = shader
+	texture_rect.material = mask
 	holder.add_child(texture_rect)
 
 
@@ -1256,11 +1277,12 @@ static func _create_avatar_render_viewport(render_host: Node, profile: Dictionar
 	render_host.add_child(viewport)
 
 	var camera := Camera3D.new()
-	camera.fov = 27.0
+	camera.fov = 25.0
+	camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	# UI previews are fitted around y=2.45 by player.gd. Frame the upper body so
 	# the face remains visible in small social circles while preserving clothing.
-	var camera_position := Vector3(0.0, 3.3, 6.9)
-	var camera_target := Vector3(0.0, 3.3, 0.0)
+	var camera_position := Vector3(0.0, 3.65, 6.1)
+	var camera_target := Vector3(0.0, 3.65, 0.0)
 	camera.transform = Transform3D(Basis.looking_at(camera_target - camera_position, Vector3.UP), camera_position)
 	viewport.add_child(camera)
 
@@ -1300,7 +1322,8 @@ static func _create_avatar_render_viewport(render_host: Node, profile: Dictionar
 	avatar.set("pants_texture_path", _resolve_avatar_texture_from_profile(profile, "pants_texture_path", "", true))
 	var equipped_payloads: Array = _resolve_avatar_payloads_from_profile(profile)
 	avatar.set("equipped_avatar_items", equipped_payloads)
-	avatar.rotation_degrees.y = 0.0
+	avatar.rotation_degrees.y = 18.0
+	avatar.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	avatar.position.y = -0.12
 	var name_label: Node = avatar.get_node_or_null("Visuals/NameLabel")
 	if name_label:

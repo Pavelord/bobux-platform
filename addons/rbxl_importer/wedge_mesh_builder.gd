@@ -44,16 +44,16 @@ static func build_wedge(size: Vector3) -> ArrayMesh:
 	# Bottom
 	_add_triangle.call(v0, v3, v2)
 	_add_triangle.call(v0, v2, v1)
-	# Back (full-size vertical face at +Z)
+	# Front: the full-height rectangular face at -Z.
+	_add_triangle.call(v3, v4, v5)
+	_add_triangle.call(v3, v5, v2)
+	# Slope: the rectangular face joining the +Z bottom edge to the -Z top edge.
 	_add_triangle.call(v0, v1, v5)
 	_add_triangle.call(v0, v5, v4)
-	# Slope (from +Z top edge down to -Z bottom)
-	_add_triangle.call(v1, v2, v5)
 	# Left side triangle
 	_add_triangle.call(v0, v4, v3)
 	# Right side triangle
-	_add_triangle.call(v2, v3, v4) # unused but keeps the shell closed
-	_add_triangle.call(v4, v5, v2) # right slope fill
+	_add_triangle.call(v1, v2, v5)
 
 	return _build_mesh(verts, normals, uvs, indices)
 

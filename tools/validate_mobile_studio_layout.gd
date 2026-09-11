@@ -30,6 +30,29 @@ func _run() -> void:
 	)
 	var compact_panels := toolbox != null and not toolbox.visible and right_dock != null and not right_dock.visible
 	var actions_present := action_panel != null and action_panel.visible
+	var joystick_owns_one_touch := false
+	if studio.get("mobile_studio_joystick_base") != null:
+		var joystick_base := studio.get("mobile_studio_joystick_base") as Control
+		var joystick_press := InputEventScreenTouch.new()
+		joystick_press.index = 11
+		joystick_press.position = joystick_base.size * Vector2(0.8, 0.5)
+		joystick_press.pressed = true
+		studio.call("_on_mobile_studio_joystick_input", joystick_press)
+		var moving_before_other_release: Vector2 = studio.get("mobile_studio_move_vector")
+		var unrelated_release := InputEventScreenTouch.new()
+		unrelated_release.index = 12
+		unrelated_release.position = Vector2.ZERO
+		unrelated_release.pressed = false
+		studio.call("_on_mobile_studio_joystick_input", unrelated_release)
+		var moving_after_other_release: Vector2 = studio.get("mobile_studio_move_vector")
+		joystick_press.pressed = false
+		studio.call("_on_mobile_studio_joystick_input", joystick_press)
+		var stopped_after_owner_release: Vector2 = studio.get("mobile_studio_move_vector")
+		joystick_owns_one_touch = (
+			moving_before_other_release.length() > 0.1
+			and moving_after_other_release.is_equal_approx(moving_before_other_release)
+			and stopped_after_owner_release.is_zero_approx()
+		)
 
 	if viewport_container != null:
 		var touch := InputEventScreenTouch.new()
@@ -66,10 +89,11 @@ func _run() -> void:
 		and touch_rotates_camera
 		and explorer_open
 		and toolbox_exclusive
+		and joystick_owns_one_touch
 	)
 	print(
-		"[validate_mobile_studio_layout] ok=%s actions=%s compact=%s no_overlay=%s scrolls=%s rotate=%s explorer=%s toolbox=%s"
-		% [ok, actions_present, compact_panels, no_look_overlay, scrolls_present, touch_rotates_camera, explorer_open, toolbox_exclusive]
+		"[validate_mobile_studio_layout] ok=%s actions=%s compact=%s no_overlay=%s scrolls=%s rotate=%s explorer=%s toolbox=%s joystick_owner=%s"
+		% [ok, actions_present, compact_panels, no_look_overlay, scrolls_present, touch_rotates_camera, explorer_open, toolbox_exclusive, joystick_owns_one_touch]
 	)
 	studio.queue_free()
 	await process_frame

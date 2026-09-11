@@ -615,7 +615,9 @@ func _build_roblox_place_manifest(json: Dictionary, instances: Dictionary, hiera
 		base["root_name"] = _name_of_ref(str(base.get("root_ref", "")), instances)
 
 		if _is_manifest_service_class(roblox_class):
-			services.append(base.duplicate(true))
+			var service_data := base.duplicate(true)
+			service_data["properties"] = _runtime_manifest_properties(roblox_class, props, roblox_class)
+			services.append(service_data)
 
 		if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
 			var script_data := base.duplicate(true)
@@ -677,6 +679,8 @@ func _build_roblox_place_manifest(json: Dictionary, instances: Dictionary, hiera
 				props,
 				str(base.get("service_name", ""))
 			)
+			if _is_part_class(roblox_class):
+				runtime_data["properties"]["BobuxDeferredGeometry"] = not eager_template_refs.has(ref_id)
 			runtime_instances.append(runtime_data)
 
 		_collect_manifest_assets(ref_id, roblox_class, name, props, parent_map, instances, assets)
@@ -730,7 +734,7 @@ func _service_name_for_ref(ref_id: String, parent_map: Dictionary, instances: Di
 		var roblox_class := str(inst.get("class", ""))
 		var instance_name := _name_of_ref(cursor, instances)
 		if _is_manifest_service_class(roblox_class):
-			return instance_name if not instance_name.is_empty() else roblox_class
+			return roblox_class
 		cursor = str(parent_map.get(cursor, "")).strip_edges()
 		guard += 1
 	return ""
@@ -752,7 +756,7 @@ func _should_emit_runtime_manifest_instance(ref_id: String, roblox_class: String
 	if _is_part_class(roblox_class) and service_name == "Workspace":
 		return false
 	if _is_part_class(roblox_class):
-		return eager_template_refs.has(ref_id)
+		return true
 	return true
 
 
@@ -811,8 +815,16 @@ func _runtime_manifest_properties(roblox_class: String, props: Dictionary, servi
 		"RequiresHandle", "CanBeDropped", "ToolTip", "Grip", "GripForward",
 		"GripPos", "GripRight", "GripUp", "Graphic", "BinType", "Active",
 		"DesiredAngle", "MaxVelocity", "BaseAngle", "TonemapperPreset",
+		"Attributes", "Tags", "TeamColor", "AutoAssignable", "Neutral", "AllowTeamChangeOnTouch",
+		"Health", "Health_XML", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight", "HipHeight",
+		"MaxActivationDistance", "KeyboardKeyCode", "ActionText", "ObjectText", "HoldDuration",
+		"UsePartColor", "VertexColor", "TopSurface", "BottomSurface", "LeftSurface", "RightSurface", "FrontSurface", "BackSurface",
 	]
 	var picked := _pick_manifest_properties(props, keys)
+	# Retain new/less common Roblox properties too. A rendering whitelist must
+	# not erase script-visible data or CSG geometry from storage templates.
+	for key in props:
+		if not picked.has(key): picked[key] = _prop(props, str(key), null)
 	if _is_part_class(roblox_class):
 		var import_transform := _cframe_to_transform(_prop(props, "CFrame", null), scale_factor)
 		if _is_transform_import_safe(import_transform):
@@ -824,6 +836,28 @@ func _runtime_manifest_properties(roblox_class: String, props: Dictionary, servi
 			picked["BobuxSize"] = [maxf(part_size.x, 0.02), maxf(part_size.y, 0.02), maxf(part_size.z, 0.02)]
 		picked["BobuxTemplateOnly"] = service_name != "Workspace"
 	return picked
+
+
+func materialize_template_part(part: MeshInstance3D) -> void:
+	var props: Dictionary = part.get_meta("roblox_properties", {})
+	var roblox_class := str(part.get_meta("roblox_class", "Part"))
+	var shape := _roblox_class_to_shape(roblox_class, props)
+	part.mesh = _create_import_mesh_for_shape(shape)
+	part.set_meta("shape_type", shape)
+	var exact := _apply_exact_import_mesh_if_needed(part, roblox_class, props)
+	if not exact and _is_csg_operation_class(roblox_class): exact = _apply_embedded_csg_hull_if_needed(part, props)
+	_apply_material_to_mesh_surfaces(part, _material_cache.get_part_material(props))
+	_apply_mesh_texture_to_parent(part, _content_to_string(_prop(props, "TextureID", _prop(props, "TextureId", ""))), exact)
+	for child in part.get_children():
+		var child_class := str(child.get_meta("roblox_class", ""))
+		var child_props: Dictionary = child.get_meta("roblox_properties", {})
+		var ref := str(child.get_meta("roblox_ref", ""))
+		var parent_ref := str(part.get_meta("roblox_ref", ""))
+		if child_class in ["SpecialMesh", "BlockMesh", "CylinderMesh"]:
+			_build_mesh_runtime_object(ref, child_class, child_props, {ref: parent_ref}, {parent_ref: part}, {}, null)
+		elif child_class in ["Decal", "Texture"]:
+			_build_decal_runtime_object(ref, child_class, child_props, {ref: parent_ref}, {parent_ref: part}, {})
+	part.set_meta("bobux_deferred_geometry", false)
 
 
 func _collect_manifest_assets(ref_id: String, roblox_class: String, name: String, props: Dictionary,
@@ -1012,7 +1046,7 @@ func _is_manifest_service_class(roblox_class: String) -> bool:
 		"Workspace", "Lighting", "Players", "Teams", "ReplicatedStorage",
 		"ReplicatedFirst", "ServerStorage", "ServerScriptService",
 		"StarterGui", "StarterPack", "StarterPlayer", "SoundService",
-		"TextChatService", "Chat", "Terrain"
+		"TextChatService", "Chat", "Debris", "Selection", "VirtualInputManager"
 	]
 
 

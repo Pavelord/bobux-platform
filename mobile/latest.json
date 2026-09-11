@@ -1,13 +1,13 @@
 {
-    "build":  29,
-    "version":  "0.1.28-mobile",
-    "android":  {
-                    "build":  29,
-                    "version":  "0.1.28-mobile",
-                    "sha256":  "E4552715B50FA787ACCE116DC3710B6CCBF6653441C795B2B009FACA631A246D",
-                    "required":  true,
-                    "apk_url":  "http://109.71.245.162/mobile/Bobux-Android.apk",
-                    "versioned_apk_url":  "http://109.71.245.162/mobile/Bobux-Android-0.1.28-mobile-build29.apk",
-                    "notes":  "Stable avatar persistence, safe world loading, authoritative creations and stats, incremental catalog rendering, and Roblox-style character fixes."
-                }
+  "build": 30,
+  "version": "0.1.29-mobile",
+  "android": {
+    "sha256": "73FF0C4FC4F9A2A9B364F1CC8F7F37FD587CFE7A244C36D7CF1FABC84DEC87B1",
+    "notes": "Bobux AI Studio now reliably creates structured parts, effects, models and scripts.",
+    "versioned_apk_url": "http://109.71.245.162/mobile/Bobux-Android-0.1.29-mobile-build30.apk",
+    "apk_url": "http://109.71.245.162/mobile/Bobux-Android.apk",
+    "required": true,
+    "version": "0.1.29-mobile",
+    "build": 30
+  }
 }

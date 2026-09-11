@@ -48,6 +48,10 @@ try:
     import zstandard as zstd
 except ImportError:
     zstd = None  # ZSTD chunks will raise if encountered.
+try:
+    from compression import zstd as stdlib_zstd  # Python 3.14+
+except ImportError:
+    stdlib_zstd = None
 
 
 COMPACT_STRING_PROPERTIES = {
@@ -97,14 +101,16 @@ def read_f64(f): return struct.unpack('<d', f.read(8))[0]
 
 def read_roblox_string(f):
     """Roblox 'string' = u32 length + raw bytes (NOT null-terminated)."""
-    length = read_u32(f)
-    return f.read(length).decode('utf-8', errors='replace')
+    return read_roblox_bytes(f).decode('utf-8', errors='replace')
 
 
 def read_roblox_bytes(f):
     """Roblox raw byte string."""
     length = read_u32(f)
-    return f.read(length)
+    raw = f.read(length)
+    if len(raw) != length:
+        raise EOFError("truncated Roblox string: expected %d bytes, got %d" % (length, len(raw)))
+    return raw
 
 
 def shared_string_to_json_value(raw):
@@ -131,7 +137,9 @@ def parse_referent(value, fallback):
     text = str(value).strip()
     if not text:
         return fallback
-    match = re.search(r'(-?\d+)$', text)
+    # Referents are opaque identifiers. Only the *entire* old numeric form may
+    # be interpreted as an integer; a UUID's trailing digits are not its ID.
+    match = re.fullmatch(r'(?:RBX)?(-?\d+)', text)
     if match:
         try:
             return int(match.group(1))
@@ -180,6 +188,11 @@ def decompress_chunk(raw, compressed_len, uncompressed_len):
         return raw
     if raw[:4] == b'\x28\xb5\x2f\xfd':
         if zstd is None:
+            if stdlib_zstd is not None:
+                result = stdlib_zstd.decompress(raw)
+                if len(result) != uncompressed_len:
+                    raise ValueError("ZSTD chunk size mismatch")
+                return result
             raise RuntimeError("ZSTD chunk found but zstandard not installed")
         dctx = zstd.ZstdDecompressor()
         return dctx.decompress(raw, max_output_size=uncompressed_len)
@@ -296,7 +309,9 @@ CFRAME_SPECIAL = {
 
 def parse_prop_values(f, type_id, count, shared_strings):
     if type_id == 0x01:  # String
-        return [read_roblox_string(f) for _ in range(count)]
+        # Roblox uses the String wire type for binary Terrain/CSG/property
+        # payloads too. Replacement UTF-8 decoding irreversibly lost bytes.
+        return [shared_string_to_json_value(read_roblox_bytes(f)) for _ in range(count)]
 
     if type_id == 0x02:  # Bool
         return [bool(read_u8(f)) for _ in range(count)]
@@ -339,8 +354,8 @@ def parse_prop_values(f, type_id, count, shared_strings):
     if type_id == 0x0A:  # Axes (u8 bitfield)
         return [read_u8(f) for _ in range(count)]
 
-    if type_id == 0x0B:  # BrickColor (i32)
-        return [untransform_i32(n) for n in read_interleaved(f, count, 4)]
+    if type_id == 0x0B:  # BrickColor (untransformed u32)
+        return read_interleaved(f, count, 4)
 
     if type_id == 0x0C:  # Color3 (3 roblox float arrays: R, G, B)
         rs = [decode_roblox_float(n) for n in read_interleaved(f, count, 4)]
@@ -360,38 +375,21 @@ def parse_prop_values(f, type_id, count, shared_strings):
         return [[xs[i], ys[i], zs[i]] for i in range(count)]
 
     if type_id == 0x10:  # CFrame
-        payload = f.read()
-        position_bytes = count * 12
-        if len(payload) < position_bytes:
-            raise EOFError("CFrame property too short for %d position value(s)" % count)
-
-        # Roblox stores all positions as the final three interleaved arrays.
-        # Rotation data before that is sequential: one special ID per CFrame,
-        # and when the ID is 0x00 the following 9 little-endian floats are the
-        # full rotation matrix for that same CFrame.
-        rotation_payload = payload[:-position_bytes]
-        position_payload = payload[-position_bytes:] if position_bytes > 0 else b""
-        rb = io.BytesIO(rotation_payload)
+        # Consume exactly this array so OptionalCFrame can read its bool trailer.
         rotations = []
         for _ in range(count):
-            if rb.tell() >= len(rotation_payload):
-                rotations.append(IDENTITY_CFRAME_ROTATION)
-                continue
-            sid = read_u8(rb)
+            sid = read_u8(f)
             if sid == 0x00:
-                if len(rotation_payload) - rb.tell() < 36:
-                    rotations.append(IDENTITY_CFRAME_ROTATION)
-                    rb.seek(len(rotation_payload))
-                    continue
-                m = [read_f32(rb) for _ in range(9)]
+                m = [read_f32(f) for _ in range(9)]
                 rotations.append([m[0:3], m[3:6], m[6:9]])
             else:
-                rotations.append(CFRAME_SPECIAL.get(sid, IDENTITY_CFRAME_ROTATION))
+                if sid not in CFRAME_SPECIAL:
+                    raise ValueError("invalid CFrame rotation ID 0x%02X" % sid)
+                rotations.append(CFRAME_SPECIAL[sid])
 
-        pb = io.BytesIO(position_payload)
-        px = [decode_roblox_float(n) for n in read_interleaved(pb, count, 4)]
-        py = [decode_roblox_float(n) for n in read_interleaved(pb, count, 4)]
-        pz = [decode_roblox_float(n) for n in read_interleaved(pb, count, 4)]
+        px = [decode_roblox_float(n) for n in read_interleaved(f, count, 4)]
+        py = [decode_roblox_float(n) for n in read_interleaved(f, count, 4)]
+        pz = [decode_roblox_float(n) for n in read_interleaved(f, count, 4)]
         return [{"position": [px[i], py[i], pz[i]], "rotation": rotations[i]}
                 for i in range(count)]
 
@@ -457,32 +455,23 @@ def parse_prop_values(f, type_id, count, shared_strings):
             out.append([a, b])
         return out
 
-    if type_id == 0x18:  # Rect (2 Vector2 → 4 f32 LE)
-        out = []
-        for _ in range(count):
-            minx, miny, maxx, maxy = read_f32(f), read_f32(f), read_f32(f), read_f32(f)
-            out.append({"min": [minx, miny], "max": [maxx, maxy]})
-        return out
+    if type_id == 0x18:  # Rect (four interleaved Roblox float arrays)
+        components = [[decode_roblox_float(n) for n in read_interleaved(f, count, 4)]
+                      for _ in range(4)]
+        return [{"min": [components[0][i], components[1][i]],
+                 "max": [components[2][i], components[3][i]]} for i in range(count)]
 
     if type_id == 0x19:  # PhysicalProperties (bool + optional custom values)
         out = []
         for _ in range(count):
-            if hasattr(f, "getbuffer") and f.tell() >= len(f.getbuffer()):
-                out.append({"custom": False})
-                continue
             custom = read_u8(f)
-            if custom == 0:
+            if not (custom & 1):
                 out.append({"custom": False})
                 continue
             entry = {"custom": True}
-            try:
-                entry["density"] = read_f32(f)
-                entry["friction"] = read_f32(f)
-                entry["elasticity"] = read_f32(f)
-                entry["frictionWeight"] = read_f32(f)
-                entry["elasticityWeight"] = read_f32(f)
-            except Exception:
-                pass
+            for key in ("density", "friction", "elasticity", "frictionWeight", "elasticityWeight"):
+                entry[key] = read_f32(f)
+            entry["acousticAbsorption"] = read_f32(f) if custom & 2 else 1.0
             out.append(entry)
         return out
 
@@ -493,15 +482,6 @@ def parse_prop_values(f, type_id, count, shared_strings):
         if len(rs) < count or len(gs) < count or len(bs) < count:
             raise EOFError("Color3uint8 property too short for %d value(s)" % count)
         return [[rs[i] / 255.0, gs[i] / 255.0, bs[i] / 255.0] for i in range(count)]
-
-    if type_id == 0x1A:  # Color3uint8 (3 × u8)
-        out = []
-        for _ in range(count):
-            r = read_u8(f)
-            g = read_u8(f)
-            b = read_u8(f)
-            out.append([r / 255.0, g / 255.0, b / 255.0])
-        return out
 
     if type_id == 0x1B:  # Int64 (zigzag i64 + 8-byte interleave)
         nums = read_interleaved(f, count, 8)
@@ -514,101 +494,53 @@ def parse_prop_values(f, type_id, count, shared_strings):
                     for i in indices]
         return list(indices)
 
-    if type_id == 0x1E:  # OptionalCFrame
-        # First: u8 presence flags
-        present = [read_u8(f) for _ in range(count)]
-        # Then a full CFrame array (same layout as 0x10) ignoring absent ones is
-        # not possible — Roblox still writes the CFrame for present entries only
-        # interleaved by component. Approximate by parsing as a CFrame block and
-        # gating by presence flags afterwards.
-        cframes = parse_prop_values(f, 0x10, count, shared_strings)
-        return [{"present": bool(present[i]), "cframe": cframes[i]} for i in range(count)]
+    if type_id == 0x1D:  # Bytecode is preserved as data, never executed here.
+        return [shared_string_to_json_value(read_roblox_bytes(f)) for _ in range(count)]
 
-    if type_id == 0x1F:  # UniqueId (16 bytes: 3 interleaved fields)
-        # Stored as 3 interleaved values: u32 epoch, u32 index, u64 randomness.
+    if type_id == 0x1E:  # OptionalCFrame: type marker, CFrames, bool marker, bools
+        if read_u8(f) != 0x10:
+            raise ValueError("OptionalCFrame is missing its CFrame type marker")
+        cframes = parse_prop_values(f, 0x10, count, shared_strings)
+        if read_u8(f) != 0x02:
+            raise ValueError("OptionalCFrame is missing its Bool type marker")
+        return [{"present": bool(read_u8(f)), "cframe": cframes[i]} for i in range(count)]
+
+    if type_id == 0x1F:  # UniqueId: entire 16-byte records are interleaved.
         out = []
-        e = read_interleaved(f, count, 4)
-        i_idx = read_interleaved(f, count, 4)
-        r = read_interleaved(f, count, 8)
-        for k in range(count):
-            out.append({"epoch": e[k], "index": i_idx[k], "random": r[k]})
+        for value in read_interleaved(f, count, 16):
+            index, epoch, random = struct.unpack('>IIQ', value.to_bytes(16, 'big'))
+            random = (random >> 1) | ((random & 1) << 63)
+            if random >= (1 << 63):
+                random -= 1 << 64
+            out.append({"epoch": epoch, "index": index, "random": random})
         return out
 
-    if type_id == 0x20:  # Font / FontFace
-        start = f.tell()
-        try:
-            families = [read_roblox_string(f) for _ in range(count)]
-            weights = read_interleaved(f, count, 4)
-            styles = read_interleaved(f, count, 4)
-            return [{"family": families[k], "weight": weights[k], "style": styles[k]}
-                    for k in range(count)]
-        except Exception:
-            f.seek(start)
-            out = []
-            for _ in range(count):
-                try:
-                    remaining = len(f.getbuffer()) - f.tell()
-                except Exception:
-                    remaining = 0
-                family = ""
-                weight = 400
-                style = 0
-                if remaining >= 4:
-                    try:
-                        family = read_roblox_string(f)
-                    except Exception:
-                        family = ""
-                try:
-                    remaining = len(f.getbuffer()) - f.tell()
-                except Exception:
-                    remaining = 0
-                if remaining >= 4:
-                    try:
-                        weight = read_u32(f)
-                    except Exception:
-                        weight = 400
-                try:
-                    remaining = len(f.getbuffer()) - f.tell()
-                except Exception:
-                    remaining = 0
-                if remaining >= 4:
-                    try:
-                        style = read_u32(f)
-                    except Exception:
-                        style = 0
-                out.append({"family": family, "weight": weight, "style": style})
-            return out
+    if type_id == 0x20:  # Font: sequential records, NOT component arrays.
+        return [{"family": read_roblox_string(f), "weight": read_u16(f),
+                 "style": read_u8(f), "cachedFaceId": read_roblox_string(f)}
+                for _ in range(count)]
 
-    if type_id == 0x21:  # Content / SecurityCapabilities fallback
-        # Roblox's newer "Content" type serialises as a u8 source-type + an
-        # optional string. We read leniently: source byte, then a u32-length
-        # string (may be empty).
+    if type_id == 0x21:  # SecurityCapabilities: transformed interleaved i64.
+        return [untransform_i32(n) & 0xFFFFFFFFFFFFFFFF for n in read_interleaved(f, count, 8)]
+
+    if type_id == 0x22:  # Content (ContentId continues to use String).
+        sources = [untransform_i32(n) for n in read_interleaved(f, count, 4)]
+        uris = [read_roblox_string(f) for _ in range(read_u32(f))]
+        objects = parse_prop_values(f, 0x13, read_u32(f), shared_strings)
+        parse_prop_values(f, 0x13, read_u32(f), shared_strings)  # external refs
+        if sources.count(1) != len(uris) or sources.count(2) != len(objects):
+            raise ValueError("Content source counts do not match their payloads")
+        uri_iter, object_iter = iter(uris), iter(objects)
         out = []
-        for _ in range(count):
-            try:
-                remaining = len(f.getbuffer()) - f.tell()
-            except Exception:
-                remaining = 0
-            if remaining <= 0:
-                out.append({"source": 0, "value": ""})
-                continue
-            src = read_u8(f)
-            try:
-                remaining = len(f.getbuffer()) - f.tell()
-            except Exception:
-                remaining = 0
-            if remaining >= 4:
-                start = f.tell()
-                try:
-                    s = read_roblox_string(f)
-                    out.append({"source": src, "value": s})
-                except Exception:
-                    f.seek(start)
-                    raw = f.read(remaining)
-                    out.append({"source": src, "raw_length": len(raw)})
+        for source in sources:
+            if source == 0:
+                out.append("")
+            elif source == 1:
+                out.append(next(uri_iter))
+            elif source == 2:
+                out.append({"source": 2, "ref": next(object_iter)})
             else:
-                raw = f.read(remaining)
-                out.append({"source": src, "raw_length": len(raw)})
+                raise ValueError("unknown Content source type %d" % source)
         return out
 
     raise ValueError("unknown property type 0x%02X" % type_id)
@@ -631,7 +563,8 @@ def parse_rbxl(filepath):
 
 
 def _parse_rbxl_binary(f):
-    f.read(6)  # signature (0x89 FF 0D 0A 1A 0A)
+    if f.read(6) != b'\x89\xff\x0d\x0a\x1a\x0a':
+        raise ValueError("invalid Roblox binary signature")
     version = read_u16(f)
     class_count = read_i32(f)
     instance_count = read_i32(f)
@@ -643,11 +576,14 @@ def _parse_rbxl_binary(f):
     shared_strings = []
     metadata = {}
     warnings = []
+    saw_end = False
 
     while True:
         name_raw = f.read(4)
-        if len(name_raw) < 4:
+        if not name_raw:
             break
+        if len(name_raw) < 4:
+            raise EOFError("truncated Roblox chunk header")
         chunk_name = name_raw.rstrip(b'\x00').decode('ascii', errors='replace')
         compressed_len = read_u32(f)
         uncompressed_len = read_u32(f)
@@ -656,16 +592,18 @@ def _parse_rbxl_binary(f):
         payload_len = compressed_len if compressed_len > 0 else uncompressed_len
         raw = f.read(payload_len)
         if len(raw) < payload_len:
-            break  # truncated file
+            raise EOFError("truncated %s chunk" % chunk_name)
 
         if chunk_name == 'END':
+            saw_end = True
             break
 
         try:
             data = decompress_chunk(raw, compressed_len, uncompressed_len)
         except Exception as e:
-            warnings.append("decompress %s failed: %s" % (chunk_name, e))
-            continue
+            # A partial scene must not replace a user's map with missing parts
+            # or missing scripts while reporting a successful import.
+            raise ValueError("decompress %s failed: %s" % (chunk_name, e)) from e
 
         buf = io.BytesIO(data)
 
@@ -743,6 +681,11 @@ def _parse_rbxl_binary(f):
         else:
             warnings.append("unhandled chunk type: %s" % chunk_name)
 
+    if not saw_end:
+        raise EOFError("Roblox binary file is missing its END chunk")
+    if len(instances) != instance_count or len(hierarchy) != instance_count:
+        raise ValueError("incomplete Roblox instance hierarchy: expected %d, decoded %d instances / %d parents"
+                         % (instance_count, len(instances), len(hierarchy)))
     return {
         "format": "binary",
         "version": version,
@@ -765,7 +708,13 @@ def _sanitize_roblox_xml(xml_string, warnings):
     )
     if cleaned != xml_string:
         warnings.append("XML control characters were stripped before parsing")
-    fixed = re.sub(r'&(?!#\d+;|#x[0-9A-Fa-f]+;|[A-Za-z][A-Za-z0-9]+;)', '&amp;', cleaned)
+    # CDATA contains literal Lua source: escaping '&' here changes strings,
+    # URLs and operators in otherwise valid scripts. Repair only XML text.
+    sections = re.split(r'(<!\[CDATA\[.*?\]\]>|<!--.*?-->)', cleaned, flags=re.DOTALL)
+    for i in range(0, len(sections), 2):
+        sections[i] = re.sub(r'&(?!#\d+;|#x[0-9A-Fa-f]+;|amp;|lt;|gt;|apos;|quot;)',
+                             '&amp;', sections[i])
+    fixed = ''.join(sections)
     if fixed != cleaned:
         warnings.append("XML bare ampersands were escaped before parsing")
     return fixed
@@ -778,22 +727,34 @@ def parse_rbxlx(xml_string):
     root = ET.fromstring(xml_string)
     instances = {}
     hierarchy = []
-    ref_counter = [0]
-
-    def next_ref():
-        ref_counter[0] += 1
-        return ref_counter[0]
+    # Build the complete referent table first: Ref properties can point
+    # forward, and numeric, UUID and arbitrary string referents may coexist.
+    items = list(root.iter('Item'))
+    refs_by_item = {}
+    refs_by_name = {}
+    used_refs = set()
+    reserved = {parse_referent(item.get('referent'), -1) for item in items}
+    next_id = 0
+    for item in items:
+        raw_ref = (item.get('referent') or '').strip()
+        if raw_ref and raw_ref in refs_by_name:
+            raise ValueError("duplicate XML referent: %s" % raw_ref)
+        ref = parse_referent(raw_ref, -1)
+        if ref < 0 or ref in used_refs:
+            while next_id in reserved or next_id in used_refs:
+                next_id += 1
+            ref = next_id
+            next_id += 1
+        used_refs.add(ref)
+        refs_by_item[item] = ref
+        if raw_ref:
+            refs_by_name[raw_ref] = ref
 
     def text_of(child, default=''):
-        if child is None or child.text is None:
-            return default
-        return child.text.strip()
+        return default if child is None or child.text is None else child.text.strip()
 
     def float_child(parent, child_name, default=0.0):
-        try:
-            return float(text_of(parent.find(child_name), str(default)))
-        except (TypeError, ValueError):
-            return default
+        return float_text(text_of(parent.find(child_name)), default)
 
     def int_text(value, default=0):
         try:
@@ -807,100 +768,129 @@ def parse_rbxlx(xml_string):
         except (TypeError, ValueError):
             return default
 
+    def resolve_ref(raw):
+        return refs_by_name.get(raw.strip(), -1)
+
     def parse_content(prop):
-        # Roblox XML usually serializes Content as:
-        #   <Content name="SoundId"><url>rbxassetid://123</url></Content>
-        # but old files may use direct text or a null child.
-        for key in ('url', 'binary', 'hash', 'null'):
+        if prop is None:
+            return ''
+        for key in ('url', 'uri', 'Ref', 'null', 'binary', 'hash'):
             child = prop.find(key)
             if child is not None:
-                if key == 'null':
-                    return ''
-                return text_of(child)
+                if key == 'Ref':
+                    return {"source": 2, "ref": resolve_ref(text_of(child))}
+                return text_of(child) if key in ('url', 'uri') else ''
         return text_of(prop)
 
-    def parse_color3uint8(prop):
-        if prop.get('R') is not None:
-            return [
-                int_text(prop.get('R')) / 255.0,
-                int_text(prop.get('G')) / 255.0,
-                int_text(prop.get('B')) / 255.0,
-            ]
-        return [
-            int_text(text_of(prop.find('R'))) / 255.0,
-            int_text(text_of(prop.find('G'))) / 255.0,
-            int_text(text_of(prop.find('B'))) / 255.0,
-        ]
+    def parse_cframe(prop):
+        return {"position": [float_child(prop, k) for k in ('X', 'Y', 'Z')],
+                "rotation": [[float_child(prop, 'R%d%d' % (r, c), 1.0 if r == c else 0.0)
+                              for c in range(3)] for r in range(3)]}
 
-    def parse_item(item, parent_ref):
-        class_name = item.get('class', 'Unknown')
-        raw_ref = item.get('referent', None)
-        if raw_ref is None:
-            ref = next_ref()
-        else:
-            ref = parse_referent(raw_ref, -1)
-            if ref == -1:
-                ref = next_ref()
+    shared_strings = {}
+    for entry in root.findall('./SharedStrings/SharedString'):
+        shared_strings[entry.get('md5', '')] = shared_string_to_json_value(
+            base64.b64decode(text_of(entry)))
 
+    unknown_tags = set()
+    def parse_property(prop):
+        tag = prop.tag
+        text = text_of(prop)
+        if tag in ('string', 'ProtectedString'):
+            return prop.text or ''  # whitespace is meaningful in strings/source
+        if tag == 'bool':
+            return text.lower() == 'true'
+        if tag in ('int', 'int64', 'uint64', 'token', 'Enum', 'SecurityCapabilities'):
+            return int_text(text)
+        if tag in ('float', 'double'):
+            return float_text(text)
+        if tag == 'CoordinateFrame':
+            return parse_cframe(prop)
+        if tag == 'OptionalCoordinateFrame':
+            cf = prop.find('CFrame')
+            return {"present": cf is not None,
+                    "cframe": parse_cframe(cf) if cf is not None else
+                    {"position": [0, 0, 0], "rotation": IDENTITY_CFRAME_ROTATION}}
+        if tag in ('Vector3', 'Vector3int16', 'Vector2'):
+            keys = ('X', 'Y') if tag == 'Vector2' else ('X', 'Y', 'Z')
+            return [float_child(prop, k) for k in keys]
+        if tag == 'Color3':
+            if len(prop) == 0:  # Legacy packed RGB form.
+                packed = int_text(text)
+                return [((packed >> shift) & 255) / 255.0 for shift in (16, 8, 0)]
+            return [float_child(prop, k) for k in ('R', 'G', 'B')]
+        if tag == 'Color3uint8':
+            if prop.get('R') is not None:
+                return [int_text(prop.get(k)) / 255.0 for k in ('R', 'G', 'B')]
+            if len(prop):
+                return [int_text(text_of(prop.find(k))) / 255.0 for k in ('R', 'G', 'B')]
+            packed = int_text(text)
+            return [((packed >> shift) & 255) / 255.0 for shift in (16, 8, 0)]
+        if tag in ('Content', 'ContentId'):
+            return parse_content(prop)
+        if tag == 'Ref':
+            return resolve_ref(text)
+        if tag == 'UDim':
+            return {"scale": float_child(prop, 'S'), "offset": int_text(text_of(prop.find('O')))}
+        if tag == 'UDim2':
+            return {axis.lower(): {"scale": float_child(prop, axis + 'S'),
+                                   "offset": int_text(text_of(prop.find(axis + 'O')))}
+                    for axis in ('X', 'Y')}
+        if tag in ('NumberRange', 'NumberSequence', 'ColorSequence'):
+            values = [float_text(v) for v in text.split()]
+            if tag == 'NumberRange':
+                return values[:2]
+            stride = 3 if tag == 'NumberSequence' else 5
+            if len(values) % stride:
+                raise ValueError("invalid XML %s keypoints" % tag)
+            return [{"time": values[i], "value": values[i + 1], "envelope": values[i + 2]}
+                    if stride == 3 else {"time": values[i], "color": values[i + 1:i + 4],
+                                         "envelope": values[i + 4]}
+                    for i in range(0, len(values), stride)]
+        if tag in ('Rect', 'Rect2D'):
+            return {key: [float_child(prop.find(key), axis) for axis in ('X', 'Y')]
+                    for key in ('min', 'max')}
+        if tag == 'PhysicalProperties':
+            custom = text_of(prop.find('CustomPhysics')).lower() == 'true'
+            entry = {"custom": custom}
+            if custom:
+                for key in ('Density', 'Friction', 'Elasticity', 'FrictionWeight', 'ElasticityWeight', 'AcousticAbsorption'):
+                    entry[key[0].lower() + key[1:]] = float_child(prop, key, 1.0 if key == 'AcousticAbsorption' else 0.0)
+            return entry
+        if tag == 'Font':
+            return {"family": parse_content(prop.find('Family')),
+                    "weight": int_text(text_of(prop.find('Weight')), 400),
+                    "style": 1 if text_of(prop.find('Style')) == 'Italic' else 0,
+                    "cachedFaceId": parse_content(prop.find('CachedFaceId'))}
+        if tag in ('Faces', 'Axes'):
+            return int_text(text_of(prop.find(tag.lower())))
+        if tag in ('SharedString', 'NetAssetRef'):
+            if text not in shared_strings:
+                warnings.append("Missing XML SharedString: %s" % text)
+            return shared_strings.get(text, '')
+        if tag == 'BinaryString':
+            return shared_string_to_json_value(base64.b64decode(text)) if text else ''
+        if tag == 'UniqueId':
+            return text
+        # Preserve new types as structured data rather than silently deleting.
+        unknown_tags.add(tag)
+        return {"__bobux_xml_type": tag, "xml": ET.tostring(prop, encoding='unicode')}
+
+    # Iterative traversal permits deep nested models without Python recursion limits.
+    pending = [(item, -1) for item in reversed(root.findall('Item'))]
+    while pending:
+        item, parent_ref = pending.pop()
+        ref = refs_by_item[item]
         props = {}
         props_node = item.find('Properties')
         if props_node is not None:
             for prop in props_node:
-                tag = prop.tag
-                name = prop.get('name', '')
-                text = (prop.text or '').strip()
-                if tag == 'string':
-                    props[name] = text
-                elif tag == 'bool':
-                    props[name] = (text.lower() == 'true')
-                elif tag in ('int', 'int64', 'uint64', 'token', 'Enum'):
-                    props[name] = int_text(text)
-                elif tag in ('float', 'double'):
-                    props[name] = float_text(text)
-                elif tag == 'CoordinateFrame':
-                    def gv(child_name):
-                        return float_child(prop, child_name)
-                    rot = [[gv('R00'), gv('R01'), gv('R02')],
-                           [gv('R10'), gv('R11'), gv('R12')],
-                           [gv('R20'), gv('R21'), gv('R22')]]
-                    props[name] = {"position": [gv('X'), gv('Y'), gv('Z')],
-                                   "rotation": rot}
-                elif tag == 'Color3':
-                    props[name] = [
-                        float_child(prop, 'R'),
-                        float_child(prop, 'G'),
-                        float_child(prop, 'B'),
-                    ]
-                elif tag == 'Vector3':
-                    props[name] = [
-                        float_child(prop, 'X'),
-                        float_child(prop, 'Y'),
-                        float_child(prop, 'Z'),
-                    ]
-                elif tag == 'Vector2':
-                    props[name] = [float_child(prop, 'X'), float_child(prop, 'Y')]
-                elif tag == 'Color3uint8':
-                    props[name] = parse_color3uint8(prop)
-                elif tag == 'Content':
-                    props[name] = parse_content(prop)
-                elif tag == 'Ref':
-                    props[name] = parse_referent(text, -1)
-                elif tag == 'UDim2':
-                    props[name] = {
-                        "x": {"scale": float_child(prop, 'XS'), "offset": int_text(text_of(prop.find('XO')))},
-                        "y": {"scale": float_child(prop, 'YS'), "offset": int_text(text_of(prop.find('YO')))},
-                    }
-                elif tag == 'BinaryString' or tag == 'ProtectedString':
-                    props[name] = text
-
-        instances[str(ref)] = {'class': class_name, 'properties': props}
+                props[prop.get('name', '')] = parse_property(prop)
+        instances[str(ref)] = {'class': item.get('class', 'Unknown'), 'properties': props}
         hierarchy.append({'child': ref, 'parent': parent_ref})
-
-        for child_item in item.findall('Item'):
-            parse_item(child_item, ref)
-
-    for item in root.findall('Item'):
-        parse_item(item, -1)
+        pending.extend((child, ref) for child in reversed(item.findall('Item')))
+    if unknown_tags:
+        warnings.append("XML property types preserved without runtime conversion: %s" % ', '.join(sorted(unknown_tags)))
 
     return {
         "format": "xml",
@@ -935,7 +925,7 @@ def sanitize_for_strict_json(value, warnings, path="$", stats=None):
             return 0.0
         return value
     if isinstance(value, str):
-        prop_name = path.rsplit(".", 1)[-1] if "." in path else ""
+        prop_name = path.rsplit(".", 1)[-1]
         if prop_name == "__bobux_binary_base64":
             return value
         should_compact = prop_name in COMPACT_STRING_PROPERTIES or (

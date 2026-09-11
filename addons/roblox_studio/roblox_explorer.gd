@@ -162,6 +162,7 @@ var _collapsed: Dictionary = {} # node_path (String) -> bool
 var _expanded_once: Dictionary = {} # node_path (String) -> bool (seen at least once)
 var _filter_text: String = ""
 var _runtime_icon_cache: Dictionary = {}
+var show_runtime: bool = false
 
 
 func set_filter_text(text: String) -> void:
@@ -175,6 +176,10 @@ func rebuild(tree: Tree, data_model: Node) -> TreeItem:
 		return null
 	_record_expanded_state(tree)
 	tree.clear()
+	tree.columns = 2
+	tree.set_column_expand(0, true)
+	tree.set_column_expand(1, false)
+	tree.set_column_custom_minimum_width(1, 78)
 	tree.hide_root = true
 	var hidden_root := tree.create_item()
 
@@ -210,6 +215,10 @@ func rebuild(tree: Tree, data_model: Node) -> TreeItem:
 
 func _recurse(parent_item: TreeItem, parent_node: Node, parent_path: NodePath) -> void:
 	for child in parent_node.get_children():
+		if not show_runtime and bool(child.get_meta("bobux_runtime_generated", false)):
+			continue
+		if bool(child.get_meta("bobux_runtime_generated", false)) and not child.has_meta(ROBLOX_CLASS_META):
+			continue
 		if bool(child.get_meta("bobux_internal_editor_visual", false)):
 			continue
 		# Skip internal helper bodies (collision/selection) — they are owned by
@@ -234,8 +243,14 @@ func _create_item(parent_item: TreeItem, node: Node, display: String, is_service
 	if roblox_class.is_empty():
 		roblox_class = str(node.get_meta(ROBLOX_CLASS_META, _infer_class(node)))
 	item.set_meta(META_CLASS_KEY, roblox_class)
+	item.set_text(1, roblox_class if not is_service else "")
+	item.set_custom_color(1, Color("#747B87"))
+	item.set_selectable(1, false)
 	item.set_meta(META_IS_SERVICE_KEY, is_service)
-	item.set_tooltip_text(0, "%s (%s)" % [display, roblox_class])
+	var tooltip := "%s (%s)\n%s" % [display, roblox_class, str(node.get_path())]
+	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
+		tooltip += "\n" + {"Script": "Серверный код. Запуск через Play.", "LocalScript": "Код игрока. Запускается в PlayerGui, Backpack, PlayerScripts или Character.", "ModuleScript": "Модуль. Запускается через require()."}[roblox_class]
+	item.set_tooltip_text(0, tooltip)
 	_apply_icon(item, roblox_class)
 	item.set_selectable(0, true)
 	item.set_editable(0, false) # rename handled via dialog (F2), not inline edit

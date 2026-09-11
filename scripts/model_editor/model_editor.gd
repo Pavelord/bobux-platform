@@ -1478,7 +1478,7 @@ func _emit_publish_model() -> void:
 	if parts.is_empty():
 		_set_status("Nothing to publish: import a supported model or add parts first.")
 		return
-	var thumbnail := await _capture_model_preview_data_uri()
+	var thumbnail := await _capture_model_preview_data_uri(model_data)
 	if not thumbnail.is_empty():
 		model_data["preview_thumbnail"] = thumbnail
 	publish_requested.emit(model_data)
@@ -1668,41 +1668,15 @@ func _get_mesh_instance_color(mesh_instance: MeshInstance3D) -> Color:
 		return (mesh_material as BaseMaterial3D).albedo_color
 	return Color(0.82, 0.82, 0.82, 1.0)
 
-func _capture_model_preview_data_uri() -> String:
-	if _subviewport == null:
-		return ""
-	var grid_floor := _world_root.get_node_or_null("GridFloor") if _world_root != null else null
-	var grid_was_visible := false
-	if grid_floor is CanvasItem:
-		grid_was_visible = (grid_floor as CanvasItem).visible
-		(grid_floor as CanvasItem).visible = false
-	elif grid_floor is Node3D:
-		grid_was_visible = (grid_floor as Node3D).visible
-		(grid_floor as Node3D).visible = false
-	await RenderingServer.frame_post_draw
-	var texture := _subviewport.get_texture()
-	if texture == null:
-		if grid_floor is CanvasItem:
-			(grid_floor as CanvasItem).visible = grid_was_visible
-		elif grid_floor is Node3D:
-			(grid_floor as Node3D).visible = grid_was_visible
-		return ""
-	var image := texture.get_image()
-	if image == null or image.get_width() <= 0 or image.get_height() <= 0:
-		if grid_floor is CanvasItem:
-			(grid_floor as CanvasItem).visible = grid_was_visible
-		elif grid_floor is Node3D:
-			(grid_floor as Node3D).visible = grid_was_visible
-		return ""
-	if grid_floor is CanvasItem:
-		(grid_floor as CanvasItem).visible = grid_was_visible
-	elif grid_floor is Node3D:
-		(grid_floor as Node3D).visible = grid_was_visible
-	image.resize(512, 512, Image.INTERPOLATE_LANCZOS)
-	var bytes := image.save_png_to_buffer()
-	if bytes.is_empty():
-		return ""
-	return "data:image/png;base64,%s" % Marshalls.raw_to_base64(bytes)
+func _capture_model_preview_data_uri(model_data: Dictionary = {}) -> String:
+	if model_data.is_empty(): model_data = _collect_model_data()
+	var renderer := load("res://scripts/lobby/catalog_thumbnail_renderer.gd").new() as Node
+	add_child(renderer)
+	var texture: Texture2D = await renderer.render_item({"category": "model", "data": model_data}, true)
+	renderer.queue_free()
+	if texture == null: return ""
+	var bytes := texture.get_image().save_png_to_buffer()
+	return "data:image/png;base64,%s" % Marshalls.raw_to_base64(bytes) if not bytes.is_empty() else ""
 
 func _serialize_part(node: Node3D) -> Dictionary:
 	return {

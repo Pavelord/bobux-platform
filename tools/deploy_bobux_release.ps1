@@ -420,6 +420,14 @@ tar -czf $hotfix `
 	--exclude="./.env" `
 	--exclude="./.venv" `
 	--exclude="./.codex-tools" `
+	--exclude="./.codex-tmp" `
+	--exclude="./toolbox_assets/models" `
+	--exclude="./toolbox_assets/sounds" `
+	--exclude="./toolbox_assets/thumbnails" `
+	--exclude="*/node_modules" `
+	--exclude="*/.env" `
+	--exclude="*.keystore" `
+	--exclude="*.jks" `
 	.
 Pop-Location
 

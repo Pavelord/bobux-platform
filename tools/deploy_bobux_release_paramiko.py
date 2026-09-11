@@ -114,6 +114,11 @@ def sync_remote_ai_environment(sftp: paramiko.SFTPClient) -> bool:
     except FileNotFoundError:
         existing = ""
 
+    # A game release must preserve the live provider configuration. CI secrets
+    # may predate a provider/model change made by the owner on the server.
+    if re.search(r"^BOBUX_AI_API_KEY=.+$", existing, re.MULTILINE) and os.environ.get("BOBUX_SYNC_AI_ENVIRONMENT") != "1":
+        return False
+
     is_gemini = api_key.startswith("AIza")
     values = {
         "BOBUX_AI_API_KEY": api_key,
@@ -159,6 +164,10 @@ REMOTE_ROOT={q(remote_root)}
 WEB_ROOT={q(web_root)}
 VERSIONED_WINDOWS={q(versioned_windows)}
 VERSIONED_MOBILE={q(versioned_mobile)}
+NODE_BIN=/opt/bobux-runtime/node/bin/node
+if [ ! -x "$NODE_BIN" ]; then NODE_BIN=$(command -v node); fi
+# Refuse to replace the working API with a build its runtime cannot import.
+"$NODE_BIN" -e "require('node:sqlite'); console.log('SQLite runtime available')"
 
 echo "=== Bobux atomic deploy {q(version)} build {build} ==="
 echo "{hashes['hotfix']}  /tmp/bobux-hotfix.tar.gz" | sha256sum -c -
@@ -185,7 +194,7 @@ systemctl reload nginx
 
 test -d "$REMOTE_ROOT/services/bobux_api"
 mkdir -p /opt/bobux-api
-rsync -a --delete --exclude=.env --exclude=node_modules "$REMOTE_ROOT/services/bobux_api/" /opt/bobux-api/
+rsync -a --delete --exclude=.env --exclude=node_modules --exclude=data --exclude=storage --exclude=uploads --exclude='*.sqlite*' --exclude='*.db*' "$REMOTE_ROOT/services/bobux_api/" /opt/bobux-api/
 if [ ! -f /opt/bobux-api/.env ] && [ -f /opt/bobux-api/.env.example ]; then
   cp /opt/bobux-api/.env.example /opt/bobux-api/.env
 fi
@@ -197,12 +206,17 @@ if [ -f /opt/bobux-api/.env ]; then
 fi
 set +a
 pm2 delete bobux-api >/dev/null 2>&1 || true
-pm2 start /opt/bobux-api/server.js --name bobux-api --update-env
+pm2 start /opt/bobux-api/server.js --name bobux-api --interpreter "$NODE_BIN" --update-env
 
 GODOT_BIN=/usr/local/bin/godot
 if [ -x "$GODOT_BIN" ]; then
   cd "$REMOTE_ROOT"
-  "$GODOT_BIN" --headless --import --path "$REMOTE_ROOT" >/var/log/bobux/import.log 2>&1 || true
+  "$GODOT_BIN" --headless --editor --import --quit --path "$REMOTE_ROOT" >/var/log/bobux/import.log 2>&1
+  if grep -Eq 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script' /var/log/bobux/import.log; then
+    echo 'Godot server preflight failed; existing game process kept running.' >&2
+    tail -n 50 /var/log/bobux/import.log >&2
+    exit 1
+  fi
   pm2 delete bobux >/dev/null 2>&1 || true
   PUBLIC_SERVER_WS_URL="ws://109.71.245.162/ws" \
   GODOT_SERVER_PORT="9000" \

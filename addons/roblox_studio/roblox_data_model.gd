@@ -239,7 +239,7 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 			node = mesh_instance
 			node.set_meta("shape_type", "Box")
 			node.add_to_group("studio_parts")
-		"Model", "Folder", "Configuration", "Tool", "Accoutrement", "Accessory", "Terrain":
+		"Model", "Folder", "Configuration", "Tool", "Accoutrement", "Accessory", "Terrain", "Explosion":
 			node = Node3D.new()
 		"Humanoid", "Animator", "BodyColors", "Motor6D", "Weld", "WeldConstraint", \
 		"StarterPlayerScripts", "StarterCharacterScripts", "PlayerScripts", "Backpack", "PlayerGui":
@@ -253,7 +253,29 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 		"Sound":
 			node = AudioStreamPlayer3D.new()
 		"ParticleEmitter", "Fire", "Smoke", "Sparkles":
-			node = GPUParticles3D.new()
+			var particles := GPUParticles3D.new()
+			particles.amount = 32 if class_name_ == "Fire" else 20
+			particles.lifetime = 0.8 if class_name_ == "Fire" else 1.5
+			particles.emitting = true
+			particles.visibility_aabb = AABB(Vector3(-3, -3, -3), Vector3(6, 8, 6))
+			var process := ParticleProcessMaterial.new()
+			process.gravity = Vector3(0, 2.4, 0) if class_name_ == "Fire" else Vector3.ZERO
+			process.initial_velocity_min = 0.5 if class_name_ == "Fire" else 0.0
+			process.initial_velocity_max = 1.5 if class_name_ == "Fire" else 0.2
+			process.color = Color(1.0, 0.47, 0.08, 0.9) if class_name_ == "Fire" else Color.WHITE
+			particles.process_material = process
+			var quad := QuadMesh.new()
+			quad.size = Vector2(0.55, 0.8) if class_name_ == "Fire" else Vector2(0.35, 0.35)
+			var draw_material := StandardMaterial3D.new()
+			draw_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			draw_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			draw_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			# The process material owns the Roblox effect color. A white billboard
+			# prevents Color3 values from being multiplied by the default tint.
+			draw_material.albedo_color = Color.WHITE
+			quad.material = draw_material
+			particles.draw_pass_1 = quad
+			node = particles
 		"Attachment":
 			node = Node3D.new()
 		"Camera":
@@ -288,6 +310,8 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 			node = Node.new()
 	node.set_meta(ROBLOX_CLASS_META, class_name_)
 	node.name = name_ if not name_.is_empty() else class_name_
+	if class_name_ == "ProximityPrompt": node.add_to_group("roblox_proximity_prompts")
+	if class_name_ == "ClickDetector": node.add_to_group("roblox_click_detectors")
 	if class_name_ in ["Tool", "HopperBin"]:
 		node.add_to_group("roblox_tools")
 		node.set_meta("inventory_source", true)
@@ -306,7 +330,11 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 		})
 	if node is Control:
 		var control := node as Control
-		control.mouse_filter = Control.MOUSE_FILTER_PASS
+		# These are script-owned DataModel instances. The GUI runtime renders
+		# their visible counterparts in the correct game viewport. Drawing both
+		# made dynamic labels/buttons appear twice and intercept editor input.
+		control.visibility_layer = 0
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if not class_name_ in ["ScreenGui", "SurfaceGui", "BillboardGui", "CanvasGroup"]:
 			control.position = Vector2(32, 32)
 			control.size = Vector2(240, 120)
@@ -469,6 +497,13 @@ func _serialize_node_properties(node: Node, roblox_class: String) -> Dictionary:
 	if node.get_meta("roblox_properties", {}) is Dictionary:
 		properties = (node.get_meta("roblox_properties", {}) as Dictionary).duplicate(true)
 	properties["Name"] = str(node.get_meta("block_name", node.name))
+	if node is MeshInstance3D:
+		properties["Anchored"] = bool(node.get_meta("anchored", true))
+		properties["CanCollide"] = bool(node.get_meta("can_collide", true))
+		properties["Transparency"] = float(node.get_meta("transparency", 0))
+		var color: Color = node.get_meta("bobux_color", Color.WHITE)
+		properties["Color"] = [color.r, color.g, color.b]
+		if node.has_meta("bobux_mesh_resource_asset"): properties["BobuxMeshResource"] = str(node.get_meta("bobux_mesh_resource_asset"))
 	if node is Node3D:
 		var node_3d := node as Node3D
 		properties["Position"] = [node_3d.position.x, node_3d.position.y, node_3d.position.z]

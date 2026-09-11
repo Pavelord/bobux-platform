@@ -1,9 +1,10 @@
 class_name CatalogBuilder
 extends RefCounted
 
-const CATALOG_CARD_WIDTH := 144
-const CATALOG_CARD_HEIGHT := 228
-const CATALOG_THUMBNAIL_SIZE := 132
+const CATALOG_CARD_WIDTH := 162
+const CATALOG_CARD_HEIGHT := 230
+const CATALOG_THUMBNAIL_SIZE := 152
+const THUMBNAIL_RENDERER := preload("res://scripts/lobby/catalog_thumbnail_renderer.gd")
 
 static func build(lobby: Control) -> void:
 	var tabs = lobby.get_node_or_null("%MainTabs")
@@ -14,6 +15,9 @@ static func build(lobby: Control) -> void:
 		catalog_view = ScrollContainer.new()
 		catalog_view.name = "CatalogView"
 		tabs.add_child(catalog_view)
+	var page_style := StyleBoxFlat.new()
+	page_style.bg_color = Color.WHITE
+	catalog_view.add_theme_stylebox_override("panel", page_style)
 	catalog_view.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	catalog_view.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	catalog_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -21,6 +25,7 @@ static func build(lobby: Control) -> void:
 		
 	# Clear existing
 	for child in catalog_view.get_children():
+		catalog_view.remove_child(child)
 		child.queue_free()
 		
 	var margin := MarginContainer.new()
@@ -39,7 +44,7 @@ static func build(lobby: Control) -> void:
 
 	
 	# Header Row (Title + Search)
-	var header_hbox := HBoxContainer.new()
+	var header_hbox := BoxContainer.new()
 	root.add_child(header_hbox)
 	
 	var title_lbl := Label.new()
@@ -53,6 +58,7 @@ static func build(lobby: Control) -> void:
 	header_hbox.add_child(spacer)
 	
 	var search_box := LineEdit.new()
+	search_box.name = "CatalogSearch"
 	search_box.custom_minimum_size.x = 250
 	search_box.placeholder_text = ""
 	var _s_style = StyleBoxFlat.new()
@@ -64,7 +70,7 @@ static func build(lobby: Control) -> void:
 	header_hbox.add_child(search_box)
 	
 	var cat_opt := OptionButton.new()
-	for option_name in ["All", "Shirts", "Pants", "Accessories"]:
+	for option_name in ["All", "Shirts", "Pants", "Accessories", "Models"]:
 		cat_opt.add_item(option_name)
 	cat_opt.select(0)
 	header_hbox.add_child(cat_opt)
@@ -74,13 +80,13 @@ static func build(lobby: Control) -> void:
 	header_hbox.add_child(btn_search)
 	
 	# Main Content Area
-	var content_hbox := HBoxContainer.new()
+	var content_hbox := BoxContainer.new()
 	content_hbox.add_theme_constant_override("separation", 20)
 	root.add_child(content_hbox)
 	
 	# Left Sidebar
 	var left_col := VBoxContainer.new()
-	left_col.custom_minimum_size.x = 180
+	left_col.custom_minimum_size.x = 145
 	content_hbox.add_child(left_col)
 	
 	var nav_title_bg := ColorRect.new()
@@ -108,7 +114,7 @@ static func build(lobby: Control) -> void:
 	sub_panel.add_child(sub_vbox)
 	
 	var section_buttons: Dictionary = {}
-	for cat in ["Shirts", "Pants", "Accessories"]:
+	for cat in ["All", "Shirts", "Pants", "Accessories", "Models"]:
 		var btn := Button.new()
 		btn.text = cat
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -141,7 +147,7 @@ static func build(lobby: Control) -> void:
 	right_col.add_theme_constant_override("separation", 20)
 	content_hbox.add_child(right_col)
 	
-	var top_hdr := HBoxContainer.new()
+	var top_hdr := BoxContainer.new()
 	right_col.add_child(top_hdr)
 	
 	var rh_title = Label.new()
@@ -159,11 +165,39 @@ static func build(lobby: Control) -> void:
 	hint.add_theme_color_override("font_color", Color("#777777"))
 	hint.add_theme_font_size_override("font_size", 12)
 	top_hdr.add_child(hint)
+	var buy_boblox := Button.new()
+	buy_boblox.text = "Buy Boblox"
+	buy_boblox.add_theme_color_override("font_color", Color.WHITE)
+	var buy_style := StyleBoxFlat.new()
+	buy_style.bg_color = Color("#008a27")
+	buy_style.content_margin_left = 12
+	buy_style.content_margin_right = 12
+	buy_style.content_margin_top = 8
+	buy_style.content_margin_bottom = 8
+	buy_boblox.add_theme_stylebox_override("normal", buy_style)
+	buy_boblox.pressed.connect(func(): lobby.call("_open_boblox_shop", 1))
+	top_hdr.add_child(buy_boblox)
 	
 	var content_area := VBoxContainer.new()
 	content_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_col.add_child(content_area)
 	
+	var resize := func():
+		if not is_instance_valid(margin): return
+		var narrow: bool = catalog_view.size.x < 760
+		header_hbox.vertical = narrow
+		content_hbox.vertical = narrow
+		left_col.visible = not narrow
+		hint.visible = catalog_view.size.x > 1100
+		top_hdr.vertical = narrow
+		var inset := maxi(16, int((catalog_view.size.x - 1100) / 2))
+		margin.add_theme_constant_override("margin_left", inset)
+		margin.add_theme_constant_override("margin_right", inset)
+	catalog_view.resized.connect(resize)
+	margin.tree_exiting.connect(func():
+		if catalog_view.resized.is_connected(resize): catalog_view.resized.disconnect(resize)
+	)
+	resize.call()
 	_load_catalog(lobby, content_area, cat_opt, search_box, btn_search, section_buttons)
 
 static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, search_box: LineEdit, btn_search: Button, section_buttons: Dictionary) -> void:
@@ -179,22 +213,34 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 		loading_lbl.text = "Cloud not connected."
 		return
 		
-	var result: Dictionary = await cloud_api.fetch_catalog_items()
+	var result: Dictionary
 	var avatar_items_result: Dictionary = {"ok": false, "data": []}
-	if cloud_api.has_method("fetch_avatar_marketplace_items"):
-		avatar_items_result = await cloud_api.fetch_avatar_marketplace_items(96, true, false)
+	var models_result: Dictionary = {"ok": false, "data": []}
+	if lobby.has_meta("catalog_preview_items"):
+		result = {"ok": true, "data": lobby.get_meta("catalog_preview_items")}
+	else:
+		result = await cloud_api.fetch_catalog_items()
+		if cloud_api.has_method("fetch_avatar_marketplace_items"):
+			avatar_items_result = await cloud_api.fetch_avatar_marketplace_items(200, true, false)
+		models_result = await cloud_api.fetch_marketplace_models(200, true, false)
+	if not is_instance_valid(container): return
 	
 	for child in container.get_children():
 		container.remove_child(child)
 		child.queue_free()
 		
-	if not result.get("ok", false):
+	if not result.get("ok", false) and not avatar_items_result.get("ok", false) and not models_result.get("ok", false):
 		var err_lbl := Label.new()
 		err_lbl.text = "Failed to load catalog: " + str(result.get("error", "Unknown error"))
 		container.add_child(err_lbl)
 		return
 		
 	var items: Array = []
+	for model in _extract_array_payload(models_result):
+		if model is Dictionary:
+			var model_item: Dictionary = model.duplicate(true)
+			model_item["asset_type"] = "model"
+			items.append(model_item)
 	for legacy_variant in result.get("data", []):
 		if not (legacy_variant is Dictionary):
 			continue
@@ -209,23 +255,10 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 			if not (avatar_item_variant is Dictionary):
 				continue
 			var avatar_item: Dictionary = avatar_item_variant
-			items.append({
-				"id": str(avatar_item.get("id", "")),
-				"item_id": str(avatar_item.get("id", "")),
-				"name": str(avatar_item.get("name", "Avatar Item")),
-				"category": str(avatar_item.get("category", avatar_item.get("item_kind", "Avatar Items"))),
-				"item_kind": str(avatar_item.get("item_kind", avatar_item.get("category", ""))),
-				"asset_type": "avatar_item",
-				"thumbnail": str(avatar_item.get("thumbnail", "")),
-				"owned": bool(avatar_item.get("owned", false)),
-				"owner_id": str(avatar_item.get("owner_id", "")),
-				"data": avatar_item.get("data", {}),
-				"attachment_slot": str(avatar_item.get("attachment_slot", "Head")),
-				"attachment_transform": avatar_item.get("attachment_transform", {}),
-				"price_robux": int(avatar_item.get("price_robux", 0)),
-				"likes_count": int(avatar_item.get("likes_count", 0)),
-				"owner_name": str(avatar_item.get("owner_name", ""))
-			})
+			var normalized := avatar_item.duplicate(true)
+			normalized["item_id"] = str(avatar_item.get("id", ""))
+			normalized["asset_type"] = "avatar_item"
+			items.append(normalized)
 	var known_avatar_item_ids: Dictionary = {}
 	for item_variant in items:
 		if item_variant is Dictionary:
@@ -261,7 +294,8 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 		var grouped := {
 			"Shirts": [],
 			"Pants": [],
-			"Accessories": []
+			"Accessories": [],
+			"Models": []
 		}
 		for item_variant in items:
 			if not (item_variant is Dictionary):
@@ -280,7 +314,7 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 					continue
 			(grouped[section] as Array).append(item)
 		var rendered_any := false
-		for section_name in ["Shirts", "Pants", "Accessories"]:
+		for section_name in ["Shirts", "Pants", "Accessories", "Models"]:
 			var section_items: Array = grouped[section_name]
 			if section_items.is_empty():
 				continue
@@ -332,7 +366,7 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, item: Dictionary) -> void:
 	var item_name = item.get("name", "Unknown Item")
 	var item_price = item.get("price_robux", 0)
-	var price_str = "R$ " + str(item_price) if item_price > 0 else "Free"
+	var price_str = str(int(item_price)) + " Boblox" if item_price > 0 else "Free"
 	
 	var card := VBoxContainer.new()
 	card.custom_minimum_size = Vector2(CATALOG_CARD_WIDTH, CATALOG_CARD_HEIGHT)
@@ -347,7 +381,22 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 	img_box.add_theme_stylebox_override("panel", ib_st)
 	img_box.custom_minimum_size = Vector2(CATALOG_THUMBNAIL_SIZE, CATALOG_THUMBNAIL_SIZE)
 	card.add_child(img_box)
-	_apply_item_thumbnail_async(lobby, _resolve_catalog_thumbnail(item), img_box)
+	var preview := TextureRect.new()
+	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preview.offset_left = 1
+	preview.offset_top = 1
+	preview.offset_right = -1
+	preview.offset_bottom = -1
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	img_box.add_child(preview)
+	var renderer := lobby.get_node_or_null("CatalogThumbnailRenderer")
+	if renderer == null:
+		renderer = THUMBNAIL_RENDERER.new()
+		renderer.name = "CatalogThumbnailRenderer"
+		lobby.add_child(renderer)
+	renderer.call("request_preview", item, preview)
 	
 	var lbl_name := Label.new()
 	lbl_name.text = item_name
@@ -398,6 +447,7 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 			get_btn.disabled = true
 			get_btn.text = "Getting..."
 			var get_result: Dictionary = await cloud_api.get_catalog_item(owned_id, owned_type)
+			if not is_instance_valid(get_btn): return
 			if bool(get_result.get("ok", false)):
 				item["owned"] = true
 				get_btn.text = "Owned"
@@ -427,6 +477,7 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 		if cloud_api.has_method("like_catalog_asset"):
 			like_btn.disabled = true
 			var like_result: Dictionary = await cloud_api.like_catalog_asset(str(item.get("asset_type", "avatar_item")), owned_id)
+			if not is_instance_valid(like_btn): return
 			like_btn.text = "Liked" if bool(like_result.get("ok", false)) else "Retry"
 			like_btn.disabled = bool(like_result.get("ok", false))
 	)
@@ -436,6 +487,7 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 
 
 static func _catalog_section_for_item(item: Dictionary) -> String:
+	if str(item.get("asset_type", "")) == "model": return "Models"
 	var data: Dictionary = item.get("data", {}) if item.get("data", {}) is Dictionary else {}
 	var kind := str(item.get("item_kind", item.get("category", item.get("type", "")))).strip_edges().to_lower()
 	if kind.is_empty() or kind in ["avatar_item", "avatar items", "avatar_items", "item"]:

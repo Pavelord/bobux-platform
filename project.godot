@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Bobux"
-config/version="0.1.36"
+config/version="0.1.37"
 run/main_scene="res://scenes/login/login.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://assets/branding/bobux_app_icon.png"
@@ -23,6 +23,7 @@ config/dedicated_server_routes_json="{}"
 
 [autoload]
 
+ClientPreferences="*res://autoload/client_preferences.gd"
 GameState="*res://autoload/game_state.gd"
 UserSession="*res://autoload/user_session.gd"
 Analytics="*res://autoload/analytics.gd"
@@ -32,11 +33,12 @@ MapManager="*res://autoload/map_manager.gd"
 NetworkManager="*res://autoload/client_network.gd"
 MobileRuntime="*res://autoload/mobile_runtime.gd"
 LuaScriptEngine="*res://autoload/lua_script_engine.gd"
+ToolboxAssetService="*res://autoload/toolbox_asset_service.gd"
 
 [bobux]
 
 mobile/manifest_url="http://109.71.245.162/mobile/latest.json"
-mobile/build=29
+mobile/build=30
 mobile/force_mobile_beta=false
 mobile/auto_open_required_update=true
 

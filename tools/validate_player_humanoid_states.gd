@@ -21,17 +21,18 @@ func _initialize() -> void:
 		await physics_frame
 
 	var primary_collision := player.get_node_or_null("CollisionBody") as CollisionShape3D
-	var fitted_collisions_ok := true
+	var limb_collisions_disabled := true
 	for collision_name in ["CollisionLeftLeg", "CollisionRightLeg", "CollisionTorso", "CollisionHead", "CollisionLeftArm", "CollisionRightArm"]:
 		var fitted_collision := player.get_node_or_null(collision_name) as CollisionShape3D
-		fitted_collisions_ok = fitted_collisions_ok and fitted_collision != null and not fitted_collision.disabled and fitted_collision.shape is ConvexPolygonShape3D
+		limb_collisions_disabled = limb_collisions_disabled and fitted_collision != null and fitted_collision.disabled
 	var collision_ok: bool = (
 		player.collision_layer == 2
 		and (player.collision_mask & 2) != 0
 		and player.safe_margin <= 0.04
 		and primary_collision != null
-		and primary_collision.disabled
-		and fitted_collisions_ok
+		and not primary_collision.disabled
+		and primary_collision.shape is CapsuleShape3D
+		and limb_collisions_disabled
 	)
 	var humanoid := player.get_node_or_null("Humanoid")
 

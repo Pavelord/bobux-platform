@@ -48,6 +48,10 @@ local color = Color3.fromHSV(0.0, 1.0, 1.0)
 local params = RaycastParams.new()
 local enumValue = Enum.BulkMoveMode.FireAllEvents
 local optional = {Value = if total > 5 then nil else total, Occupies = 1}
+script.Parent:SetAttribute("Literal", "asset_123_456; text")
+local part = Instance.new("Part")
+part.Name = "Multi_123_456"; part.Anchored = true; part.CanCollide = false
+part.Parent = script.Parent
 script.Parent.Value = (label == "ok" and casted == 6 and template == "Total {total}" and inline == " ok" and color ~= nil and params ~= nil and enumValue == 0 and current == nil and runContext == "server" and typedCallback ~= nil and optional.Value == nil and optional.Occupies == 1) and add(4) or -1;
 """
 	var result: Dictionary = engine.start_script(
@@ -60,6 +64,9 @@ script.Parent.Value = (label == "ok" and casted == 6 and template == "Total {tot
 		engine._process(0.016)
 	var ok := bool(result.get("ok", false))
 	ok = ok and int(workspace.get_meta("value", -1)) == 10
+	ok = ok and workspace.get_meta("attribute_Literal", "") == "asset_123_456; text"
+	var multi: Node = workspace.get_node_or_null("Multi_123_456")
+	ok = ok and multi != null and not bool(engine.BobuxInstance.new(multi).GetProperty("CanCollide"))
 	if not ok:
 		var prepared: String = engine.call("_prepare_scheduled_lua_source", source)
 		for line_number in range(prepared.split("\n").size()):

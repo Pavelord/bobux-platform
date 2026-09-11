@@ -52,15 +52,23 @@ func _initialize() -> void:
 	)
 	studio._on_studio_menu_action(212, "Edit")
 	studio._on_studio_menu_action(214, "Edit")
+	var wireframe_initial := bool(studio.get("studio_wireframe_enabled"))
 	studio._on_studio_menu_action(308, "View")
-	var wireframe_on := bool(studio.get("studio_wireframe_enabled"))
+	var wireframe_toggled := bool(studio.get("studio_wireframe_enabled")) != wireframe_initial
 	studio._on_studio_menu_action(308, "View")
+	var wireframe_restored := bool(studio.get("studio_wireframe_enabled")) == wireframe_initial
+	var gui_initial := bool(studio.get("studio_gui_preview_enabled"))
 	studio._on_studio_menu_action(309, "View")
-	var gui_hidden := not bool(studio.get("studio_gui_preview_enabled"))
+	await process_frame
+	var gui_toggled := bool(studio.get("studio_gui_preview_enabled")) != gui_initial
 	studio._on_studio_menu_action(309, "View")
+	await process_frame
+	var gui_restored := bool(studio.get("studio_gui_preview_enabled")) == gui_initial
+	var audio_initial := bool(studio.get("studio_audio_muted"))
 	studio._on_studio_menu_action(311, "View")
-	var audio_muted := bool(studio.get("studio_audio_muted"))
+	var audio_toggled := bool(studio.get("studio_audio_muted")) != audio_initial
 	studio._on_studio_menu_action(311, "View")
+	var audio_restored := bool(studio.get("studio_audio_muted")) == audio_initial
 	studio._on_studio_menu_action(508, "Window")
 	var has_insert_dialog := false
 	for child in studio.get_children():
@@ -78,11 +86,18 @@ func _initialize() -> void:
 	)
 	var ok: bool = (
 		pressed >= 16 and has_gui and has_script and parts.size() >= 2 and capture_status_ok
-		and menus_complete and property_actions_ok and wireframe_on and gui_hidden and audio_muted and has_insert_dialog
+		and menus_complete and property_actions_ok
+		and wireframe_toggled and wireframe_restored
+		and gui_toggled and gui_restored
+		and audio_toggled and audio_restored and has_insert_dialog
 	)
 	print("[validate_new_studio_button_smoke] ok=%s pressed=%d parts=%d gui=%s script=%s menus=%s properties=%s toggles=%s" % [
 		str(ok), pressed, parts.size(), str(has_gui), str(has_script), str(menus_complete),
-		str(property_actions_ok), str(wireframe_on and gui_hidden and audio_muted)
+		str(property_actions_ok), str(
+			wireframe_toggled and wireframe_restored
+			and gui_toggled and gui_restored
+			and audio_toggled and audio_restored
+		)
 	])
 	studio.free()
 	quit(0 if ok else 1)

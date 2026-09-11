@@ -1,4 +1,5 @@
 extends Control
+const AudioFileLoader = preload("res://addons/roblox_runtime/audio_file_loader.gd")
 
 const ACCELERATION = 10.0
 const MAX_SPEED = 25.0
@@ -22,9 +23,9 @@ const SELECTION_RAY_MASK: int = 1
 const GIZMO_RAY_MASK: int = 1 << 3
 const COLLISION_PREVIEW_MASK: int = 1 << 2
 const ILLEGAL_MAP_NAME_CHARS: Array[String] = ["<", ">", ":", "\"", "/", "\\", "|", "?", "*"]
-const DEFAULT_PLAYER_MOVE_SPEED: float = 24.0
+const DEFAULT_PLAYER_MOVE_SPEED: float = 16.0
 const DEFAULT_PLAYER_SPRINT_MULTIPLIER: float = 1.25
-const DEFAULT_PLAYER_JUMP_VELOCITY: float = 31.0
+const DEFAULT_PLAYER_JUMP_VELOCITY: float = 53.15
 const ROBLOX_DEFAULT_WALK_SPEED: float = 16.0
 const ROBLOX_DEFAULT_JUMP_POWER: float = 50.0
 const DEFAULT_MODE_MUSIC_VOLUME: float = 0.65
@@ -119,6 +120,7 @@ var explorer_search_edit: LineEdit = null
 var explorer_filter_text: String = ""
 var inspector_panel: VBoxContainer = null
 var player_settings_panel: VBoxContainer = null
+var authored_player_settings: Dictionary = {}
 var atmosphere_settings_panel: VBoxContainer = null
 var toolbar_hbox: HBoxContainer = null
 var name_edit: LineEdit = null
@@ -140,6 +142,10 @@ var atmosphere_music_volume_slider: HSlider = null
 var atmosphere_music_volume_label: Label = null
 var atmosphere_sky_path_edit: LineEdit = null
 var music_file_dialog: FileDialog = null
+var studio_music_dialog: AcceptDialog = null
+var studio_music_player: AudioStreamPlayer = null
+var studio_music_volume := DEFAULT_MODE_MUSIC_VOLUME
+var studio_music_track := 0
 var sky_file_dialog: FileDialog = null
 var rbxl_file_dialog: FileDialog = null
 var last_rbxl_import_report: Dictionary = {}
@@ -156,6 +162,7 @@ var mobile_studio_controls_layer: CanvasLayer = null
 var mobile_studio_joystick_base: Panel = null
 var mobile_studio_joystick_knob: Panel = null
 var mobile_studio_move_vector: Vector2 = Vector2.ZERO
+var mobile_studio_joystick_touch_index: int = -1
 var mobile_studio_look_touch_active: bool = false
 var mobile_studio_action_panel: PanelContainer = null
 var mobile_studio_action_buttons: Dictionary = {}
@@ -244,6 +251,7 @@ func _ready() -> void:
 	_reset_studio_camera_interpolation()
 
 	_build_main_white_layout()
+	LuaScriptEngine.script_message.connect(_on_lua_script_message)
 	_setup_roblox_data_model()
 	_build_explorer_panel()
 	_build_inspector_panel()
@@ -284,6 +292,19 @@ func _process(delta: float) -> void:
 	_process_movement(delta)
 	_update_selection_highlight()
 	_update_transform_gizmo()
+
+func _input(event: InputEvent) -> void:
+	if not studio_playtest_active or not is_instance_valid(studio_inventory_controller) or _is_text_input_focused():
+		return
+	# CanvasLayer lives in the embedded viewport. Route game shortcuts before
+	# editor focus navigation consumes Tab or prevents the viewport receiving it.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.is_action_pressed("interact") and preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").activate_nearest_prompt(placement_parent, studio_playtest_player, LuaScriptEngine):
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode in [KEY_TAB, KEY_QUOTELEFT, KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9]:
+			studio_inventory_controller._unhandled_input(event)
+			get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_inside_tree():
@@ -577,10 +598,19 @@ func _on_studio_viewport_gui_input(event: InputEvent) -> void:
 	# event here: SubViewportContainer will forward it to the player camera and
 	# runtime GUI after this handler returns.
 	if studio_playtest_active:
+		if event is InputEventMouse:
+			var pointer_viewport := _get_studio_subviewport()
+			pointer_viewport.set_meta("bobux_pointer_position", event.position * Vector2(pointer_viewport.size) / viewport_container_node.size.max(Vector2.ONE))
 		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 			get_viewport().gui_release_focus()
 			if viewport_container_node != null:
 				viewport_container_node.grab_focus()
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				var play_viewport := _get_studio_subviewport()
+				var viewport_position: Vector2 = event.position * Vector2(play_viewport.size) / viewport_container_node.size.max(Vector2.ONE)
+				if preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").activate_click(play_viewport.get_camera_3d(), viewport_position, placement_parent, studio_playtest_player, LuaScriptEngine):
+					accept_event()
+					return
 		var route_to_camera := false
 		if event is InputEventMouseButton:
 			var button := event as InputEventMouseButton
@@ -746,11 +776,17 @@ func _on_mobile_studio_joystick_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
+			if mobile_studio_joystick_touch_index >= 0:
+				return
+			mobile_studio_joystick_touch_index = touch.index
 			_update_mobile_studio_joystick(touch.position)
-		else:
+		elif touch.index == mobile_studio_joystick_touch_index:
+			mobile_studio_joystick_touch_index = -1
 			_reset_mobile_studio_joystick()
 	elif event is InputEventScreenDrag:
-		_update_mobile_studio_joystick((event as InputEventScreenDrag).position)
+		var drag := event as InputEventScreenDrag
+		if drag.index == mobile_studio_joystick_touch_index:
+			_update_mobile_studio_joystick(drag.position)
 	elif event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		if button.pressed:
@@ -1154,12 +1190,24 @@ func _serialize_block_for_clipboard(block: Node3D) -> Dictionary:
 		"material": str(block.get_meta("material_type", "Plastic")),
 		"transparency": float(block.get_meta("transparency", 0.0)),
 		"can_collide": bool(block.get_meta("can_collide", true)),
+		"anchored": bool(block.get_meta("anchored", true)),
 		"deals_damage": bool(block.get_meta("deals_damage", false)),
 		"damage_amount": float(block.get_meta("damage_amount", DEFAULT_BLOCK_DAMAGE)),
 		"is_spawn": bool(block.get_meta("is_spawn", false))
 	}
 	if block.has_meta("bobux_mesh_resource_asset"):
 		serialized["bobux_mesh_resource_asset"] = str(block.get_meta("bobux_mesh_resource_asset", ""))
+	if block.has_meta("bobux_ai_effects"):
+		serialized["bobux_ai_effects"] = block.get_meta("bobux_ai_effects", []).duplicate(true)
+	if block.has_meta("bobux_ai_interaction"):
+		serialized["bobux_ai_interaction"] = block.get_meta("bobux_ai_interaction", {}).duplicate(true)
+	for physics_key in [
+		"bobux_physics_mode", "bobux_physics_mass", "bobux_physics_friction",
+		"bobux_physics_bounce", "bobux_physics_gravity_scale",
+		"bobux_physics_linear_damp", "bobux_physics_angular_damp"
+	]:
+		if block.has_meta(physics_key):
+			serialized[physics_key] = block.get_meta(physics_key)
 	return serialized
 
 func _create_block_from_clipboard(block_data: Dictionary, paste_offset: Vector3, preserve_original_name: bool = false) -> MeshInstance3D:
@@ -1176,11 +1224,24 @@ func _create_block_from_clipboard(block_data: Dictionary, paste_offset: Vector3,
 	mesh_inst.position = _vector3_from_variant(block_data.get("position", Vector3.ZERO), Vector3.ZERO) + paste_offset
 	mesh_inst.rotation_degrees = _vector3_from_variant(block_data.get("rotation_degrees", Vector3.ZERO), Vector3.ZERO)
 	mesh_inst.scale = _vector3_from_variant(block_data.get("scale", Vector3.ONE), Vector3.ONE)
+	mesh_inst.set_meta("anchored", bool(block_data.get("anchored", true)))
 	mesh_inst.set_meta("is_spawn", shape_type == "Spawn")
 	mesh_inst.set_meta("deals_damage", bool(block_data.get("deals_damage", false)))
 	mesh_inst.set_meta("damage_amount", float(block_data.get("damage_amount", DEFAULT_BLOCK_DAMAGE)))
+	if block_data.get("bobux_ai_effects", []) is Array:
+		mesh_inst.set_meta("bobux_ai_effects", (block_data.get("bobux_ai_effects", []) as Array).duplicate(true))
+	if block_data.get("bobux_ai_interaction", {}) is Dictionary:
+		mesh_inst.set_meta("bobux_ai_interaction", (block_data.get("bobux_ai_interaction", {}) as Dictionary).duplicate(true))
+	for physics_key in [
+		"bobux_physics_mode", "bobux_physics_mass", "bobux_physics_friction",
+		"bobux_physics_bounce", "bobux_physics_gravity_scale",
+		"bobux_physics_linear_damp", "bobux_physics_angular_damp"
+	]:
+		if block_data.has(physics_key):
+			mesh_inst.set_meta(physics_key, block_data[physics_key])
 	_apply_saved_bobux_mesh_resource(mesh_inst, block_data, "")
 	_update_block_collision(mesh_inst)
+	_rebuild_studio_ai_components(mesh_inst)
 	return mesh_inst
 
 func _make_unique_block_copy_name(original_name: String) -> String:
@@ -1652,6 +1713,8 @@ func _place_block(pos: Vector3) -> void:
 	var mat := _create_material(placement_color, placement_material, 0.28 if current_shape == "Water" else 0.0)
 	mesh_resource.surface_set_material(0, mat)
 	mesh_inst.mesh = mesh_resource
+	if current_shape in ["Cone", "Wedge", "WedgePart", "CornerWedge", "CornerWedgePart", "Truss", "TrussPart"]:
+		_ensure_mesh_materials_double_sided(mesh_inst)
 
 	mesh_inst.position = pos
 	mesh_inst.scale = _get_default_block_scale(current_shape)
@@ -1733,8 +1796,19 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 	match shape_name:
 		"Sphere":
 			return SphereMesh.new()
+		"Cone":
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = 0.5
+			cone.height = 1.0
+			cone.cap_top = true
+			cone.cap_bottom = true
+			return cone
 		"Cylinder":
-			return CylinderMesh.new()
+			var cylinder := CylinderMesh.new()
+			cylinder.cap_top = true
+			cylinder.cap_bottom = true
+			return cylinder
 		"Wedge", "WedgePart":
 			return RbxlWedgeMeshBuilder.build_wedge(Vector3.ONE)
 		"CornerWedge", "CornerWedgePart":
@@ -1750,10 +1824,13 @@ func _create_collision_for_shape(shape_name: String) -> Shape3D:
 	match shape_name:
 		"Sphere":
 			return SphereShape3D.new()
-		"Cylinder":
+		"Cylinder", "Cone":
 			return CylinderShape3D.new()
-		"Wedge", "WedgePart", "CornerWedge", "CornerWedgePart", "Truss", "TrussPart":
-			return BoxShape3D.new() # Approximate wedge with box
+		"Wedge", "WedgePart", "CornerWedge", "CornerWedgePart":
+			var wedge_mesh := _create_mesh_for_shape(shape_name)
+			return wedge_mesh.create_convex_shape(true, false) if wedge_mesh != null else BoxShape3D.new()
+		"Truss", "TrussPart":
+			return BoxShape3D.new()
 		_:
 			return BoxShape3D.new()
 
@@ -1950,7 +2027,7 @@ func _apply_collision_shape_size(collision_shape: CollisionShape3D, shape_name: 
 			var sphere_shape := collision_shape.shape as SphereShape3D
 			if sphere_shape:
 				sphere_shape.radius = 0.5
-		"Cylinder":
+		"Cylinder", "Cone":
 			var cylinder_shape := collision_shape.shape as CylinderShape3D
 			if cylinder_shape:
 				cylinder_shape.radius = 0.5
@@ -2325,6 +2402,16 @@ func _update_gizmo_drag(mouse_position: Vector2) -> void:
 					block.global_position = start_pos + (gizmo_drag_axis_world * snapped_delta)
 		"scale":
 			var scale_delta: float = _snap_scale_delta(axis_delta)
+			if Input.is_physical_key_pressed(KEY_SHIFT):
+				var reference_size := maxf(gizmo_drag_start_scale.length(), 1.0)
+				var factor := maxf(0.01, 1.0 + scale_delta / reference_size)
+				for block in _get_valid_selected_blocks():
+					var block_id := block.get_instance_id()
+					var start_pos: Vector3 = gizmo_drag_start_positions.get(block_id, block.global_position)
+					block.scale = gizmo_drag_start_scales.get(block_id, block.scale) * factor
+					block.global_position = gizmo_drag_start_pivot + (start_pos - gizmo_drag_start_pivot) * factor
+					_update_block_collision(block)
+				return
 			for block in _get_valid_selected_blocks():
 				var block_id: int = block.get_instance_id()
 				var start_pos: Vector3 = gizmo_drag_start_positions.get(block_id, block.global_position)
@@ -2507,11 +2594,19 @@ var properties_title_label: Label = null
 var properties_filter_edit: LineEdit = null
 var explorer_dock_panel: PanelContainer = null
 var toolbox_dock_panel: PanelContainer = null
+var toolbox_content_tabs: TabContainer = null
 var toolbox_items_list: ItemList = null
 var viewport_frame_panel: PanelContainer = null
 var command_line_edit: LineEdit = null
 var command_history: Array[String] = []
 var command_history_cursor: int = 0
+var studio_ai_window: Window = null
+var studio_ai_dock: Control = null
+var studio_ai_prompt_edit: TextEdit = null
+var studio_ai_result_label: RichTextLabel = null
+var studio_ai_submit_button: Button = null
+var studio_ai_request_active: bool = false
+var studio_ai_last_errors: Array[String] = []
 var document_tab_button: Button = null
 var document_tabs_container: HBoxContainer = null
 var document_tab_spacer: Control = null
@@ -2544,6 +2639,7 @@ const STUDIO_ICON_FILES := {
 	"Pause": "pause.svg", "Stop": "square.svg", "Reset": "refresh-cw.svg", "Record": "circle.svg",
 	"Refresh": "refresh-cw.svg", "Close": "x.svg", "More": "ellipsis.svg",
 	"Search": "search.svg", "History": "history.svg", "Command": "terminal.svg",
+	"AI": "boxes.svg",
 		"Save": "save.svg", "Open": "folder-open.svg", "Add": "plus.svg",
 		"Delete": "trash-2.svg", "Copy": "copy.svg", "Undo": "undo-2.svg", "Redo": "redo-2.svg",
 		"ChevronDown": "chevron-down.svg",
@@ -2670,6 +2766,13 @@ func _build_command_bar() -> void:
 	_style_white_button(history_btn)
 	history_btn.pressed.connect(_show_command_history_popup.bind(history_btn))
 	row.add_child(history_btn)
+	var ai_btn := Button.new()
+	ai_btn.text = "Bobux AI"
+	ai_btn.tooltip_text = "Ask AI to create Luau scripts, parts, or complete models"
+	ai_btn.custom_minimum_size = Vector2(86, 24)
+	_style_white_button(ai_btn)
+	ai_btn.pressed.connect(_show_studio_ai_window)
+	row.add_child(ai_btn)
 	var run_btn := Button.new()
 	run_btn.text = "Run"
 	run_btn.custom_minimum_size = Vector2(62, 24)
@@ -2677,6 +2780,259 @@ func _build_command_bar() -> void:
 	_style_white_button(run_btn)
 	run_btn.pressed.connect(func() -> void: _execute_command_bar(command_line_edit.text))
 	row.add_child(run_btn)
+
+
+func _show_studio_ai_window() -> void:
+	_set_tool_window_visible("toolbox", true)
+	if toolbox_content_tabs != null:
+		toolbox_content_tabs.current_tab = 1
+	if studio_ai_prompt_edit != null and is_instance_valid(studio_ai_prompt_edit):
+		studio_ai_prompt_edit.grab_focus()
+		studio_ai_prompt_edit.set_caret_line(studio_ai_prompt_edit.get_line_count() - 1)
+
+
+func _build_studio_ai_window() -> void:
+	studio_ai_window = Window.new()
+	studio_ai_window.name = "BobuxAIWindow"
+	studio_ai_window.title = "Bobux AI Builder"
+	studio_ai_window.min_size = Vector2i(440, 420)
+	studio_ai_window.close_requested.connect(studio_ai_window.hide)
+	add_child(studio_ai_window)
+	var surface := PanelContainer.new()
+	surface.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	surface.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F7F8FA"), Color("#D1D4D8"), 1))
+	studio_ai_window.add_child(surface)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	surface.add_child(margin)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	margin.add_child(column)
+	var title := Label.new()
+	title.text = "Create with Bobux AI"
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color("#202124"))
+	column.add_child(title)
+	var hint := Label.new()
+	hint.text = "Describe a Luau script or a 3D build. The assistant can add validated Parts, Models and Scripts to this place."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_color_override("font_color", Color("#5F6368"))
+	column.add_child(hint)
+	studio_ai_prompt_edit = TextEdit.new()
+	studio_ai_prompt_edit.placeholder_text = "Examples:\nCreate an anchored wooden house with a door and four windows\nWrite a script that makes the selected part change color when touched"
+	studio_ai_prompt_edit.custom_minimum_size = Vector2(0, 150)
+	studio_ai_prompt_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	studio_ai_prompt_edit.add_theme_color_override("font_color", Color("#202124"))
+	studio_ai_prompt_edit.add_theme_color_override("font_placeholder_color", Color("#6B7078"))
+	studio_ai_prompt_edit.add_theme_color_override("background_color", Color.WHITE)
+	column.add_child(studio_ai_prompt_edit)
+	studio_ai_result_label = RichTextLabel.new()
+	studio_ai_result_label.bbcode_enabled = true
+	studio_ai_result_label.fit_content = false
+	studio_ai_result_label.custom_minimum_size = Vector2(0, 120)
+	studio_ai_result_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	studio_ai_result_label.add_theme_color_override("default_color", Color("#202124"))
+	studio_ai_result_label.add_theme_stylebox_override("normal", _studio_panel_style(Color.WHITE, Color("#DADCE0"), 1))
+	studio_ai_result_label.text = "[color=#5f6368]The generated plan and result will appear here.[/color]"
+	column.add_child(studio_ai_result_label)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	actions.add_theme_constant_override("separation", 8)
+	column.add_child(actions)
+	var close_button := Button.new()
+	close_button.text = "Close"
+	_style_white_button(close_button)
+	close_button.pressed.connect(studio_ai_window.hide)
+	actions.add_child(close_button)
+	studio_ai_submit_button = Button.new()
+	studio_ai_submit_button.text = "Create in Studio"
+	studio_ai_submit_button.tooltip_text = "Generate a validated plan and apply it to the current place"
+	_style_white_button(studio_ai_submit_button)
+	studio_ai_submit_button.pressed.connect(_request_and_apply_studio_ai)
+	actions.add_child(studio_ai_submit_button)
+
+
+func _request_and_apply_studio_ai() -> void:
+	if studio_ai_request_active or studio_ai_prompt_edit == null or _is_studio_editing_locked():
+		return
+	var prompt := studio_ai_prompt_edit.text.strip_edges()
+	if prompt.length() < 3:
+		_append_studio_ai_message("Bobux AI", "Describe what should be created.", "#b3261e")
+		return
+	studio_ai_request_active = true
+	studio_ai_submit_button.disabled = true
+	_append_studio_ai_message("You", prompt, "#202124")
+	studio_ai_prompt_edit.clear()
+	_append_studio_ai_message("Bobux AI", "Preparing a validated Studio plan...", "#5f6368")
+	await ToolboxAssetService.refresh_catalog()
+	if not is_inside_tree(): return
+	var context := _build_studio_ai_context(prompt)
+	var requested_selection := str(context.get("selected_ref", ""))
+	var response: Dictionary = preload("res://addons/roblox_studio/studio_ai_planner.gd").plan_for_request(prompt, context)
+	if response.is_empty():
+		var script_contract := "\nStudio scripting requirements: plain Luau, no HTML entities or markdown in source. Player input uses UserInputService.JumpRequest (never Humanoid.JumpRequested). Character scripts must be LocalScript parent=StarterCharacterScripts and use script.Parent:WaitForChild('Humanoid'). General client scripts use StarterPlayerScripts, Players.LocalPlayer.Character or CharacterAdded:Wait(). StateChanged supplies oldState and newState. Save stores code; Play runs it."
+		var scripting_request := RegEx.new()
+		scripting_request.compile("(?i)(скрипт|script|lua|прыж|jump|gui|кнопк|button|монет|coin|бафф|buff|летат|fly)")
+		var provider_prompt := prompt + script_contract if scripting_request.search(prompt) != null and prompt.length() + script_contract.length() <= 4000 else prompt
+		response = await CloudAPI.request_studio_ai(provider_prompt, context)
+		response = _normalize_studio_ai_editor_response(response)
+		if bool(response.get("ok", false)):
+			var repair_feedback := _studio_ai_source_feedback(response.get("actions", []))
+			if not repair_feedback.is_empty() and provider_prompt.length() < 2800:
+				_append_studio_ai_message("Bobux AI", "Проверка обнаружила ошибку в Lua. Запрашиваю исправленный вариант...", "#975c00")
+				response = await CloudAPI.request_studio_ai(provider_prompt + "\nPrevious generated source failed compilation. Return a corrected complete plan.\n" + repair_feedback.left(1000), context)
+	response = _normalize_studio_ai_editor_response(response)
+	if not bool(response.get("ok", false)):
+		_finish_studio_ai_request()
+		_append_studio_ai_message("Bobux AI", str(response.get("error", "Bobux AI request failed.")), "#b3261e")
+		return
+	var actions_value: Variant = response.get("actions", [])
+	var actions: Array = actions_value if actions_value is Array else []
+	var expanded := preload("res://addons/roblox_studio/studio_ai_planner.gd").expand_actions(actions)
+	if not expanded.ok:
+		_finish_studio_ai_request()
+		_append_studio_ai_message("Bobux AI", expanded.error, "#b3261e")
+		return
+	actions = expanded.actions
+	for action in actions:
+		if action is Dictionary and action.get("type") in ["spawn_asset", "attach_sound"]:
+			if not await ToolboxAssetService.ensure_asset(str(action.get("asset_id", ""))):
+				_finish_studio_ai_request()
+				_append_studio_ai_message("Bobux AI", ToolboxAssetService.last_error, "#b3261e")
+				return
+	var applied := _apply_studio_ai_actions(actions, requested_selection)
+	_finish_studio_ai_request()
+	var details := "\n".join(studio_ai_last_errors)
+	if applied <= 0:
+		_append_studio_ai_message("Bobux AI", "%s\nNothing was changed in the place. %s" % [str(response.get("message", "No supported actions were returned.")), details], "#b3261e")
+		return
+	_append_studio_ai_message("Bobux AI", "%s\nApplied: %d object change(s).%s" % [str(response.get("message", "Done.")), applied, "\n" + details if not details.is_empty() else ""], "#137333" if details.is_empty() else "#975c00")
+
+
+func _finish_studio_ai_request() -> void:
+	studio_ai_request_active = false
+	if is_instance_valid(studio_ai_submit_button): studio_ai_submit_button.disabled = false
+
+func _build_studio_ai_context(query: String = "") -> Dictionary:
+	var selected := _get_selected_editor_node()
+	var context := {
+		"map_name": current_map_name,
+		"world_units": "studs",
+		"avatar_metrics": {
+			"height": 5.8,
+			"width": 4.0,
+			"depth": 2.0,
+			"comfortable_door": [5.0, 8.0],
+			"comfortable_room_height": 12.0
+		},
+		"selected_name": selected.name if selected != null else "",
+		"selected_ref": _studio_ai_node_reference(selected),
+		"selected_class": str(selected.get_meta("roblox_class", selected.get_class())) if selected != null else "",
+		"selected_position": _vector3_to_array((selected as Node3D).global_position) if selected is Node3D else []
+	}
+	var pending: Array[Node] = []
+	if selected != null:
+		pending.append(selected)
+	if data_model != null:
+		pending.append_array(data_model.get_children())
+	if placement_parent != null:
+		pending.append(placement_parent)
+	var seen := {}
+	var scene: Array = []
+	var source_budget := 24000
+	while not pending.is_empty() and scene.size() < 160:
+		var node := pending.pop_front() as Node
+		if not _is_studio_ai_scene_node(node) or seen.has(node.get_instance_id()):
+			continue
+		seen[node.get_instance_id()] = true
+		pending.append_array(node.get_children())
+		var roblox_class := str(node.get_meta("roblox_class", ""))
+		if roblox_class.is_empty() and node != placement_parent:
+			continue
+		var entry := {"ref": _studio_ai_node_reference(node), "name": str(node.name), "class": roblox_class, "parent": _studio_ai_node_reference(node.get_parent())}
+		entry["attributes"] = LuaScriptEngine.BobuxInstance.new(node).GetAttributes()
+		entry["properties"] = node.get_meta("roblox_properties", {}).duplicate(true)
+		if node is Node3D:
+			entry["position"] = _vector3_to_array((node as Node3D).global_position)
+			entry["rotation"] = _vector3_to_array((node as Node3D).rotation_degrees)
+		if node is MeshInstance3D:
+			entry["size"] = _vector3_to_array((node as MeshInstance3D).scale)
+			entry["color"] = "#" + _get_bobux_block_color(node, Color.WHITE).to_html(false)
+			entry["material"] = str(node.get_meta("material_type", "Plastic"))
+			entry["anchored"] = bool(node.get_meta("anchored", true))
+			entry["can_collide"] = bool(node.get_meta("can_collide", true))
+		if roblox_class in ["Script", "LocalScript", "ModuleScript"] and source_budget > 0:
+			var source := str(node.get_meta("code", node.get_meta("lua_source", "")))
+			var script_tab := open_scripts.get(node.get_instance_id(), null) as Control
+			if is_instance_valid(script_tab):
+				var editor: CodeEdit = null
+				for child in script_tab.get_children():
+					if child is CodeEdit:
+						editor = child
+						break
+				if editor is CodeEdit:
+					source = (editor as CodeEdit).text
+			entry["source"] = source.left(mini(source_budget, 16000 if node == selected else 2000))
+			entry["source_truncated"] = str(entry["source"]).length() < source.length()
+			source_budget -= str(entry["source"]).length()
+		scene.append(entry)
+	context["scene"] = scene
+	context["scene_truncated"] = not pending.is_empty()
+	context["prefabs"] = preload("res://addons/roblox_studio/studio_prefab_library.gd").entries()
+	context["player_settings"] = _get_current_player_settings()
+	context["environment"] = current_roblox_environment_settings.duplicate(true)
+	context["asset_candidates"] = preload("res://addons/roblox_studio/toolbox_asset_library.gd").ai_candidates(query) if not query.is_empty() else []
+	return context
+
+func _studio_ai_source_feedback(actions: Variant) -> String:
+	if not actions is Array:
+		return ""
+	var feedback: Array[String] = []
+	for action in actions:
+		if not action is Dictionary or not str(action.get("type", "")) in ["create_script", "update_script"]:
+			continue
+		var source := str(action.get("source", ""))
+		var validation: Dictionary = LuaScriptEngine.validate_script_source(source)
+		for problem in preload("res://addons/roblox_studio/roblox_script_contract.gd").errors(source):
+			feedback.append("%s: %s" % [action.get("name", "Script"), problem])
+		if not bool(validation.get("ok", false)):
+			feedback.append("%s: %s\nSource: %s" % [action.get("name", "Script"), validation.get("error", "Invalid Lua"), source.left(600)])
+	return "\n".join(feedback)
+
+
+func _normalize_studio_ai_editor_response(response: Dictionary) -> Dictionary:
+	if response.has("actions") or not bool(response.get("ok", false)):
+		return response
+	var payload: Variant = response.get("data", {})
+	if payload is String:
+		var parsed_payload: Variant = JSON.parse_string((payload as String).strip_edges())
+		if parsed_payload != null:
+			payload = parsed_payload
+	if not payload is Dictionary:
+		return response
+	var normalized: Dictionary = response.duplicate(true)
+	for key_variant in (payload as Dictionary).keys():
+		normalized[key_variant] = (payload as Dictionary)[key_variant]
+	normalized["ok"] = bool(response.get("ok", false)) and bool((payload as Dictionary).get("ok", true))
+	return normalized
+
+
+func _append_studio_ai_message(author: String, message: String, color: String) -> void:
+	if studio_ai_result_label == null or not is_instance_valid(studio_ai_result_label):
+		return
+	var safe_author := author.replace("[", "(").replace("]", ")")
+	var safe_message := message.replace("[", "(").replace("]", ")")
+	if studio_ai_result_label.text.contains("Ask for a build"):
+		studio_ai_result_label.clear()
+	studio_ai_result_label.append_text("[b]%s[/b]\n[color=%s]%s[/color]\n\n" % [safe_author, color, safe_message])
+	studio_ai_result_label.scroll_to_line(maxi(0, studio_ai_result_label.get_line_count() - 1))
+
+
+func _vector3_to_array(value: Vector3) -> Array:
+	return [value.x, value.y, value.z]
 
 
 func _execute_command_bar(source: String) -> void:
@@ -2841,6 +3197,7 @@ func _populate_home_ribbon() -> void:
 		)
 		_add_to_ribbon_group(transform_group, mode_btn)
 		transform_mode_buttons[mode_key] = mode_btn
+		if mode_key == "scale": mode_btn.tooltip_text = "Scale an axis; hold Shift to resize the whole selection uniformly. Model → Resize sets an exact multiplier."
 	_add_to_ribbon_group(transform_group, _create_snap_controls())
 
 	ribbon_tools_container.add_child(_create_ribbon_separator())
@@ -2853,6 +3210,7 @@ func _populate_home_ribbon() -> void:
 	_add_ribbon_action(insert_group, "GUI", _insert_gui_placeholder, 46)
 	_add_ribbon_action(insert_group, "Script", _insert_script_from_ribbon, 48)
 	_add_ribbon_action(insert_group, "Audio", _on_music_browse_pressed, 48)
+	_add_ribbon_action(insert_group, "AI", _show_studio_ai_window, 42)
 	_add_ribbon_action(insert_group, "Import", _on_import_rbxl_pressed, 48)
 
 	ribbon_tools_container.add_child(_create_ribbon_separator())
@@ -3515,7 +3873,7 @@ func _build_ribbon_tabs(parent: VBoxContainer) -> void:
 		var left_spacer := Control.new()
 		left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tabs.add_child(left_spacer)
-	for tab_name in ["Home", "Avatar", "UI", "Script", "Model", "Plugins", "Misc", "+"]:
+	for tab_name in ["Home", "Avatar", "UI", "Script", "Model", "Plugins", "Misc", "Learn", "+"]:
 		var tab := Button.new()
 		tab.text = tab_name
 		tab.flat = true
@@ -3534,6 +3892,9 @@ func _build_ribbon_tabs(parent: VBoxContainer) -> void:
 		tabs.add_child(right_spacer)
 
 func _on_ribbon_tab_pressed(tab_name: String) -> void:
+	if tab_name == "Learn":
+		preload("res://addons/roblox_studio/studio_script_library.gd").open(self, _apply_studio_ai_actions)
+		return
 	if tab_name == "+":
 		_open_plugin_manager_dialog()
 		return
@@ -3637,6 +3998,7 @@ func _populate_model_ribbon() -> void:
 			shape_buttons["Select"] = button
 		else:
 			transform_mode_buttons[key] = button
+	_add_ribbon_action(tools_group, "Resize", _open_uniform_scale_dialog, 52)
 	var insert_group := _create_ribbon_group("Insert")
 	ribbon_tools_container.add_child(insert_group)
 	_add_to_ribbon_group(insert_group, _create_part_insert_control())
@@ -3653,12 +4015,84 @@ func _populate_model_ribbon() -> void:
 	_add_ribbon_action(edit_group, "Anchor", _toggle_selected_anchor, 48)
 	_add_ribbon_action(edit_group, "Align", _align_selected_blocks, 44)
 
+func _open_uniform_scale_dialog() -> void:
+	if _is_studio_editing_locked(): return
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Размер модели целиком"
+	dialog.ok_button_text = "Применить"
+	var column := VBoxContainer.new()
+	var label := Label.new()
+	label.text = "Множитель по всем осям (2 = вдвое больше):"
+	column.add_child(label)
+	var factor := SpinBox.new()
+	factor.min_value = 0.01
+	factor.max_value = 100
+	factor.step = 0.05
+	factor.value = 1
+	column.add_child(factor)
+	dialog.add_child(column)
+	dialog.confirmed.connect(func(): _scale_selection_uniformly(factor.value); dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(440, 130))
+
+func _scale_selection_uniformly(factor: float) -> void:
+	if _is_studio_editing_locked() or not is_finite(factor) or factor <= 0: return
+	factor = clampf(factor, 0.01, 100.0)
+	var target := _get_selected_editor_node()
+	var model: Node3D = null
+	var cursor := target
+	while is_instance_valid(cursor) and cursor != placement_parent:
+		if cursor is Node3D and str(cursor.get_meta("roblox_class", "")) in ["Model", "Tool"]: model = cursor
+		cursor = cursor.get_parent()
+	if model != null:
+		model.scale *= factor
+		model.set_meta("ModelScale", model.scale.x)
+		var properties: Dictionary = model.get_meta("roblox_properties", {}).duplicate(true)
+		properties["Scale"] = model.scale.x
+		model.set_meta("roblox_properties", properties)
+	else:
+		var pivot := _get_selection_pivot()
+		for block in _get_valid_selected_blocks():
+			block.global_position = pivot + (block.global_position - pivot) * factor
+			block.scale *= factor
+			_update_block_collision(block)
+	_refresh_explorer()
+	_update_transform_gizmo()
+	_commit_editor_history("Resize model ×%s" % factor)
+
 func _populate_plugins_ribbon() -> void:
 	_clear_ribbon_tools()
 	var plugin_group := _create_ribbon_group("Plugins")
 	ribbon_tools_container.add_child(plugin_group)
 	_add_ribbon_action(plugin_group, "Manager", _open_plugin_manager_dialog, 54)
 	_add_ribbon_action(plugin_group, "Folder", _open_plugins_folder, 48)
+	_add_ribbon_action(plugin_group, "Проверить карту", _audit_studio_map, 112)
+	_add_ribbon_action(plugin_group, "Boblox", _open_boblox_wallet, 60)
+
+func _audit_studio_map() -> void:
+	if _is_studio_editing_locked(): return
+	var roots: Array = [placement_parent]
+	for service in ["StarterPack", "StarterGui", "StarterPlayer", "ServerScriptService", "ServerStorage", "ReplicatedStorage"]:
+		roots.append(data_model.ensure_service(service))
+	var issues := preload("res://addons/roblox_studio/studio_map_audit.gd").inspect(roots, get_tree().root.get_node("LuaScriptEngine"))
+	var dialog := AcceptDialog.new()
+	dialog.title = "Проверка карты · Lua и структура"
+	var text_ := TextEdit.new()
+	text_.editable = false
+	text_.custom_minimum_size = Vector2(700, 380)
+	text_.text = "Ошибок синтаксиса и проверяемой структуры не найдено. Поведение скриптов проверьте в Play." if issues.is_empty() else "\n\n".join(issues)
+	dialog.add_child(text_)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
+
+func _open_boblox_wallet() -> void:
+	var dialog := preload("res://addons/roblox_studio/boblox_wallet_dialog.gd").new()
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(460, 320))
+	dialog.refresh()
 
 func _populate_misc_ribbon() -> void:
 	_clear_ribbon_tools()
@@ -4396,110 +4830,148 @@ func _build_explorer_dock() -> PanelContainer:
 func _build_toolbox_dock() -> PanelContainer:
 	var dock := PanelContainer.new()
 	dock.name = "ToolboxPanel"
-	dock.custom_minimum_size = Vector2(264, 0)
+	dock.custom_minimum_size = Vector2(270, 0)
 	dock.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dock.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F7F7F7"), Color("#C8C8C8"), 1))
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 6)
-	margin.add_theme_constant_override("margin_right", 6)
-	margin.add_theme_constant_override("margin_top", 2)
-	margin.add_theme_constant_override("margin_bottom", 4)
-	dock.add_child(margin)
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 6)
-	margin.add_child(root)
-	var header := HBoxContainer.new()
-	header.custom_minimum_size = Vector2(0, 28)
-	root.add_child(header)
-	var title := Label.new()
-	title.text = "Toolbox"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", Color("#2D2F33"))
-	header.add_child(title)
-	var close_button := _create_studio_icon_button("Close", "Close Toolbox", Vector2(26, 24))
-	close_button.pressed.connect(_set_tool_window_visible.bind("toolbox", false))
-	header.add_child(close_button)
-
-	var mode_row := HBoxContainer.new()
-	mode_row.custom_minimum_size = Vector2(0, 36)
-	mode_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	mode_row.add_theme_constant_override("separation", 14)
-	root.add_child(mode_row)
-	for mode_spec in [["Toolbox", "Creator Store"], ["Assets", "Inventory"], ["History", "Recent"]]:
-		var mode_button := _create_studio_icon_button(str(mode_spec[0]), str(mode_spec[1]), Vector2(42, 32))
-		mode_button.pressed.connect(func() -> void:
-			if toolbar_status_label:
-				toolbar_status_label.text = "Toolbox: %s" % str(mode_spec[1])
-		)
-		mode_row.add_child(mode_button)
-
-	var section_title := Label.new()
-	section_title.text = "Creator Store"
-	section_title.add_theme_font_size_override("font_size", 12)
-	section_title.add_theme_color_override("font_color", Color("#222428"))
-	root.add_child(section_title)
-	var search_row := HBoxContainer.new()
-	search_row.add_theme_constant_override("separation", 4)
-	root.add_child(search_row)
-	var search := LineEdit.new()
-	search.name = "ToolboxSearch"
-	search.placeholder_text = "Search assets"
-	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	search.custom_minimum_size = Vector2(0, 28)
-	search.add_theme_font_size_override("font_size", 11)
-	search.add_theme_stylebox_override("normal", _studio_line_edit_style())
-	search_row.add_child(search)
-	var search_button := _create_studio_icon_button("Search", "Search Toolbox", Vector2(30, 28))
-	search_button.pressed.connect(_filter_toolbox_items.bind(search))
-	search_row.add_child(search_button)
-
-	var categories_title := Label.new()
-	categories_title.text = "Categories"
-	categories_title.add_theme_font_size_override("font_size", 11)
-	categories_title.add_theme_color_override("font_color", Color("#3A3C40"))
-	root.add_child(categories_title)
-	var categories := GridContainer.new()
-	categories.columns = 2
-	categories.add_theme_constant_override("h_separation", 6)
-	categories.add_theme_constant_override("v_separation", 6)
-	root.add_child(categories)
-	for category in ["3D Assets", "Visual Effects", "2D Assets", "Gameplay", "Plugins", "Audio"]:
-		var category_button := Button.new()
-		category_button.text = category
-		category_button.custom_minimum_size = Vector2(118, 38)
-		category_button.add_theme_font_size_override("font_size", 10)
-		_style_toolbox_category_button(category_button)
-		category_button.pressed.connect(_on_toolbox_category_pressed.bind(category))
-		categories.add_child(category_button)
-
-	var results_title := Label.new()
-	results_title.text = "Workspace assets"
-	results_title.add_theme_font_size_override("font_size", 11)
-	results_title.add_theme_color_override("font_color", Color("#3A3C40"))
-	root.add_child(results_title)
-	var items := ItemList.new()
-	toolbox_items_list = items
-	items.name = "ToolboxItems"
-	items.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	items.add_theme_font_size_override("font_size", 11)
-	items.add_theme_color_override("font_color", Color("#2C2E32"))
-	items.add_theme_color_override("font_selected_color", Color.WHITE)
-	items.add_theme_color_override("guide_color", Color("#D7D9DC"))
-	items.add_theme_stylebox_override("panel", _studio_panel_style(Color.WHITE, Color("#D4D6D9"), 1, 2))
-	items.add_theme_stylebox_override("selected", _studio_panel_style(Color("#1677D2"), Color("#1677D2"), 0, 2))
-	items.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	items.fixed_icon_size = Vector2i(42, 42)
-	items.add_item("Models")
-	items.add_item("Meshes")
-	items.add_item("Images and decals")
-	items.add_item("Audio")
-	items.add_item("Packages")
-	items.item_activated.connect(_on_toolbox_item_activated)
-	root.add_child(items)
-	call_deferred("_populate_toolbox_dock", toolbox_active_category)
+	toolbox_content_tabs = TabContainer.new()
+	toolbox_content_tabs.name = "ToolboxAITabs"
+	toolbox_content_tabs.theme = preload("res://addons/roblox_studio/toolbox_library_panel.gd").library_theme()
+	dock.add_child(toolbox_content_tabs)
+	var browser := preload("res://addons/roblox_studio/toolbox_library_panel.gd").new()
+	browser.name = "Toolbox"
+	browser.asset_requested.connect(_insert_library_asset)
+	browser.prefab_requested.connect(_open_studio_prefab_options)
+	browser.legacy_requested.connect(_open_toolbox_dialog)
+	toolbox_content_tabs.add_child(browser)
+	var ai_page := _build_studio_ai_dock_chat()
+	ai_page.name = "AI"
+	toolbox_content_tabs.add_child(ai_page)
 	return dock
+
+func _open_studio_prefab_options(prefab_id: String) -> void:
+	if _is_studio_editing_locked(): return
+	var library = preload("res://addons/roblox_studio/studio_prefab_library.gd")
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Настроить заготовку · " + prefab_id
+	dialog.ok_button_text = "Добавить в карту"
+	var column := VBoxContainer.new()
+	dialog.add_child(column)
+	var controls := {}
+	for key in library.parameters(prefab_id):
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = str(key)
+		label.custom_minimum_size.x = 180
+		row.add_child(label)
+		var value: Variant = library.parameters(prefab_id)[key]
+		if value is bool:
+			var field := CheckBox.new()
+			field.button_pressed = value
+			controls[key] = field
+			row.add_child(field)
+		elif value is String:
+			var field := LineEdit.new()
+			field.text = value
+			field.custom_minimum_size.x = 240
+			controls[key] = field
+			row.add_child(field)
+		else:
+			var field := SpinBox.new()
+			field.min_value = -10000
+			field.max_value = 100000
+			field.step = 0.05 if float(value) < 1 else 1.0
+			field.value = value
+			controls[key] = field
+			row.add_child(field)
+		column.add_child(row)
+	dialog.confirmed.connect(func():
+		var options := {}
+		for key in controls:
+			if controls[key] is CheckBox: options[key] = controls[key].button_pressed
+			elif controls[key] is LineEdit: options[key] = controls[key].text
+			else: options[key] = controls[key].value
+		dialog.queue_free()
+		_apply_studio_prefab(prefab_id, options)
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(440, 160))
+
+func _apply_studio_prefab(prefab_id: String, options: Dictionary) -> void:
+	var plan := preload("res://addons/roblox_studio/studio_prefab_library.gd").plan(prefab_id, options)
+	if not plan.ok: toolbar_status_label.text = plan.error; return
+	for action in plan.actions:
+		if action.get("type") in ["spawn_asset", "attach_sound"]:
+			if not await ToolboxAssetService.ensure_asset(str(action.asset_id)):
+				toolbar_status_label.text = ToolboxAssetService.last_error
+				return
+	var count := _apply_studio_ai_actions(plan.actions)
+	toolbar_status_label.text = "%s · %d изменений" % [prefab_id, count] if studio_ai_last_errors.is_empty() else "\n".join(studio_ai_last_errors)
+
+func _insert_library_asset(asset_id: String) -> void:
+	if _is_studio_editing_locked(): return
+	if toolbar_status_label: toolbar_status_label.text = "Загрузка ассета с сервера…"
+	if not await ToolboxAssetService.ensure_asset(asset_id):
+		if toolbar_status_label: toolbar_status_label.text = ToolboxAssetService.last_error
+		return
+	if _is_studio_editing_locked(): return
+	var library = preload("res://addons/roblox_studio/toolbox_asset_library.gd")
+	var entry: Dictionary = library.get_asset(asset_id)
+	if entry.is_empty(): return
+	var selected := _get_selected_editor_node()
+	var action := {"type": "spawn_asset" if entry.type == "model" else "attach_sound", "asset_id": asset_id}
+	if entry.type == "sound" and selected != null:
+		action["parent"] = _studio_ai_node_reference(selected)
+	_apply_studio_ai_actions([action])
+
+
+func _build_studio_ai_dock_chat() -> Control:
+	var panel := PanelContainer.new()
+	studio_ai_dock = panel
+	panel.name = "BobuxAIChat"
+	panel.custom_minimum_size = Vector2(0, 214)
+	panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F1F3F4"), Color("#CDD1D5"), 1, 3))
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 7)
+	margin.add_theme_constant_override("margin_right", 7)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	panel.add_child(margin)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 5)
+	margin.add_child(column)
+	var title := Label.new()
+	title.text = "Bobux AI"
+	title.tooltip_text = "Create parts, models and Luau scripts in the current place"
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", Color("#202124"))
+	column.add_child(title)
+	studio_ai_result_label = RichTextLabel.new()
+	studio_ai_result_label.bbcode_enabled = true
+	studio_ai_result_label.custom_minimum_size = Vector2(0, 76)
+	studio_ai_result_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	studio_ai_result_label.add_theme_font_size_override("normal_font_size", 10)
+	studio_ai_result_label.add_theme_color_override("default_color", Color("#202124"))
+	studio_ai_result_label.add_theme_stylebox_override("normal", _studio_panel_style(Color.WHITE, Color("#DADCE0"), 1, 2))
+	studio_ai_result_label.text = "[color=#5f6368]Ask for a build or a Luau script. The result is applied to this place.[/color]"
+	column.add_child(studio_ai_result_label)
+	studio_ai_prompt_edit = TextEdit.new()
+	studio_ai_prompt_edit.placeholder_text = "Write a request..."
+	studio_ai_prompt_edit.custom_minimum_size = Vector2(0, 52)
+	studio_ai_prompt_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	studio_ai_prompt_edit.add_theme_font_size_override("font_size", 11)
+	studio_ai_prompt_edit.add_theme_color_override("font_color", Color("#202124"))
+	studio_ai_prompt_edit.add_theme_color_override("font_placeholder_color", Color("#777B82"))
+	studio_ai_prompt_edit.add_theme_color_override("background_color", Color.WHITE)
+	column.add_child(studio_ai_prompt_edit)
+	studio_ai_submit_button = Button.new()
+	studio_ai_submit_button.text = "Create in Studio"
+	studio_ai_submit_button.tooltip_text = "Send this request and apply the validated result"
+	studio_ai_submit_button.custom_minimum_size = Vector2(0, 28)
+	_style_white_button(studio_ai_submit_button, Color("#1677D2"))
+	studio_ai_submit_button.pressed.connect(_request_and_apply_studio_ai)
+	column.add_child(studio_ai_submit_button)
+	return panel
 
 func _create_studio_icon_button(icon_name: String, tooltip: String, minimum_size: Vector2) -> Button:
 	var button := Button.new()
@@ -4667,6 +5139,7 @@ func _get_toolbox_entries(category: String) -> Array[Dictionary]:
 				["Part", "insert_shape", "Box", "Part"],
 				["Sphere", "insert_shape", "Sphere", "Part"],
 				["Cylinder", "insert_shape", "Cylinder", "Part"],
+				["Cone", "insert_shape", "Cone", "Part"],
 				["WedgePart", "insert_class", "WedgePart", "Part"],
 				["CornerWedgePart", "insert_class", "CornerWedgePart", "Part"],
 				["TrussPart", "insert_class", "TrussPart", "Part"],
@@ -4675,6 +5148,14 @@ func _get_toolbox_entries(category: String) -> Array[Dictionary]:
 				["Tool with Handle", "insert_class", "Tool", "Toolbox"],
 			]:
 				entries.append(_toolbox_entry(str(spec[0]), str(spec[1]), str(spec[2]), str(spec[3])))
+			for asset_name in ["Coin", "Tree", "Crate", "Chair", "Table", "Lamp", "Door", "Ladder", "Arch", "Stairs", "Hammer"]:
+				entries.append({
+					"label": asset_name,
+					"action": "builtin_model",
+					"value": asset_name,
+					"icon": "Assets",
+					"description": "Insert the built-in %s model" % asset_name,
+				})
 			if category in ["3D Assets", "Models"]:
 				for draft in _load_local_model_draft_entries(64):
 					entries.append({
@@ -4828,6 +5309,17 @@ func _activate_toolbox_entry(entry: Dictionary) -> void:
 	match action:
 		"insert_shape":
 			_place_shape_from_ribbon(str(entry.get("value", "Box")))
+		"builtin_model":
+			var model := _create_builtin_model(
+				str(entry.get("value", entry.get("label", ""))),
+				{"bobux_ai_generated": false},
+				_get_editor_drop_position(10.0)
+			)
+			if model != null:
+				explorer_selected_node = model
+				_refresh_explorer()
+				_show_properties_for_node(model)
+				_commit_editor_history("Insert built-in model")
 		"insert_class":
 			_insert_roblox_instance(_get_selected_editor_node(), str(entry.get("value", "Part")))
 		"model_draft":
@@ -4943,7 +5435,7 @@ func _insert_local_image_asset(path: String) -> void:
 
 
 func _insert_local_audio_asset(path: String) -> void:
-	var stream := ResourceLoader.load(path) as AudioStream
+	var stream := AudioFileLoader.load_stream(path, false)
 	if stream == null or data_model == null:
 		if toolbar_status_label:
 			toolbar_status_label.text = "Could not load audio: %s" % path.get_file()
@@ -5059,6 +5551,8 @@ func _set_tool_window_visible(window_name: String, visible: bool) -> void:
 		"toolbox":
 			if toolbox_dock_panel:
 				toolbox_dock_panel.visible = visible
+			if visible and toolbox_content_tabs != null:
+				toolbox_content_tabs.current_tab = 0
 	if _is_mobile_studio_runtime():
 		if window_name == "toolbox" and visible and right_side != null:
 			right_side.visible = false
@@ -5072,6 +5566,9 @@ func _set_tool_window_visible(window_name: String, visible: bool) -> void:
 				)
 
 func _toggle_tool_window(window_name: String) -> void:
+	if window_name == "toolbox" and toolbox_content_tabs != null and toolbox_content_tabs.current_tab != 0:
+		_set_tool_window_visible("toolbox", true)
+		return
 	if _is_mobile_studio_runtime() and window_name in ["properties", "explorer", "toolbox"]:
 		_toggle_mobile_studio_panel(window_name)
 		return
@@ -5188,7 +5685,11 @@ func _start_studio_playtest() -> void:
 	var playtest_generation := studio_playtest_generation
 	studio_playtest_active = true
 	studio_playtest_paused = false
+	# Generated and edited scripts open their own document. Play must bring the
+	# game viewport back before locking editor controls and routing input.
+	_show_viewport_document()
 	_set_studio_playtest_ui_locked(true)
+	if not current_music_source_paths.is_empty(): _play_studio_music(0)
 	if toolbar_status_label:
 		toolbar_status_label.text = "Preparing Play test scene..."
 	studio_playtest_snapshot = await _capture_playtest_scene_snapshot_async("PlayTestSnapshot", playtest_generation)
@@ -5203,6 +5704,7 @@ func _start_studio_playtest() -> void:
 	_clear_roblox_gui_preview()
 	_set_shape("Select")
 	_clear_selection()
+	_activate_studio_playtest_dynamic_parts()
 	if LuaScriptEngine != null and LuaScriptEngine.has_method("reset_runtime_diagnostics"):
 		LuaScriptEngine.reset_runtime_diagnostics()
 	if toolbar_status_label:
@@ -5249,6 +5751,68 @@ func _start_studio_playtest() -> void:
 		]
 
 
+func _activate_studio_playtest_dynamic_parts() -> void:
+	if placement_parent == null:
+		return
+	for part_node in _get_editor_parts():
+		if not (part_node is MeshInstance3D):
+			continue
+		var part := part_node as MeshInstance3D
+		var physics_mode := str(part.get_meta("bobux_physics_mode", "Static")).strip_edges().to_lower()
+		if physics_mode != "dynamic" and bool(part.get_meta("anchored", true)):
+			continue
+		_create_studio_playtest_rigid_body(part)
+
+
+func _create_studio_playtest_rigid_body(part: MeshInstance3D) -> RigidBody3D:
+	if part == null or not is_instance_valid(part) or part.get_parent() == null:
+		return null
+	var static_body := part.get_node_or_null(COLLISION_BODY_NAME) as StaticBody3D
+	if static_body != null:
+		var static_shape := static_body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+		if static_shape != null:
+			static_shape.disabled = true
+	var rigid_body := RigidBody3D.new()
+	rigid_body.name = "%s_PhysicsBody" % part.name
+	rigid_body.set_meta("bobux_runtime_generated", true)
+	rigid_body.set_meta("bobux_visual_instance_id", part.get_instance_id())
+	rigid_body.collision_layer = STUDIO_PLAYTEST_COLLISION_MASK
+	rigid_body.collision_mask = STUDIO_PLAYTEST_COLLISION_MASK | 2
+	rigid_body.mass = maxf(0.05, float(part.get_meta("bobux_physics_mass", 1.0)))
+	rigid_body.gravity_scale = maxf(0.0, float(part.get_meta("bobux_physics_gravity_scale", 1.0)))
+	rigid_body.linear_damp = maxf(0.0, float(part.get_meta("bobux_physics_linear_damp", 0.1)))
+	rigid_body.angular_damp = maxf(0.0, float(part.get_meta("bobux_physics_angular_damp", 0.1)))
+	rigid_body.continuous_cd = true
+	rigid_body.contact_monitor = true
+	rigid_body.max_contacts_reported = 8
+	var physical_material := PhysicsMaterial.new()
+	physical_material.friction = clampf(float(part.get_meta("bobux_physics_friction", 0.5)), 0.0, 1.0)
+	physical_material.bounce = clampf(float(part.get_meta("bobux_physics_bounce", 0.0)), 0.0, 1.0)
+	rigid_body.physics_material_override = physical_material
+	part.get_parent().add_child(rigid_body, true)
+	var visual_scale := part.global_basis.get_scale().abs()
+	rigid_body.global_transform = Transform3D(part.global_basis.orthonormalized(), part.global_position)
+	var collision_shape := CollisionShape3D.new()
+	collision_shape.name = "CollisionShape3D"
+	if bool(part.get_meta("roblox_mesh_applied", false)) and part.mesh != null:
+		collision_shape.shape = part.mesh.create_convex_shape(true, false)
+	else:
+		collision_shape.shape = _create_collision_for_shape(_get_block_shape(part))
+		_apply_collision_shape_size(collision_shape, _get_block_shape(part), visual_scale)
+	collision_shape.scale = visual_scale
+	collision_shape.disabled = not bool(part.get_meta("can_collide", true))
+	rigid_body.add_child(collision_shape)
+	var remote := RemoteTransform3D.new()
+	remote.name = "VisualFollower"
+	remote.update_position = true
+	remote.update_rotation = true
+	remote.update_scale = false
+	rigid_body.add_child(remote)
+	remote.remote_path = remote.get_path_to(part)
+	part.set_meta("_bobux_physics_body_instance_id", rigid_body.get_instance_id())
+	return rigid_body
+
+
 func _await_playtest_script_compilation(playtest_generation: int, realm_label: String) -> void:
 	if LuaScriptEngine == null or not LuaScriptEngine.has_method("get_runtime_diagnostics"):
 		return
@@ -5284,6 +5848,7 @@ func _toggle_studio_playtest_pause() -> void:
 		toolbar_status_label.text = "Play test %s" % ("paused" if studio_playtest_paused else "resumed")
 
 func _stop_studio_playtest() -> void:
+	if is_instance_valid(studio_music_player): studio_music_player.stop()
 	if not studio_playtest_active:
 		if toolbar_status_label:
 			toolbar_status_label.text = "Play test is not running"
@@ -5384,11 +5949,7 @@ func _spawn_studio_playtest_player() -> void:
 			spawn_points.append(spawn_position)
 		player.call("configure_spawn_points", spawn_points, spawn_points.find(spawn_position))
 	if player.has_method("apply_movement_settings"):
-		player.call("apply_movement_settings", {
-			"move_speed": ROBLOX_DEFAULT_WALK_SPEED,
-			"sprint_multiplier": DEFAULT_PLAYER_SPRINT_MULTIPLIER,
-			"jump_velocity": ROBLOX_DEFAULT_JUMP_POWER,
-		})
+		player.call("apply_movement_settings", _get_current_player_settings())
 	studio_playtest_player = player
 	if camera != null:
 		camera.current = false
@@ -5411,8 +5972,8 @@ func _create_studio_playtest_character_api(player: CharacterBody3D) -> void:
 	humanoid.set_meta("bobux_character_body_instance_id", player.get_instance_id())
 	humanoid.set_meta("Health", 100.0)
 	humanoid.set_meta("MaxHealth", 100.0)
-	humanoid.set_meta("WalkSpeed", ROBLOX_DEFAULT_WALK_SPEED)
-	humanoid.set_meta("JumpPower", ROBLOX_DEFAULT_JUMP_POWER)
+	humanoid.set_meta("WalkSpeed", player.get_humanoid_walk_speed())
+	humanoid.set_meta("JumpPower", player.get_humanoid_jump_power())
 	humanoid.set_meta("bobux_runtime_generated", true)
 	var proxy_specs := {
 		"HumanoidRootPart": Vector3(0.0, 2.3, 0.0),
@@ -5457,6 +6018,7 @@ func _ensure_studio_inventory_controller() -> void:
 	if not (controller_variant is CanvasLayer):
 		return
 	studio_inventory_controller = controller_variant as CanvasLayer
+	studio_inventory_controller.set("show_local_player_list", true)
 	studio_inventory_controller.call("configure", LuaScriptEngine, placement_parent, Callable(self, "_get_studio_playtest_player"))
 	viewport.add_child(studio_inventory_controller)
 
@@ -5591,15 +6153,11 @@ func _run_studio_playtest_local_scripts(playtest_generation: int) -> Dictionary:
 	var state_variant: Variant = LuaScriptEngine.call("get_local_inventory_state", placement_parent, studio_playtest_player)
 	if not (state_variant is Dictionary):
 		return {"started": 0, "failed": 0, "skipped_context": 0, "skipped_disabled": 0}
-	var state := state_variant as Dictionary
-	var runnable: Array = []
+	var runnable: Array = LuaScriptEngine.collect_live_player_scripts(placement_parent, studio_playtest_player)
 	var seen: Dictionary = {}
-	var local_player: Node = state.get("local_player", null) as Node
-	if local_player != null:
-		_collect_playtest_scripts_recursive(local_player, "LocalScript", runnable, seen)
-	if studio_playtest_player != null and is_instance_valid(studio_playtest_player):
-		_collect_playtest_scripts_recursive(studio_playtest_player, "LocalScript", runnable, seen)
-	return await _start_studio_playtest_script_nodes(runnable, playtest_generation, "client")
+	if data_model != null:
+		_collect_playtest_scripts_recursive(data_model.ensure_service("ReplicatedFirst"), "LocalScript", runnable, seen)
+	return await _start_studio_playtest_script_nodes(runnable, playtest_generation, "player")
 
 
 func _collect_playtest_scripts_recursive(root: Node, script_class: String, out: Array, seen: Dictionary) -> void:
@@ -5629,6 +6187,8 @@ func _start_studio_playtest_script_nodes(runnable: Array, playtest_generation: i
 			skipped_disabled += 1
 			continue
 		var script_class := str(script_node.get_meta("roblox_class", script_node.get_meta("script_type", "Script")))
+		if script_node.has_meta("bobux_script_runtime_id"):
+			continue
 		if realm == "server" and not _is_script_runnable_in_playtest(script_node, script_class):
 			skipped_context += 1
 			continue
@@ -5640,8 +6200,8 @@ func _start_studio_playtest_script_nodes(runnable: Array, playtest_generation: i
 			skipped_disabled += 1
 			continue
 		var result: Dictionary = LuaScriptEngine.start_script(source, script_node, {
-			"realm": realm,
-			"is_server": realm == "server",
+			"realm": "server" if script_class == "Script" else "client",
+			"is_server": script_class == "Script",
 			"source_name": str(script_node.get_path()),
 			"retain": true,
 			"defer_initial_resume": true,
@@ -5907,7 +6467,7 @@ func _insert_gui_placeholder() -> void:
 
 func _insert_script_from_ribbon() -> void:
 	var selected := _get_selected_editor_node()
-	if selected != null and not bool(selected.get_meta("is_roblox_service", false)):
+	if selected != null:
 		_add_script_to_node(selected)
 	elif data_model != null:
 		_add_script_to_node(data_model.ensure_service("ServerScriptService"), "", "Script")
@@ -7260,35 +7820,9 @@ func _add_character_to_node(parent_node: Node) -> void:
 func _add_tool_to_node(parent_node: Node) -> void:
 	if _is_studio_editing_locked() or data_model == null:
 		return
-	var tool_parent := parent_node
-	if tool_parent == null or bool(tool_parent.get_meta("is_roblox_service", false)) and str(tool_parent.get_meta("roblox_class", "")) != "StarterPack":
-		tool_parent = data_model.ensure_service("StarterPack")
-	if tool_parent == null:
+	var tool := _create_authored_tool(parent_node, {})
+	if tool == null:
 		return
-	var tool := RobloxDataModelClass.create_instance("Tool", "Tool") as Node3D
-	tool.name = "Tool"
-	tool.set_meta("Name", "Tool")
-	tool.set_meta("block_name", "Tool")
-	tool.visible = false
-	tool_parent.add_child(tool, true)
-
-	# A Roblox Tool is useful only when it owns a Handle and its LocalScript is
-	# copied into the live Backpack instance during Play Test.
-	var handle := _build_imported_block_instance("Box", Color("#6E97C8"), "Plastic", 0.0, false, "Handle")
-	handle.name = "Handle"
-	handle.scale = Vector3(0.42, 1.5, 0.42)
-	handle.set_meta("Name", "Handle")
-	handle.set_meta("block_name", "Handle")
-	handle.set_meta("roblox_class", "Part")
-	handle.set_meta("anchored", false)
-	handle.set_meta("can_collide", false)
-	tool.add_child(handle, true)
-
-	var local_script := RobloxDataModelClass.create_instance("LocalScript", "ToolClient")
-	local_script.set_meta("code", "local tool = script.Parent\ntool.Activated:Connect(function()\n    print(tool.Name .. ' activated')\nend)\n")
-	local_script.set_meta("lua_source", local_script.get_meta("code"))
-	local_script.set_meta("disabled", false)
-	tool.add_child(local_script, true)
 
 	explorer_selected_node = tool
 	_refresh_explorer()
@@ -7356,23 +7890,843 @@ func _add_script_to_node(parent_node: Node, service_name: String = "", requested
 
 	var script_class := requested_class.strip_edges()
 	if script_class.is_empty():
-		script_class = "LocalScript" if _is_gui_script_parent(script_parent) else "Script"
-	var new_script := RobloxDataModelClass.create_instance(script_class, "%s_%04d" % [script_class, randi() % 10000])
-	new_script.name = script_class + "_" + str(randi() % 1000)
+		var parent_class := str(script_parent.get_meta("roblox_class", ""))
+		script_class = "LocalScript" if _is_gui_script_parent(script_parent) or parent_class in ["StarterPlayerScripts", "StarterCharacterScripts", "PlayerScripts", "StarterGui"] else "Script"
+	var new_script := RobloxDataModelClass.create_instance(script_class, script_class)
 	new_script.add_to_group("bobux_scripts")
 	new_script.set_meta("script_type", script_class)
 	new_script.set_meta("roblox_class", script_class)
 	new_script.set_meta("disabled", false)
 	var source := "-- Server Script\nlocal object = script.Parent\nprint('Script loaded in: ' .. object.Name)\n"
 	if script_class == "LocalScript":
-		source = "-- LocalScript attached to this GUI object\nlocal gui = script.Parent\nif gui.Activated then\n\tgui.Activated:Connect(function()\n\t\tprint(gui.Name .. ' activated')\n\tend)\nend\n"
+		source = "-- LocalScript: runs on the player's copy during Play\nlocal player = game:GetService('Players').LocalPlayer\nprint('LocalScript loaded for ' .. player.Name)\n"
 	new_script.set_meta("code", source)
 	new_script.set_meta("lua_source", source)
 	
-	script_parent.add_child(new_script)
+	script_parent.add_child(new_script, true)
+	explorer_selected_node = new_script
 	_refresh_explorer()
 	_commit_editor_history("Add %s" % script_class)
 	_open_script_in_editor(new_script)
+
+
+func _studio_ai_node_reference(node: Node) -> String:
+	return "node:%d" % node.get_instance_id() if _is_studio_ai_scene_node(node) else ""
+
+
+func _is_studio_ai_scene_node(node: Node) -> bool:
+	return is_instance_valid(node) and not node.is_queued_for_deletion() and (
+		node == placement_parent or (is_instance_valid(placement_parent) and placement_parent.is_ancestor_of(node))
+		or (is_instance_valid(data_model) and data_model.is_ancestor_of(node)))
+
+
+func _resolve_studio_ai_reference(reference: String, selected: Node = null, aliases: Dictionary = {}) -> Node:
+	var target: Node = null
+	if reference == "selected":
+		target = selected
+	elif reference.begins_with("node:") and reference.trim_prefix("node:").is_valid_int():
+		target = instance_from_id(int(reference.trim_prefix("node:"))) as Node
+	elif reference.begins_with("action:"):
+		target = aliases.get(reference.trim_prefix("action:"), null) as Node
+	elif reference == "Workspace":
+		target = placement_parent
+	elif reference in ["StarterPlayerScripts", "StarterCharacterScripts"] and data_model != null:
+		target = data_model.ensure_service("StarterPlayer").get_node_or_null(NodePath(reference))
+	elif reference in ["ServerScriptService", "ServerStorage", "StarterGui", "StarterPack", "StarterPlayer", "ReplicatedStorage", "ReplicatedFirst", "Lighting", "SoundService"] and data_model != null:
+		target = data_model.ensure_service(reference)
+	return target if _is_studio_ai_scene_node(target) else null
+
+
+func _apply_studio_ai_actions(actions: Array, selected_ref: String = "") -> int:
+	studio_ai_last_errors.clear()
+	if _is_studio_editing_locked():
+		studio_ai_last_errors.append("Stop the playtest before applying AI changes.")
+		return 0
+	var expanded := preload("res://addons/roblox_studio/studio_ai_planner.gd").expand_actions(actions)
+	if not expanded.ok:
+		studio_ai_last_errors.append(expanded.error)
+		return 0
+	actions = expanded.actions
+	# Compile all returned sources before changing the place. Invalid code must not
+	# silently replace working scripts, nor leave half of a dependent build applied.
+	for action_variant in actions:
+		if not action_variant is Dictionary:
+			continue
+		var candidate: Dictionary = action_variant
+		if str(candidate.get("type", "")) in ["create_script", "update_script"]:
+			studio_ai_last_errors.append_array(preload("res://addons/roblox_studio/roblox_script_contract.gd").errors(str(candidate.get("source", ""))))
+			var validation: Dictionary = LuaScriptEngine.validate_script_source(str(candidate.get("source", "")))
+			if not bool(validation.get("ok", false)):
+				studio_ai_last_errors.append("%s: %s" % [str(candidate.get("name", "Script")), str(validation.get("error", "Invalid script source"))])
+	if not studio_ai_last_errors.is_empty():
+		return 0
+	var captured_selection := _resolve_studio_ai_reference(selected_ref) if not selected_ref.is_empty() else _get_selected_editor_node()
+	var aliases := {}
+	var created_count := 0
+	var created_parts: Array[Node3D] = []
+	var drop_origin := _get_editor_drop_position(12.0)
+	for action_variant in actions:
+		if not action_variant is Dictionary:
+			continue
+		var action: Dictionary = action_variant
+		var created_node: Node = null
+		match str(action.get("type", "")):
+			"spawn_asset", "attach_sound":
+				var library = preload("res://addons/roblox_studio/toolbox_asset_library.gd")
+				var asset_id := str(action.get("asset_id", ""))
+				var parent := _resolve_studio_ai_reference(str(action.get("parent", "Workspace")), captured_selection, aliases)
+				if str(action.get("type")) == "attach_sound":
+					created_node = library.attach_sound(asset_id, parent)
+				elif parent is Node3D:
+					var rotation_ := _studio_ai_vector3(action.get("rotation", [0, 0, 0]), Vector3.ZERO, -360, 360) * PI / 180
+					var position_ := _studio_ai_vector3(action.get("position", [0, 0, 0]), Vector3.ZERO, -512, 512)
+					var scale_ := _studio_ai_vector3(action.get("scale", [1, 1, 1]), Vector3.ONE, 0.05, 20)
+					created_node = library.spawn_asset(asset_id, parent, Transform3D(Basis.from_euler(rotation_).scaled(scale_), position_))
+					if created_node != null:
+						if parent == placement_parent: created_node.global_position += drop_origin
+						var mesh_index := 0
+						for mesh in created_node.find_children("*", "MeshInstance3D", true, false):
+							_cache_exact_model_mesh(mesh, asset_id, mesh_index)
+							_update_block_collision(mesh)
+							mesh_index += 1
+						explorer_selected_node = created_node
+						created_parts.append(created_node)
+				if created_node == null:
+					studio_ai_last_errors.append("Asset unavailable or invalid target: " + asset_id)
+				else:
+					created_count += 1
+			"create_instance":
+				var class_name_ := str(action.get("class", ""))
+				if class_name_ not in ["ScreenGui", "Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame", "UICorner", "UIStroke", "UIPadding", "UIListLayout", "Folder", "Model", "Humanoid", "Attachment", "Explosion", "Tool", "ClickDetector", "ProximityPrompt", "IntValue", "NumberValue", "StringValue", "BoolValue", "BindableEvent", "RemoteEvent"]:
+					studio_ai_last_errors.append("Unsupported instance class: " + class_name_)
+					continue
+				var parent := _resolve_studio_ai_reference(str(action.get("parent", "StarterGui" if class_name_ == "ScreenGui" else "Workspace")), captured_selection, aliases)
+				if parent == null:
+					studio_ai_last_errors.append("Instance parent could not be resolved.")
+					continue
+				created_node = RobloxDataModelClass.create_instance(class_name_, str(action.get("name", class_name_)))
+				parent.add_child(created_node)
+				created_node.set_meta("bobux_ai_generated", true)
+				_apply_studio_ai_instance_properties(created_node, action.get("properties", {}))
+				created_count += 1
+			"update_instance":
+				var target := _resolve_studio_ai_reference(str(action.get("target", "")), captured_selection, aliases)
+				if target != null and _apply_studio_ai_instance_properties(target, action.get("properties", {})):
+					created_count += 1
+				else:
+					studio_ai_last_errors.append("Instance properties could not be updated.")
+			"modify_selected", "modify_object":
+				var target := captured_selection if str(action.get("type", "")) == "modify_selected" else _resolve_studio_ai_reference(str(action.get("target", "")), captured_selection, aliases)
+				if _apply_studio_ai_object_update(target, action):
+					created_count += 1
+					if target is Node3D:
+						created_parts.append(target as Node3D)
+				else:
+					studio_ai_last_errors.append("Cannot edit target: %s" % str(action.get("target", "selected")))
+			"update_script":
+				var target := _resolve_studio_ai_reference(str(action.get("target", "")), captured_selection, aliases)
+				if _update_studio_ai_script(target, action):
+					created_count += 1
+				else:
+					studio_ai_last_errors.append("Script target no longer exists or is not a script.")
+			"create_script":
+				created_node = _create_studio_ai_script(action, captured_selection, aliases)
+				if created_node != null:
+					created_count += 1
+			"set_environment":
+				if _apply_studio_ai_environment(action):
+					created_count += 1
+			"set_player_settings":
+				var settings := _get_current_player_settings()
+				for field in [["move_speed", 1, 200], ["jump_velocity", 1, 200], ["sprint_multiplier", 1, 10]]:
+					if action.has(field[0]): settings[field[0]] = clampf(float(action[field[0]]), field[1], field[2])
+				_apply_player_settings_to_ui(settings)
+				created_count += 1
+			"create_tool":
+				var authored_tool := _create_authored_tool(null, action)
+				if authored_tool != null:
+					created_node = authored_tool
+					created_parts.append(authored_tool)
+					created_count += 1
+			"insert_asset":
+				var inserted_model := _create_builtin_model(str(action.get("asset", "")), action, drop_origin)
+				if inserted_model != null:
+					created_node = inserted_model
+					for descendant in inserted_model.find_children("*", "MeshInstance3D", true, false):
+						if descendant is Node3D:
+							created_parts.append(descendant as Node3D)
+					created_count += 1
+			"create_part":
+				var parent := _resolve_studio_ai_reference(str(action.get("parent", "Workspace")), captured_selection, aliases)
+				var part := _create_studio_ai_part(action, parent, drop_origin, parent != placement_parent)
+				if part != null:
+					created_node = part
+					created_parts.append(part)
+					created_count += 1
+			"create_model":
+				var parent := _resolve_studio_ai_reference(str(action.get("parent", "Workspace")), captured_selection, aliases)
+				if parent == null:
+					studio_ai_last_errors.append("Model parent could not be resolved.")
+					continue
+				var model := Node3D.new()
+				model.name = str(action.get("name", "Model")).strip_edges()
+				if model.name.is_empty():
+					model.name = "Model"
+				model.set_meta("roblox_class", "Model")
+				model.set_meta("bobux_ai_generated", true)
+				parent.add_child(model)
+				var offset := _studio_ai_vector3(action.get("position", [0, 0, 0]), Vector3.ZERO, -512.0, 512.0)
+				if parent == placement_parent:
+					model.global_position = drop_origin + offset
+				else:
+					model.position = offset
+				model.rotation_degrees = _studio_ai_vector3(action.get("rotation", [0, 0, 0]), Vector3.ZERO, -360.0, 360.0)
+				var model_created := 0
+				var parts: Array = action.get("parts", []) if action.get("parts", []) is Array else []
+				for part_variant in parts.slice(0, 96):
+					if not part_variant is Dictionary:
+						continue
+					var model_part := _create_studio_ai_part(part_variant, model, Vector3.ZERO, true)
+					if model_part != null:
+						created_parts.append(model_part)
+						model_created += 1
+				created_count += model_created
+				if model_created == 0:
+					model.queue_free()
+				else:
+					created_node = model
+		if created_node != null and not str(action.get("id", "")).is_empty():
+			aliases[str(action["id"])] = created_node
+	if created_count > 0:
+		_on_data_model_gui_changed()
+		if not created_parts.is_empty():
+			_set_selection(created_parts)
+		_refresh_explorer()
+		_commit_editor_history("Bobux AI changes")
+		if not created_parts.is_empty():
+			call_deferred("_focus_camera_on_selection")
+	return created_count
+
+
+func _apply_studio_ai_instance_properties(target: Node, properties: Variant) -> bool:
+	if not properties is Dictionary:
+		return false
+	var saved: Dictionary = target.get_meta("roblox_properties", {}).duplicate(true)
+	var allowed := ["Text", "TextSize", "TextColor3", "TextTransparency", "BackgroundColor3", "BackgroundTransparency", "BorderSizePixel", "BorderColor3", "Position", "Size", "AnchorPoint", "Visible", "Enabled", "Active", "DisplayOrder", "ZIndex", "AutoButtonColor", "Image", "Value", "MaxActivationDistance", "RequiresHandle", "ToolTip", "ResetOnSpawn", "TextScaled", "TextWrapped"]
+	allowed.append_array(["Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight", "UseJumpPower", "AutoRotate", "BlastRadius", "BlastPressure", "DestroyJointRadiusPercent"])
+	allowed.append_array(["ActionText", "ObjectText", "HoldDuration", "MaxSpeed", "Disabled"])
+	var changed := false
+	for key in properties:
+		if str(key) == "Attributes" and properties[key] is Dictionary:
+			for attribute in properties[key]:
+				var value: Variant = properties[key][attribute]
+				if value is String or value is bool or value is int or value is float:
+					LuaScriptEngine.BobuxInstance.new(target).SetAttribute(str(attribute), value)
+			saved["Attributes"] = target.get_meta("roblox_properties", {}).get("Attributes", {}).duplicate(true)
+			changed = true
+			continue
+		if str(key) not in allowed:
+			continue
+		saved[key] = properties[key]
+		if key in ["Text", "Value", "Visible", "Enabled", "MaxActivationDistance", "RequiresHandle", "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight", "UseJumpPower", "AutoRotate", "BlastRadius", "BlastPressure", "DestroyJointRadiusPercent", "ActionText", "ObjectText", "HoldDuration", "MaxSpeed", "Disabled"]:
+			LuaScriptEngine.BobuxInstance.new(target)._set(str(key), properties[key])
+		changed = true
+	target.set_meta("roblox_properties", saved)
+	if target is Control:
+		RobloxGuiRuntime._apply_udim2_layout(target, saved)
+		RobloxGuiRuntime._apply_visual_style(target, str(target.get_meta("roblox_class", "Frame")), saved)
+	return changed
+
+func _create_studio_ai_script(action: Dictionary, selected: Node = null, aliases: Dictionary = {}) -> Node:
+	var script_class := str(action.get("script_type", "Script"))
+	if not script_class in ["Script", "LocalScript", "ModuleScript"]:
+		script_class = "Script"
+	var parent_name := str(action.get("parent", "StarterPlayerScripts" if script_class == "LocalScript" else "ServerScriptService"))
+	var script_parent := _resolve_studio_ai_reference(parent_name, selected, aliases)
+	if script_parent == null:
+		studio_ai_last_errors.append("Script parent could not be resolved: %s" % parent_name)
+		return null
+	var script_node := RobloxDataModelClass.create_instance(script_class, str(action.get("name", script_class)))
+	script_node.name = str(action.get("name", script_class)).strip_edges()
+	if script_node.name.is_empty():
+		script_node.name = script_class
+	var source := LuaScriptEngine.normalize_script_source(str(action.get("source", "")).left(60000))
+	script_node.add_to_group("bobux_scripts")
+	script_node.set_meta("script_type", script_class)
+	script_node.set_meta("roblox_class", script_class)
+	script_node.set_meta("disabled", false)
+	script_node.set_meta("code", source)
+	script_node.set_meta("lua_source", source)
+	script_node.set_meta("bobux_ai_generated", true)
+	script_parent.add_child(script_node)
+	_open_script_in_editor(script_node)
+	return script_node
+
+
+func _update_studio_ai_script(target: Node, action: Dictionary) -> bool:
+	if not _is_studio_ai_scene_node(target) or not str(target.get_meta("roblox_class", "")) in ["Script", "LocalScript", "ModuleScript"]:
+		return false
+	if action.has("parent"):
+		var script_parent := _resolve_studio_ai_reference(str(action["parent"]))
+		if script_parent == null or script_parent == target or target.is_ancestor_of(script_parent):
+			return false
+		if target.get_parent() != script_parent:
+			target.reparent(script_parent)
+	if str(action.get("script_type", "")) in ["Script", "LocalScript", "ModuleScript"]:
+		target.set_meta("roblox_class", str(action["script_type"]))
+		target.set_meta("script_type", str(action["script_type"]))
+	var source := LuaScriptEngine.normalize_script_source(str(action.get("source", "")).left(60000))
+	target.set_meta("code", source)
+	target.set_meta("lua_source", source)
+	if action.has("disabled"):
+		target.set_meta("disabled", bool(action["disabled"]))
+		var properties: Dictionary = target.get_meta("roblox_properties", {})
+		properties["Disabled"] = bool(action["disabled"])
+		target.set_meta("roblox_properties", properties)
+	if action.has("name"):
+		target.name = str(action["name"])
+		target.set_meta("Name", str(target.name))
+	var tab := open_scripts.get(target.get_instance_id(), null) as Control
+	if is_instance_valid(tab):
+		for child in tab.get_children():
+			if child is CodeEdit:
+				(child as CodeEdit).text = source
+	var document_button := script_document_buttons.get(target.get_instance_id(), null) as Button
+	if is_instance_valid(document_button):
+		document_button.text = str(target.name)
+	_open_script_in_editor(target)
+	return true
+
+
+func _apply_studio_ai_object_update(target: Node, action: Dictionary) -> bool:
+	if not _is_studio_ai_scene_node(target) or not target is Node3D or bool(target.get_meta("is_roblox_service", false)):
+		return false
+	var spatial := target as Node3D
+	var roblox_class := str(target.get_meta("roblox_class", ""))
+	if not target is MeshInstance3D and not roblox_class in ["Model", "Tool", "Folder"]:
+		return false
+	if action.has("name") and not str(action["name"]).strip_edges().is_empty():
+		target.name = str(action["name"]).strip_edges()
+		target.set_meta("Name", str(target.name))
+		target.set_meta("block_name", str(target.name))
+	if action.has("position"):
+		spatial.global_position = _studio_ai_vector3(action["position"], spatial.global_position, -100000.0, 100000.0)
+	if action.has("rotation"):
+		spatial.rotation_degrees = _studio_ai_vector3(action["rotation"], spatial.rotation_degrees, -360.0, 360.0)
+	if action.has("scale"):
+		spatial.scale *= _studio_ai_vector3(action["scale"], Vector3.ONE, 0.1, 16.0)
+	if target is MeshInstance3D:
+		var part := target as MeshInstance3D
+		if action.has("size"):
+			var mesh_size := part.mesh.get_aabb().size if part.mesh != null else Vector3.ONE
+			var requested_size := _studio_ai_vector3(action["size"], part.scale * mesh_size, 0.1, 256.0)
+			part.scale = requested_size / mesh_size.max(Vector3.ONE * 0.001)
+		_apply_studio_ai_part_update(part, action, true)
+	else:
+		var part_action := action.duplicate(true)
+		for key in ["name", "position", "rotation", "size", "scale", "target"]:
+			part_action.erase(key)
+		for descendant in target.find_children("*", "MeshInstance3D", true, false):
+			_apply_studio_ai_part_update(descendant as MeshInstance3D, part_action, true)
+	if roblox_class == "Tool":
+		for field in [["damage", 0.0, 200.0], ["cooldown", 0.1, 5.0], ["range", 1.0, 24.0]]:
+			if action.has(field[0]):
+				target.set_meta("bobux_tool_" + str(field[0]), clampf(float(action[field[0]]), field[1], field[2]))
+	return true
+
+
+func _apply_studio_ai_environment(action: Dictionary) -> bool:
+	var previous: Dictionary = current_roblox_environment_settings
+	var previous_lighting: Dictionary = previous.get("lighting", {})
+	var sky_color := Color.from_string(str(action.get("sky_color", "#" + _color_from_array(previous.get("background_color", [0.47, 0.74, 0.95]), Color("#78BDF2")).to_html(false))), Color("#78BDF2"))
+	var ambient_color := Color.from_string(str(action.get("ambient_color", "#" + _color_from_array(previous.get("ambient_color", [0.72, 0.83, 0.91]), Color("#B7D3E8")).to_html(false))), Color("#B7D3E8"))
+	var sun_color := Color.from_string(str(action.get("sun_color", "#FFF1D2")), Color("#FFF1D2"))
+	var brightness := clampf(float(action.get("brightness", previous_lighting.get("Brightness", 2.0))), 0.0, 8.0)
+	var clock_time := clampf(float(action.get("clock_time", previous_lighting.get("ClockTime", 14.0))), 0.0, 24.0)
+	var lighting_properties := {
+		"ClockTime": clock_time,
+		"Brightness": brightness,
+		"Ambient": _color_to_array(ambient_color),
+		"OutdoorAmbient": _color_to_array(ambient_color),
+		"ColorShift_Top": _color_to_array(sun_color),
+	}
+	current_sky_source_path = ""
+	current_roblox_environment_settings = {
+		"custom_sky_color": action.has("sky_color") or bool(previous.get("custom_sky_color", false)),
+		"lighting": lighting_properties.duplicate(true),
+		"background_color": _color_to_array(sky_color),
+		"ambient_color": _color_to_array(ambient_color),
+		"ambient_energy": clampf(brightness * 0.32, 0.0, 2.0),
+		"glow_enabled": brightness > 1.25,
+		"glow_intensity": clampf(brightness * 0.18, 0.0, 1.25),
+		"glow_bloom": 0.08,
+		"fog_enabled": false,
+	}
+	set_meta("roblox_lighting_properties", lighting_properties.duplicate(true))
+	if data_model != null:
+		var lighting := data_model.ensure_service("Lighting")
+		if lighting != null:
+			lighting.set_meta("roblox_properties", lighting_properties.duplicate(true))
+			lighting.set_meta("bobux_ai_generated", true)
+	_apply_imported_roblox_environment_preview()
+	if sun_light != null:
+		sun_light.light_color = sun_color
+		sun_light.light_energy = brightness
+		sun_light.shadow_enabled = true
+		var daylight_angle := lerpf(-165.0, 15.0, clock_time / 24.0)
+		sun_light.rotation_degrees = Vector3(daylight_angle, -32.0, 0.0)
+	return true
+
+
+func _create_authored_tool(tool_parent: Node, specification: Dictionary = {}) -> Node3D:
+	if data_model == null:
+		return null
+	if tool_parent == null or (bool(tool_parent.get_meta("is_roblox_service", false)) and str(tool_parent.get_meta("roblox_class", "")) != "StarterPack"):
+		tool_parent = data_model.ensure_service("StarterPack")
+	if tool_parent == null:
+		return null
+	var tool_kind := str(specification.get("tool_kind", "Hammer"))
+	if not tool_kind in ["Hammer", "Sword", "Pickup"]:
+		tool_kind = "Hammer"
+	var default_name := "Tool" if specification.is_empty() else ("Bobux %s" % tool_kind)
+	var tool_name := str(specification.get("name", default_name)).strip_edges()
+	if tool_name.is_empty():
+		tool_name = default_name
+	var tool_color := Color.from_string(str(specification.get("color", "#6E97C8")), Color("#6E97C8"))
+	var damage := clampf(float(specification.get("damage", 25.0)), 0.0, 200.0)
+	var cooldown := clampf(float(specification.get("cooldown", 0.55)), 0.1, 5.0)
+	var attack_range := clampf(float(specification.get("range", 5.0)), 1.0, 24.0)
+	var fallback_handle_size := Vector3(0.55, 3.5, 0.55) if tool_kind != "Sword" else Vector3(0.45, 4.2, 0.45)
+	var handle_size := _studio_ai_vector3(specification.get("handle_size", [fallback_handle_size.x, fallback_handle_size.y, fallback_handle_size.z]), fallback_handle_size, 0.15, 12.0)
+
+	var tool := RobloxDataModelClass.create_instance("Tool", tool_name) as Node3D
+	if tool == null:
+		return null
+	tool.name = tool_name
+	tool.set_meta("Name", tool_name)
+	tool.set_meta("block_name", tool_name)
+	tool.set_meta("bobux_ai_generated", not specification.is_empty())
+	tool.set_meta("bobux_tool_kind", tool_kind)
+	tool.set_meta("bobux_tool_damage", damage)
+	tool.set_meta("bobux_tool_cooldown", cooldown)
+	tool.set_meta("bobux_tool_range", attack_range)
+	tool.set_meta("bobux_tool_last_activation_msec", 0)
+	tool.add_to_group("roblox_tools")
+	tool.set_meta("inventory_source", true)
+	var tool_properties: Dictionary = tool.get_meta("roblox_properties", {}) if tool.get_meta("roblox_properties", {}) is Dictionary else {}
+	tool_properties["RequiresHandle"] = true
+	tool_properties["CanBeDropped"] = false
+	tool_properties["ToolTip"] = "%s - %.0f damage" % [tool_kind, damage]
+	tool_properties["GripPos"] = [0.0, -0.35, 0.0]
+	tool.set_meta("roblox_properties", tool_properties)
+	tool.visible = false
+	tool_parent.add_child(tool, true)
+
+	var handle := _create_authored_tool_part(tool, "Handle", "Box", handle_size, Vector3.ZERO, tool_color.darkened(0.28), "Wood")
+	if tool_kind == "Hammer":
+		_create_authored_tool_part(tool, "HammerHead", "Box", Vector3(3.1, 1.05, 1.15), Vector3(0.0, handle_size.y * 0.47, 0.0), tool_color, "Metal")
+		_create_authored_tool_part(tool, "HammerFace", "Cylinder", Vector3(1.35, 0.5, 1.35), Vector3(1.75, handle_size.y * 0.47, 0.0), tool_color.lightened(0.12), "Metal", Vector3(0.0, 0.0, 90.0))
+	elif tool_kind == "Sword":
+		_create_authored_tool_part(tool, "Blade", "Wedge", Vector3(0.65, 4.3, 0.28), Vector3(0.0, handle_size.y * 0.83, 0.0), tool_color.lightened(0.35), "Metal")
+		_create_authored_tool_part(tool, "Guard", "Box", Vector3(2.3, 0.3, 0.55), Vector3(0.0, handle_size.y * 0.48, 0.0), tool_color, "Metal")
+	if handle != null:
+		handle.set_meta("bobux_tool_handle", true)
+
+	var local_script := RobloxDataModelClass.create_instance("LocalScript", "ToolClient")
+	var source := """local tool = script.Parent
+local lastSwing = 0
+tool.Equipped:Connect(function()
+    tool:SetAttribute(\"Equipped\", true)
+end)
+tool.Unequipped:Connect(function()
+    tool:SetAttribute(\"Equipped\", false)
+end)
+tool.Activated:Connect(function()
+    local now = tick()
+    if now - lastSwing < %.3f then return end
+    lastSwing = now
+    tool:SetAttribute(\"LastSwing\", now)
+    print(tool.Name .. \" activated\")
+end)
+""" % cooldown
+	local_script.set_meta("code", source)
+	local_script.set_meta("lua_source", source)
+	local_script.set_meta("disabled", false)
+	local_script.set_meta("bobux_ai_generated", not specification.is_empty())
+	tool.add_child(local_script, true)
+	return tool
+
+
+func _create_authored_tool_part(parent: Node3D, part_name: String, shape: String, size: Vector3, position: Vector3, color: Color, material: String, rotation_degrees_value: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var part := _build_imported_block_instance(shape, color, material, 0.0, false, part_name)
+	part.name = part_name
+	part.scale = size
+	part.position = position
+	part.rotation_degrees = rotation_degrees_value
+	part.set_meta("Name", part_name)
+	part.set_meta("block_name", part_name)
+	part.set_meta("roblox_class", "Part")
+	part.set_meta("anchored", false)
+	part.set_meta("can_collide", false)
+	parent.add_child(part, true)
+	return part
+
+
+func _create_builtin_model(asset_name: String, options: Dictionary = {}, drop_origin: Vector3 = Vector3.ZERO) -> Node3D:
+	var canonical := asset_name.strip_edges().to_lower()
+	if canonical == "hammer":
+		var hammer_options := options.duplicate(true)
+		hammer_options["tool_kind"] = "Hammer"
+		return _create_authored_tool(null, hammer_options)
+	var specs := _builtin_model_part_specs(canonical)
+	if specs.is_empty():
+		return null
+	var model := Node3D.new()
+	model.name = str(options.get("name", asset_name.capitalize())).strip_edges()
+	if model.name.is_empty():
+		model.name = asset_name.capitalize()
+	model.set_meta("roblox_class", "Model")
+	model.set_meta("bobux_builtin_asset", canonical)
+	model.set_meta("bobux_ai_generated", bool(options.get("bobux_ai_generated", true)))
+	placement_parent.add_child(model)
+	var offset := _studio_ai_vector3(options.get("position", [0.0, 0.0, 0.0]), Vector3.ZERO, -512.0, 512.0)
+	model.global_position = drop_origin + offset
+	model.rotation_degrees = _studio_ai_vector3(options.get("rotation", [0.0, 0.0, 0.0]), Vector3.ZERO, -360.0, 360.0)
+	model.scale = _studio_ai_vector3(options.get("scale", [1.0, 1.0, 1.0]), Vector3.ONE, 0.1, 16.0)
+	var requested_color_text := str(options.get("color", "")).strip_edges()
+	var tint_enabled := not requested_color_text.is_empty() and requested_color_text.to_upper() != "#A3A2A5"
+	var requested_color := Color.from_string(requested_color_text, Color.WHITE)
+	for spec_variant in specs:
+		if not spec_variant is Dictionary:
+			continue
+		var spec: Dictionary = spec_variant
+		var default_color := Color.from_string(str(spec.get("color", "#A3A2A5")), Color("#A3A2A5"))
+		if tint_enabled and bool(spec.get("tint", true)):
+			default_color = requested_color
+		var part_action := {
+			"name": str(spec.get("name", "Part")),
+			"shape": str(spec.get("shape", "Box")),
+			"size": spec.get("size", [1.0, 1.0, 1.0]),
+			"position": spec.get("position", [0.0, 0.0, 0.0]),
+			"rotation": spec.get("rotation", [0.0, 0.0, 0.0]),
+			"color": default_color.to_html(false),
+			"material": str(spec.get("material", "Plastic")),
+			"anchored": true,
+			"can_collide": bool(spec.get("can_collide", true)),
+			"effects": spec.get("effects", []),
+			"interaction": spec.get("interaction", {}),
+		}
+		var part := _create_studio_ai_part(part_action, model, Vector3.ZERO, true)
+		if part != null and bool(spec.get("climbable", false)):
+			part.set_meta("climbable", true)
+			part.add_to_group("roblox_climbable")
+	return model
+
+
+func _builtin_model_part_specs(asset_name: String) -> Array[Dictionary]:
+	match asset_name:
+		"coin":
+			return [{"name":"Coin", "shape":"Cylinder", "size":[2.6, 0.38, 2.6], "position":[0, 2.2, 0], "rotation":[90, 0, 0], "color":"#F5C542", "material":"Metal", "can_collide":false, "interaction":{"mode":"click", "action":"collect", "prompt":"Collect coin", "max_distance":16}}]
+		"tree":
+			return [
+				{"name":"Trunk", "shape":"Cylinder", "size":[2.0, 8.0, 2.0], "position":[0, 4, 0], "color":"#7A4D2A", "material":"Wood", "tint":false},
+				{"name":"CrownLow", "shape":"Sphere", "size":[7.2, 4.5, 7.2], "position":[0, 8.1, 0], "color":"#2E8B45", "material":"Grass"},
+				{"name":"CrownHigh", "shape":"Sphere", "size":[5.4, 4.0, 5.4], "position":[0, 11.0, 0], "color":"#39A852", "material":"Grass"},
+			]
+		"crate":
+			return [
+				{"name":"CrateBody", "shape":"Box", "size":[4,4,4], "position":[0,2,0], "color":"#A86F3D", "material":"Wood"},
+				{"name":"BraceA", "shape":"Box", "size":[0.35,5.2,0.25], "position":[0,2,2.08], "rotation":[0,0,45], "color":"#6D4427", "material":"Wood", "tint":false},
+				{"name":"BraceB", "shape":"Box", "size":[0.35,5.2,0.25], "position":[0,2,2.1], "rotation":[0,0,-45], "color":"#6D4427", "material":"Wood", "tint":false},
+			]
+		"chair":
+			return [
+				{"name":"Seat", "shape":"Box", "size":[4,0.6,4], "position":[0,3,0], "color":"#9A6337", "material":"Wood"},
+				{"name":"Back", "shape":"Box", "size":[4,4.5,0.55], "position":[0,5.4,-1.72], "color":"#9A6337", "material":"Wood"},
+				{"name":"Leg1", "shape":"Box", "size":[0.55,3,0.55], "position":[-1.5,1.5,-1.5], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg2", "shape":"Box", "size":[0.55,3,0.55], "position":[1.5,1.5,-1.5], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg3", "shape":"Box", "size":[0.55,3,0.55], "position":[-1.5,1.5,1.5], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg4", "shape":"Box", "size":[0.55,3,0.55], "position":[1.5,1.5,1.5], "color":"#754724", "material":"Wood", "tint":false},
+			]
+		"table":
+			return [
+				{"name":"Top", "shape":"Box", "size":[8,0.7,5], "position":[0,4.2,0], "color":"#9A6337", "material":"Wood"},
+				{"name":"Leg1", "shape":"Box", "size":[0.65,4.2,0.65], "position":[-3.2,2.1,-1.7], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg2", "shape":"Box", "size":[0.65,4.2,0.65], "position":[3.2,2.1,-1.7], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg3", "shape":"Box", "size":[0.65,4.2,0.65], "position":[-3.2,2.1,1.7], "color":"#754724", "material":"Wood", "tint":false},
+				{"name":"Leg4", "shape":"Box", "size":[0.65,4.2,0.65], "position":[3.2,2.1,1.7], "color":"#754724", "material":"Wood", "tint":false},
+			]
+		"lamp":
+			return [
+				{"name":"Base", "shape":"Cylinder", "size":[2.4,0.5,2.4], "position":[0,0.25,0], "color":"#4B4F58", "material":"Metal", "tint":false},
+				{"name":"Pole", "shape":"Cylinder", "size":[0.45,8,0.45], "position":[0,4.25,0], "color":"#4B4F58", "material":"Metal", "tint":false},
+				{"name":"Light", "shape":"Sphere", "size":[2.2,2.2,2.2], "position":[0,8.7,0], "color":"#FFE08A", "material":"Neon", "can_collide":false, "effects":[{"type":"PointLight", "color":"#FFE08A", "enabled":true, "brightness":2.4, "range":18}]},
+			]
+		"door":
+			return [
+				{"name":"Door", "shape":"Box", "size":[5,8,0.45], "position":[0,4,0], "color":"#7A4728", "material":"Wood", "interaction":{"mode":"click", "action":"hide", "prompt":"Open door", "max_distance":16}},
+				{"name":"Knob", "shape":"Sphere", "size":[0.45,0.45,0.45], "position":[1.8,4,0.32], "color":"#E1B34C", "material":"Metal", "can_collide":false, "tint":false},
+			]
+		"ladder":
+			var ladder: Array[Dictionary] = [
+				{"name":"LeftRail", "shape":"Box", "size":[0.45,12,0.45], "position":[-1.6,6,0], "color":"#B8B8B8", "material":"Metal", "climbable":true},
+				{"name":"RightRail", "shape":"Box", "size":[0.45,12,0.45], "position":[1.6,6,0], "color":"#B8B8B8", "material":"Metal", "climbable":true},
+			]
+			for rung_index in range(7):
+				ladder.append({"name":"Rung%d" % (rung_index + 1), "shape":"Cylinder", "size":[0.34,3.2,0.34], "position":[0,1.1 + rung_index * 1.65,0], "rotation":[0,0,90], "color":"#B8B8B8", "material":"Metal", "climbable":true})
+			return ladder
+		"arch":
+			return [
+				{"name":"LeftPillar", "shape":"Box", "size":[3,10,3], "position":[-5,5,0], "color":"#B8A58D", "material":"Concrete"},
+				{"name":"RightPillar", "shape":"Box", "size":[3,10,3], "position":[5,5,0], "color":"#B8A58D", "material":"Concrete"},
+				{"name":"ArchTop", "shape":"Cylinder", "size":[13,3,3], "position":[0,10,0], "rotation":[0,0,90], "color":"#B8A58D", "material":"Concrete"},
+			]
+		"stairs":
+			var stairs: Array[Dictionary] = []
+			for stair_index in range(8):
+				stairs.append({"name":"Step%d" % (stair_index + 1), "shape":"Box", "size":[6,0.75,2.2], "position":[0,0.375 + stair_index * 0.75,stair_index * -1.7], "color":"#9A9DA3", "material":"Concrete"})
+			return stairs
+	return []
+
+
+func _create_studio_ai_part(action: Dictionary, parent: Node, origin: Vector3, local_position: bool) -> MeshInstance3D:
+	if parent == null:
+		return null
+	var shape := str(action.get("shape", "Box"))
+	if not shape in ["Box", "Sphere", "Cylinder", "Cone", "Wedge", "CornerWedge", "Truss", "Water", "Spawn", "Checkpoint", "Teleport", "Seat", "VehicleSeat"]:
+		shape = "Box"
+	var color := Color.from_string(str(action.get("color", "#A3A2A5")), Color("#A3A2A5"))
+	var material := str(action.get("material", "Plastic"))
+	var can_collide := bool(action.get("can_collide", true))
+	var part := _build_block_instance(shape, color, material, 0.0, can_collide, str(action.get("name", "Part")))
+	part.name = str(action.get("name", "Part")).strip_edges()
+	if part.name.is_empty():
+		part.name = "Part"
+	part.scale = _studio_ai_vector3(action.get("size", [4.0, 1.0, 2.0]), Vector3(4.0, 1.0, 2.0), 0.1, 256.0)
+	part.rotation_degrees = _studio_ai_vector3(action.get("rotation", [0.0, 0.0, 0.0]), Vector3.ZERO, -360.0, 360.0)
+	part.set_meta("anchored", bool(action.get("anchored", true)))
+	part.set_meta("bobux_ai_generated", true)
+	parent.add_child(part)
+	var offset := _studio_ai_vector3(action.get("position", [0.0, 0.0, 0.0]), Vector3.ZERO, -512.0, 512.0)
+	if local_position:
+		part.position = offset
+	else:
+		part.global_position = origin + offset
+	_apply_studio_ai_part_update(part, action, false)
+	return part
+
+
+func _apply_studio_ai_part_update(part: MeshInstance3D, action: Dictionary, preserve_transform: bool = true) -> void:
+	if part == null or not is_instance_valid(part):
+		return
+	if action.has("name"):
+		var requested_name := str(action.get("name", part.name)).strip_edges()
+		if not requested_name.is_empty():
+			part.name = requested_name
+			part.set_meta("block_name", requested_name)
+	if action.has("color"):
+		var color := Color.from_string(str(action.get("color", "#A3A2A5")), _get_bobux_block_color(part, Color("#A3A2A5")))
+		part.set_meta("bobux_color", Color(color.r, color.g, color.b, 1.0))
+	if action.has("material"):
+		part.set_meta("material_type", str(action.get("material", "Plastic")))
+	if action.has("anchored"):
+		part.set_meta("anchored", bool(action.get("anchored", true)))
+	if action.has("physics_mode"):
+		var physics_mode := str(action.get("physics_mode", "Static")).strip_edges().capitalize()
+		part.set_meta("bobux_physics_mode", physics_mode)
+		if physics_mode == "Dynamic":
+			part.set_meta("anchored", false)
+	for physics_field in [
+		["mass", "bobux_physics_mass", 1.0, 0.05, 1000.0],
+		["friction", "bobux_physics_friction", 0.5, 0.0, 1.0],
+		["bounce", "bobux_physics_bounce", 0.0, 0.0, 1.0],
+		["gravity_scale", "bobux_physics_gravity_scale", 1.0, -4.0, 4.0],
+		["linear_damp", "bobux_physics_linear_damp", 0.1, 0.0, 32.0],
+		["angular_damp", "bobux_physics_angular_damp", 0.1, 0.0, 32.0]
+	]:
+		var action_key := str(physics_field[0])
+		if action.has(action_key):
+			part.set_meta(
+				str(physics_field[1]),
+				clampf(float(action.get(action_key, physics_field[2])), float(physics_field[3]), float(physics_field[4]))
+			)
+	if action.has("can_collide"):
+		part.set_meta("can_collide", bool(action.get("can_collide", true)))
+	if action.has("effects") and action.get("effects", []) is Array:
+		part.set_meta("bobux_ai_effects", (action.get("effects", []) as Array).duplicate(true))
+	if action.has("interaction") and action.get("interaction", {}) is Dictionary:
+		part.set_meta("bobux_ai_interaction", (action.get("interaction", {}) as Dictionary).duplicate(true))
+	if not preserve_transform:
+		part.set_meta("bobux_ai_generated", true)
+	_rebuild_block_material(part)
+	_rebuild_block_helpers(part)
+	_rebuild_studio_ai_components(part)
+
+
+func _rebuild_studio_ai_components(part: MeshInstance3D) -> void:
+	if part == null or not is_instance_valid(part):
+		return
+	for child in part.get_children():
+		if bool(child.get_meta("bobux_ai_component", false)):
+			child.queue_free()
+	var effects: Array = part.get_meta("bobux_ai_effects", []) if part.get_meta("bobux_ai_effects", []) is Array else []
+	for index in range(effects.size()):
+		if not effects[index] is Dictionary:
+			continue
+		var effect_spec: Dictionary = effects[index]
+		var effect_type := str(effect_spec.get("type", ""))
+		if not effect_type in ["Fire", "Smoke", "Sparkles", "PointLight"]:
+			continue
+		var effect_node := RobloxDataModelClass.create_instance(effect_type, "%s_%d" % [effect_type, index + 1])
+		if effect_node == null:
+			continue
+		_configure_studio_ai_effect_node(effect_node, effect_spec)
+		part.add_child(effect_node)
+	var interaction: Dictionary = part.get_meta("bobux_ai_interaction", {}) if part.get_meta("bobux_ai_interaction", {}) is Dictionary else {}
+	if interaction.is_empty():
+		return
+	var mode := str(interaction.get("mode", "click"))
+	var interaction_class := "ProximityPrompt" if mode == "proximity" else ("TouchInterest" if mode == "touch" else "ClickDetector")
+	var interaction_node := RobloxDataModelClass.create_instance(interaction_class, interaction_class)
+	if interaction_node == null:
+		interaction_node = Node.new()
+	interaction_node.name = interaction_class
+	interaction_node.set_meta("roblox_class", interaction_node.name)
+	interaction_node.set_meta("bobux_ai_component", true)
+	interaction_node.set_meta("bobux_runtime_generated", true)
+	interaction_node.set_meta("bobux_ai_interaction", interaction.duplicate(true))
+	interaction_node.set_meta("roblox_properties", {
+		"Enabled": true,
+		"ActionText": str(interaction.get("prompt", "Use")),
+		"MaxActivationDistance": float(interaction.get("max_distance", 16.0))
+	})
+	interaction_node.set_meta("max_activation_distance", float(interaction.get("max_distance", 16.0)))
+	interaction_node.set_meta("action_text", str(interaction.get("prompt", "Use")))
+	if mode == "proximity":
+		interaction_node.add_to_group("roblox_proximity_prompts")
+	elif mode == "click":
+		interaction_node.add_to_group("roblox_click_detectors")
+	part.add_child(interaction_node)
+	var interaction_source := _studio_ai_interaction_source(mode, str(interaction.get("action", "")))
+	if not interaction_source.is_empty():
+		var script_node := RobloxDataModelClass.create_instance("Script", "InteractionScript")
+		if script_node != null:
+			script_node.name = "InteractionScript"
+			script_node.add_to_group("bobux_scripts")
+			script_node.set_meta("script_type", "Script")
+			script_node.set_meta("roblox_class", "Script")
+			script_node.set_meta("disabled", false)
+			script_node.set_meta("code", interaction_source)
+			script_node.set_meta("lua_source", interaction_source)
+			script_node.set_meta("bobux_ai_component", true)
+			script_node.set_meta("bobux_ai_generated", true)
+			part.add_child(script_node)
+
+
+func _studio_ai_interaction_source(mode: String, action: String) -> String:
+	var event_expression := "detector.MouseClick"
+	if mode == "proximity":
+		event_expression = "detector.Triggered"
+	elif mode == "touch":
+		event_expression = "part.Touched"
+	var detector_lookup := "local detector = part:FindFirstChild(\"ClickDetector\")"
+	if mode == "proximity":
+		detector_lookup = "local detector = part:FindFirstChild(\"ProximityPrompt\")"
+	elif mode == "touch":
+		detector_lookup = "local detector = part"
+	match action:
+		"collect":
+			return """local part = script.Parent
+%s
+local collected = false
+%s:Connect(function(player)
+    if collected then return end
+    collected = true
+    part:Destroy()
+end)
+""" % [detector_lookup, event_expression]
+		"hide":
+			return """local part = script.Parent
+%s
+local opened = false
+%s:Connect(function(player)
+    opened = not opened
+    part.Transparency = opened and 1 or 0
+    part.CanCollide = not opened
+end)
+""" % [detector_lookup, event_expression]
+		"toggle_door":
+			return """local door = script.Parent
+%s
+local closedPosition = door.Position
+local openPosition = closedPosition + Vector3.new(0, math.max(door.Size.Y + 0.35, 4), 0)
+local opened = false
+%s:Connect(function(player)
+    if opened then
+        door.CanCollide = true
+        door.Position = closedPosition
+    else
+        door.Position = openPosition
+        door.CanCollide = false
+    end
+    opened = not opened
+end)
+""" % [detector_lookup, event_expression]
+		"toggle_effect":
+			return """local part = script.Parent
+%s
+%s:Connect(function(player)
+	local effect = part:FindFirstChildOfClass("Fire")
+	if effect == nil then effect = part:FindFirstChildOfClass("Smoke") end
+	if effect == nil then effect = part:FindFirstChildOfClass("Sparkles") end
+	if effect == nil then effect = part:FindFirstChildOfClass("PointLight") end
+    if effect then effect.Enabled = not effect.Enabled end
+end)
+""" % [detector_lookup, event_expression]
+	return ""
+
+
+func _configure_studio_ai_effect_node(effect_node: Node, effect_spec: Dictionary) -> void:
+	var effect_type := str(effect_spec.get("type", effect_node.name))
+	var primary := Color.from_string(str(effect_spec.get("color", "#FF7814")), Color("#FF7814"))
+	effect_node.name = effect_type
+	effect_node.set_meta("roblox_class", effect_type)
+	effect_node.set_meta("bobux_ai_component", true)
+	effect_node.set_meta("bobux_runtime_generated", true)
+	effect_node.set_meta("bobux_ai_effect", effect_spec.duplicate(true))
+	effect_node.set_meta("roblox_properties", {
+		"Enabled": bool(effect_spec.get("enabled", true)),
+		"Color": [primary.r, primary.g, primary.b],
+		"Brightness": float(effect_spec.get("brightness", 2.0)),
+		"Range": float(effect_spec.get("range", 12.0)),
+		"Rate": float(effect_spec.get("rate", 20.0))
+	})
+	if effect_node is GPUParticles3D:
+		var particles := effect_node as GPUParticles3D
+		particles.emitting = bool(effect_spec.get("enabled", true))
+		particles.amount = maxi(1, int(effect_spec.get("rate", 20.0)))
+		var process := particles.process_material as ParticleProcessMaterial
+		if process == null:
+			process = ParticleProcessMaterial.new()
+			particles.process_material = process
+		process.color = primary
+	elif effect_node is Light3D:
+		var light := effect_node as Light3D
+		light.light_color = primary
+		light.light_energy = float(effect_spec.get("brightness", 2.0))
+		light.visible = bool(effect_spec.get("enabled", true))
+		if light is OmniLight3D:
+			(light as OmniLight3D).omni_range = float(effect_spec.get("range", 12.0))
+
+
+func _studio_ai_vector3(value: Variant, fallback: Vector3, minimum: float, maximum: float) -> Vector3:
+	if not value is Array or value.size() < 3:
+		return fallback
+	return Vector3(
+		clampf(float(value[0]), minimum, maximum),
+		clampf(float(value[1]), minimum, maximum),
+		clampf(float(value[2]), minimum, maximum)
+	)
 
 
 func _is_gui_script_parent(node: Node) -> bool:
@@ -7417,15 +8771,13 @@ func _open_script_in_editor(script_node: Node) -> void:
 	_style_white_button(save_btn)
 	toolbar.add_child(save_btn)
 	
-	var run_btn := Button.new()
-	run_btn.text = "Run"
-	_style_white_button(run_btn, Color.GREEN)
-	toolbar.add_child(run_btn)
-	
-	var stop_btn := Button.new()
-	stop_btn.text = "Stop"
-	_style_white_button(stop_btn, Color.RED)
-	toolbar.add_child(stop_btn)
+	var keyboard_btn: Button = null
+	if _is_mobile_studio_runtime():
+		keyboard_btn = Button.new()
+		keyboard_btn.text = "Keyboard"
+		keyboard_btn.tooltip_text = "Focus the code editor and open the screen keyboard"
+		_style_white_button(keyboard_btn)
+		toolbar.add_child(keyboard_btn)
 	
 	var close_btn := Button.new()
 	close_btn.text = "Close"
@@ -7437,6 +8789,11 @@ func _open_script_in_editor(script_node: Node) -> void:
 	code_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	setup_lua_editor(code_edit)
 	tab_root.add_child(code_edit)
+	if keyboard_btn != null:
+		keyboard_btn.pressed.connect(func() -> void:
+			code_edit.grab_focus()
+		)
+		code_edit.call_deferred("grab_focus")
 	var document_button := script_document_buttons.get(inst_id, null) as Button
 	code_edit.text_changed.connect(func() -> void:
 		if document_button != null and is_instance_valid(document_button) and not document_button.text.ends_with(" *"):
@@ -7444,7 +8801,7 @@ func _open_script_in_editor(script_node: Node) -> void:
 	)
 	
 	var console_panel := PanelContainer.new()
-	console_panel.custom_minimum_size = Vector2(0, 120)
+	console_panel.custom_minimum_size = Vector2(0, 84 if _is_mobile_studio_runtime() else 120)
 	console_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#17191D"), Color("#333840"), 1))
 	tab_root.add_child(console_panel)
 	
@@ -7467,6 +8824,7 @@ func _open_script_in_editor(script_node: Node) -> void:
 		if not is_instance_valid(script_node):
 			console_text.append_text("[Error] Script instance no longer exists.\n")
 			return
+		code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
 		var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
 		if not bool(validation.get("ok", false)):
 			console_text.append_text("[Compile Error] %s\n" % str(validation.get("error", "Unknown syntax error")))
@@ -7474,28 +8832,7 @@ func _open_script_in_editor(script_node: Node) -> void:
 		_commit_script_editor_source(script_node, code_edit.text)
 		if document_button != null and is_instance_valid(document_button):
 			document_button.text = script_node.name
-		console_text.append_text("[System] Script saved and compiled successfully.\n")
-	)
-	
-	run_btn.pressed.connect(func():
-		if not is_instance_valid(script_node):
-			console_text.append_text("[Error] Script instance no longer exists.\n")
-			return
-		_commit_script_editor_source(script_node, code_edit.text)
-		console_text.append_text("[System] Executing Lua...\n")
-		var run_result: Dictionary = LuaScriptEngine.run_script(code_edit.text, script_node)
-		if not run_result.get("ok", false):
-			console_text.append_text("[Error] " + str(run_result.get("error", "Unknown error")) + "\n")
-		elif bool(run_result.get("scheduled", false)):
-			console_text.append_text("[System] Script is running in the scheduler.\n")
-		else:
-			console_text.append_text("[System] Execution completed.\n")
-	)
-
-	stop_btn.pressed.connect(func():
-		if is_instance_valid(script_node) and LuaScriptEngine != null and LuaScriptEngine.has_method("stop_script"):
-			LuaScriptEngine.stop_script(script_node)
-		console_text.append_text("[System] Script stopped.\n")
+		console_text.append_text("[System] Saved. The script starts automatically with Play. Restart Play to apply changes.\n")
 	)
 	
 	close_btn.pressed.connect(func():
@@ -7510,6 +8847,24 @@ func _open_script_in_editor(script_node: Node) -> void:
 	
 	script_editor_tabs.current_tab = script_editor_tabs.get_tab_idx_from_control(tab_root)
 
+
+func _on_lua_script_message(context: Node, message: String, is_error: bool) -> void:
+	if not _is_studio_ai_scene_node(context) and not (is_instance_valid(studio_playtest_player) and studio_playtest_player.is_ancestor_of(context)):
+		return
+	var reference := str(context.get_meta("roblox_ref", ""))
+	for instance_id in open_scripts:
+		var authored := instance_from_id(int(instance_id)) as Node
+		if not is_instance_valid(authored):
+			continue
+		if authored != context and (reference.is_empty() or str(authored.get_meta("roblox_ref", "")) != reference):
+			continue
+		var output := _find_output_log(open_scripts[instance_id])
+		if output != null:
+			if output.get_line_count() > 500:
+				output.clear()
+			output.append_text(("[Error] " if is_error else "") + message + "\n")
+	if is_error and toolbar_status_label != null:
+		toolbar_status_label.text = "%s: %s" % [context.name, message.left(220)]
 
 func _commit_script_editor_source(script_node: Node, source: String) -> void:
 	if script_node == null:
@@ -7552,9 +8907,11 @@ func setup_lua_editor(code_edit: CodeEdit) -> void:
 	code_edit.line_folding = true
 	code_edit.gutters_draw_line_numbers = true
 	code_edit.highlight_current_line = true
-	code_edit.minimap_draw = true
+	code_edit.minimap_draw = not _is_mobile_studio_runtime()
 	code_edit.minimap_width = 96
-	code_edit.add_theme_font_size_override("font_size", 14)
+	code_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY if _is_mobile_studio_runtime() else TextEdit.LINE_WRAPPING_NONE
+	code_edit.virtual_keyboard_enabled = true
+	code_edit.add_theme_font_size_override("font_size", 17 if _is_mobile_studio_runtime() else 14)
 	code_edit.add_theme_color_override("background_color", Color("#1E1E1E"))
 	code_edit.add_theme_color_override("font_color", Color("#D4D4D4"))
 	code_edit.add_theme_color_override("font_readonly_color", Color("#A7ACB5"))
@@ -7619,11 +8976,23 @@ func _open_toolbox_dialog() -> void:
 		["Part", "Box"],
 		["WedgePart", "Wedge"],
 		["Cylinder", "Cylinder"],
+		["Cone", "Cone"],
 		["Sphere", "Sphere"],
 		["SpawnLocation", "Spawn"],
 		["Checkpoint", "Checkpoint"],
 		["Teleport", "Teleport"],
-		["R6 Character", "Character"]
+		["R6 Character", "Character"],
+		["Coin", "Coin"],
+		["Tree", "Tree"],
+		["Crate", "Crate"],
+		["Chair", "Chair"],
+		["Table", "Table"],
+		["Lamp", "Lamp"],
+		["Door", "Door"],
+		["Ladder", "Ladder"],
+		["Arch", "Arch"],
+		["Stairs", "Stairs"],
+		["Hammer", "Hammer"]
 	]:
 		builtin_grid.add_child(_create_toolbox_builtin_card(str(builtin[0]), str(builtin[1])))
 
@@ -7731,6 +9100,13 @@ func _insert_toolbox_builtin(shape_name: String) -> void:
 		return
 	if shape_name == "Character":
 		_insert_character_placeholder()
+	elif shape_name in ["Coin", "Tree", "Crate", "Chair", "Table", "Lamp", "Door", "Ladder", "Arch", "Stairs", "Hammer"]:
+		var model := _create_builtin_model(shape_name, {"bobux_ai_generated": false}, _get_editor_drop_position(10.0))
+		if model != null:
+			explorer_selected_node = model
+			_refresh_explorer()
+			_show_properties_for_node(model)
+			_commit_editor_history("Insert built-in model")
 	else:
 		_place_shape_from_ribbon(shape_name)
 	if toolbox_dialog != null and is_instance_valid(toolbox_dialog):
@@ -7750,7 +9126,7 @@ func _get_toolbox_preview_icon(title: String, shape_name: String) -> Texture2D:
 			primary = Color("#8FD18F")
 		"Wedge":
 			primary = Color("#B38BFA")
-		"Cylinder", "Sphere":
+		"Cylinder", "Cone", "Sphere":
 			primary = Color("#77B7E5")
 	for y in range(36, 40):
 		for x in range(14, 82):
@@ -7763,6 +9139,9 @@ func _get_toolbox_preview_icon(title: String, shape_name: String) -> Texture2D:
 			_draw_icon_rect(image, Rect2i(34, 14, 28, 20), primary, true)
 			_draw_icon_circle(image, Vector2i(48, 14), 14, primary.lightened(0.12))
 			_draw_icon_circle(image, Vector2i(48, 34), 14, primary.darkened(0.12))
+		"Cone":
+			_draw_icon_triangle(image, Vector2i(48, 7), Vector2i(31, 35), Vector2i(65, 35), primary)
+			_draw_icon_line(image, Vector2i(31, 35), Vector2i(65, 35), primary.darkened(0.25))
 		"Wedge":
 			_draw_icon_triangle(image, Vector2i(30, 34), Vector2i(66, 34), Vector2i(66, 12), primary)
 			_draw_icon_line(image, Vector2i(30, 34), Vector2i(66, 12), primary.darkened(0.35))
@@ -8130,7 +9509,16 @@ func _cache_exact_model_mesh(mesh_node: MeshInstance3D, model_key: String, index
 	for surface_index in range(mesh_copy.get_surface_count()):
 		var material := mesh_node.get_active_material(surface_index)
 		if material != null:
-			mesh_copy.surface_set_material(surface_index, material.duplicate(true))
+			var bundled := material.duplicate(true) as Material
+			# Importer textures can retain external resource indices even with
+			# FLAG_BUNDLE_RESOURCES. Embed their pixels in a fresh ImageTexture.
+			for property in bundled.get_property_list():
+				if not (int(property.usage) & PROPERTY_USAGE_STORAGE): continue
+				var value: Variant = bundled.get(property.name)
+				if value is Texture2D:
+					var bitmap: Image = value.get_image()
+					if bitmap != null and not bitmap.is_empty(): bundled.set(property.name, ImageTexture.create_from_image(bitmap))
+			mesh_copy.surface_set_material(surface_index, bundled)
 	mesh_node.mesh = mesh_copy
 	var resource_path := STUDIO_MODEL_CACHE_FOLDER.path_join("%s_%03d.res" % [model_key, index])
 	if ResourceSaver.save(mesh_copy, resource_path, ResourceSaver.FLAG_BUNDLE_RESOURCES) == OK:
@@ -8376,6 +9764,7 @@ func _setup_roblox_data_model() -> void:
 		return
 	data_model = RobloxDataModelClass.new()
 	data_model.name = "RobloxDataModel"
+	data_model.set_meta("roblox_stud_scale", _get_workspace_stud_scale())
 	# Attach the DataModel as a sibling of placement_parent (under World3D, but
 	# NOT reparenting placement_parent itself).
 	var world_host: Node = null
@@ -8386,6 +9775,7 @@ func _setup_roblox_data_model() -> void:
 	world_host.add_child(data_model, true)
 	# Register the block container as Workspace WITHOUT moving it.
 	if placement_parent:
+		placement_parent.set_meta("roblox_stud_scale", _get_workspace_stud_scale())
 		data_model.register_workspace_alias(placement_parent)
 	roblox_data_model_ready = true
 	# The explorer was already created by _build_main_white_layout; populate it.
@@ -8417,6 +9807,7 @@ func _refresh_explorer() -> void:
 ## tags every TreeItem with the underlying node's instance_id so selection,
 ## context menus and the Properties panel all route back to the real node.
 func _refresh_explorer_from_data_model() -> void:
+	roblox_explorer.show_runtime = studio_playtest_active
 	roblox_explorer.rebuild(explorer_tree, data_model)
 	# Rebuild the compatibility lookup: service name -> TreeItem. Several
 	# legacy helpers (`_manifest_entry_service_name`, manifest population) key
@@ -8753,7 +10144,7 @@ func _build_inspector_panel() -> void:
 	music_file_dialog = FileDialog.new()
 	music_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILES
 	music_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	music_file_dialog.filters = PackedStringArray(["*.mp3, *.ogg ; Audio Files"])
+	music_file_dialog.filters = PackedStringArray(["*.mp3, *.ogg, *.wav ; Audio Files"])
 	music_file_dialog.use_native_dialog = true
 	music_file_dialog.title = "Add Music Tracks"
 	music_file_dialog.file_selected.connect(_on_music_file_selected)
@@ -8942,6 +10333,7 @@ func _on_player_settings_changed(_value: float) -> void:
 
 func _get_default_player_settings() -> Dictionary:
 	return {
+		"movement_version": 2,
 		"move_speed": DEFAULT_PLAYER_MOVE_SPEED,
 		"sprint_multiplier": DEFAULT_PLAYER_SPRINT_MULTIPLIER,
 		"jump_velocity": DEFAULT_PLAYER_JUMP_VELOCITY
@@ -8949,6 +10341,7 @@ func _get_default_player_settings() -> Dictionary:
 
 func _get_current_player_settings() -> Dictionary:
 	var settings := _get_default_player_settings()
+	settings.merge(authored_player_settings, true)
 	if player_move_speed_spin:
 		settings["move_speed"] = player_move_speed_spin.value
 	if player_sprint_multiplier_spin:
@@ -8958,9 +10351,11 @@ func _get_current_player_settings() -> Dictionary:
 	return settings
 
 func _apply_player_settings_to_ui(settings: Dictionary) -> void:
+	settings = preload("res://scripts/player/movement_settings.gd").normalize(settings)
 	var merged_settings := _get_default_player_settings()
 	for key in settings.keys():
 		merged_settings[key] = settings[key]
+	authored_player_settings = merged_settings.duplicate(true)
 	if player_move_speed_spin:
 		player_move_speed_spin.set_value_no_signal(float(merged_settings.get("move_speed", DEFAULT_PLAYER_MOVE_SPEED)))
 	if player_sprint_multiplier_spin:
@@ -8969,14 +10364,72 @@ func _apply_player_settings_to_ui(settings: Dictionary) -> void:
 		player_jump_velocity_spin.set_value_no_signal(float(merged_settings.get("jump_velocity", DEFAULT_PLAYER_JUMP_VELOCITY)))
 
 func _on_music_browse_pressed() -> void:
-	if music_file_dialog:
-		music_file_dialog.popup_centered(Vector2(720, 420))
+	if _is_studio_editing_locked(): return
+	if not is_instance_valid(studio_music_dialog):
+		studio_music_dialog = AcceptDialog.new()
+		studio_music_dialog.title = "Фоновая музыка режима"
+		studio_music_dialog.ok_button_text = "Готово"
+		var column := VBoxContainer.new()
+		column.custom_minimum_size = Vector2(480, 230)
+		var info := Label.new()
+		info.text = "Треки сохраняются с картой и передаются другим игрокам."
+		column.add_child(info)
+		var actions := HBoxContainer.new()
+		column.add_child(actions)
+		var browse := Button.new()
+		browse.text = "Добавить MP3 / OGG / WAV"
+		browse.pressed.connect(func(): music_file_dialog.popup_centered(Vector2(720, 420)))
+		actions.add_child(browse)
+		var stop := Button.new()
+		stop.text = "Остановить"
+		stop.pressed.connect(func(): if is_instance_valid(studio_music_player): studio_music_player.stop())
+		actions.add_child(stop)
+		atmosphere_music_volume_label = Label.new()
+		column.add_child(atmosphere_music_volume_label)
+		atmosphere_music_volume_slider = HSlider.new()
+		atmosphere_music_volume_slider.max_value = 100
+		atmosphere_music_volume_slider.value = studio_music_volume * 100
+		atmosphere_music_volume_slider.value_changed.connect(_on_music_volume_changed)
+		column.add_child(atmosphere_music_volume_slider)
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size.y = 150
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		column.add_child(scroll)
+		atmosphere_music_list = VBoxContainer.new()
+		atmosphere_music_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(atmosphere_music_list)
+		studio_music_dialog.add_child(column)
+		add_child(studio_music_dialog)
+		_on_music_volume_changed(studio_music_volume * 100)
+	_rebuild_music_track_list()
+	studio_music_dialog.popup_centered(Vector2i(600, 340))
+
+func _play_studio_music(index: int) -> void:
+	if current_music_source_paths.is_empty(): return
+	studio_music_track = posmod(index, current_music_source_paths.size())
+	var stream := AudioFileLoader.load_stream(current_music_source_paths[studio_music_track], true)
+	if stream == null:
+		if toolbar_status_label: toolbar_status_label.text = "Не удалось прочитать аудио: " + current_music_source_paths[studio_music_track].get_file()
+		return
+	if not is_instance_valid(studio_music_player):
+		studio_music_player = AudioStreamPlayer.new()
+		studio_music_player.name = "StudioModeMusic"
+		add_child(studio_music_player)
+		studio_music_player.finished.connect(func():
+			if studio_playtest_active: _play_studio_music(studio_music_track + 1)
+		)
+	studio_music_player.stream = stream
+	studio_music_player.volume_db = linear_to_db(maxf(studio_music_volume, 0.0001))
+	studio_music_player.play()
 
 func _on_sky_browse_pressed() -> void:
 	if sky_file_dialog:
 		sky_file_dialog.popup_centered(Vector2(720, 420))
 
 func _on_music_file_selected(path: String) -> void:
+	if AudioFileLoader.load_stream(path, false) == null:
+		if toolbar_status_label: toolbar_status_label.text = "Файл не является поддерживаемым аудио."
+		return
 	if current_music_source_paths.size() >= CLOUD_INLINE_ASSET_MAX_TRACKS:
 		push_warning("[Studio] Track limit reached (%d). Remove some tracks before adding new ones." % CLOUD_INLINE_ASSET_MAX_TRACKS)
 		if toolbar_status_label:
@@ -8994,6 +10447,9 @@ func _on_music_files_selected(paths: PackedStringArray) -> void:
 			continue
 		var clean_path: String = str(path).strip_edges()
 		if clean_path.is_empty() or current_music_source_paths.has(clean_path):
+			continue
+		if AudioFileLoader.load_stream(clean_path, false) == null:
+			skipped += 1
 			continue
 		current_music_source_paths.append(clean_path)
 	if skipped > 0:
@@ -9015,6 +10471,7 @@ func _on_sky_file_selected(path: String) -> void:
 
 func _on_music_clear_pressed() -> void:
 	current_music_source_paths.clear()
+	if is_instance_valid(studio_music_player): studio_music_player.stop()
 	_refresh_atmosphere_path_labels()
 
 func _on_sky_clear_pressed() -> void:
@@ -9023,6 +10480,8 @@ func _on_sky_clear_pressed() -> void:
 	_refresh_atmosphere_path_labels()
 
 func _on_music_volume_changed(value: float) -> void:
+	studio_music_volume = clampf(value / 100.0, 0, 1)
+	if is_instance_valid(studio_music_player): studio_music_player.volume_db = linear_to_db(maxf(studio_music_volume, 0.0001))
 	if atmosphere_music_volume_label:
 		atmosphere_music_volume_label.text = "Volume: %d%%" % roundi(value)
 
@@ -9039,6 +10498,7 @@ func _apply_mode_settings_to_ui(settings: Dictionary, folder: String = "") -> vo
 	var merged_settings := _get_default_mode_settings()
 	for key in settings.keys():
 		merged_settings[key] = settings[key]
+	studio_music_volume = clampf(float(merged_settings.get("music_volume", DEFAULT_MODE_MUSIC_VOLUME)), 0, 1)
 
 	current_music_source_paths.clear()
 	current_sky_source_path = ""
@@ -9065,7 +10525,7 @@ func _apply_mode_settings_to_ui(settings: Dictionary, folder: String = "") -> vo
 
 	if atmosphere_music_volume_slider:
 		atmosphere_music_volume_slider.set_value_no_signal(clampf(float(merged_settings.get("music_volume", DEFAULT_MODE_MUSIC_VOLUME)), 0.0, 1.0) * 100.0)
-	_on_music_volume_changed(atmosphere_music_volume_slider.value if atmosphere_music_volume_slider else DEFAULT_MODE_MUSIC_VOLUME * 100.0)
+	_on_music_volume_changed(studio_music_volume * 100.0)
 	_apply_editor_sky_preview()
 	_refresh_atmosphere_path_labels()
 
@@ -9093,7 +10553,7 @@ func _rebuild_music_track_list() -> void:
 		child.queue_free()
 	if current_music_source_paths.is_empty():
 		var empty_label := Label.new()
-		empty_label.text = "No tracks yet. Add MP3 or OGG files for this mode."
+		empty_label.text = "Добавьте MP3, OGG или WAV. Треки будут играть по очереди."
 		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty_label.add_theme_font_size_override("font_size", 11)
 		empty_label.add_theme_color_override("font_color", Color(0.42, 0.46, 0.5, 1.0))
@@ -9121,6 +10581,11 @@ func _create_music_track_row(index: int, path: String) -> Control:
 	track_label.add_theme_font_size_override("font_size", 11)
 	track_label.add_theme_color_override("font_color", Color(0.12, 0.15, 0.18, 1.0))
 	row.add_child(track_label)
+	var listen := Button.new()
+	listen.text = "▶"
+	listen.tooltip_text = "Прослушать"
+	listen.pressed.connect(_play_studio_music.bind(index))
+	row.add_child(listen)
 
 	var remove_button := Button.new()
 	remove_button.text = "Remove"
@@ -9239,7 +10704,7 @@ func _install_roblox_manifest_data_model_preview() -> void:
 	if data_model != null and data_model.has_method("clear_services"):
 		data_model.clear_services()
 	var context_node: Node = placement_parent if placement_parent != null else self
-	var preview_manifest := current_roblox_place_manifest.duplicate(false)
+	var preview_manifest := preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").resolve(current_roblox_place_manifest, current_map_folder)
 	if toolbar_status_label:
 		toolbar_status_label.text = "Building Roblox DataModel..."
 	var result: Dictionary = {}
@@ -9361,7 +10826,7 @@ func _apply_imported_roblox_environment_preview() -> void:
 
 func _apply_roblox_environment_settings_to_environment(env: Environment, settings: Dictionary) -> void:
 	var sky_color := _color_from_array(settings.get("background_color", [0.52, 0.76, 0.96]), Color(0.52, 0.76, 0.96))
-	if settings.has("lighting") and settings["lighting"] is Dictionary:
+	if settings.has("lighting") and settings["lighting"] is Dictionary and not bool(settings.get("custom_sky_color", false)):
 		var lighting: Dictionary = settings["lighting"]
 		sky_color = _roblox_sky_color_for_hour(_hour_from_lighting_props(lighting))
 	if settings.has("atmosphere") and settings["atmosphere"] is Dictionary:
@@ -9546,7 +11011,7 @@ func _roblox_sky_color_for_hour(hour: float) -> Color:
 
 func _collect_mode_settings_for_save(folder: String) -> Dictionary:
 	var settings := _get_default_mode_settings()
-	var music_volume_percent := atmosphere_music_volume_slider.value if atmosphere_music_volume_slider else (DEFAULT_MODE_MUSIC_VOLUME * 100.0)
+	var music_volume_percent := studio_music_volume * 100.0
 	settings["music_volume"] = clampf(float(music_volume_percent) / 100.0, 0.0, 1.0)
 	settings["music_playlist"] = _store_mode_playlist_files(current_music_source_paths, folder)
 	settings["skybox_file"] = _store_mode_asset_file(current_sky_source_path, folder, MODE_SKY_FILE_BASENAME)
@@ -9645,6 +11110,18 @@ func _store_runtime_object_asset_files(objects: Array[Dictionary], folder: Strin
 				continue
 		if object_index > 0 and object_index % 128 == 0:
 			await get_tree().process_frame
+
+func _store_manifest_asset_files(manifest: Dictionary, folder: String) -> void:
+	var stored := {}
+	for section in ["instances", "tools", "gui", "storage_libraries"]:
+		for entry in manifest.get(section, []):
+			var props: Dictionary = entry.get("properties", {})
+			for key in ["BobuxMeshResource", "SoundId"]:
+				var source := _resolve_existing_file_path_for_folder(str(props.get(key, "")), current_map_folder)
+				if source.is_empty(): continue
+				if not stored.has(source):
+					stored[source] = _store_mode_asset_file(source, folder, "manifest_asset_%04d" % stored.size())
+				if not str(stored[source]).is_empty(): props[key] = stored[source]
 
 func _store_block_asset_files(blocks: Array, folder: String) -> void:
 	var stored_by_source: Dictionary = {}
@@ -10309,6 +11786,10 @@ func _upload_publish_map_asset_async(cloud_map_id: String, entry: Dictionary, st
 
 func _collect_publish_asset_file_names(payload: Dictionary, playlist: Array, folder: String = "") -> Array[String]:
 	var result: Array[String] = []
+	for section in ["instances", "tools", "gui", "storage_libraries"]:
+		for entry in payload.get("roblox_manifest", {}).get(section, []):
+			for key in ["BobuxMeshResource", "SoundId"]:
+				_append_publish_asset_file_name(result, str(entry.get("properties", {}).get(key, "")))
 	for file_variant in playlist:
 		_append_publish_asset_file_name(result, str(file_variant).strip_edges())
 	var runtime_objects: Array = payload.get("runtime_objects", []) if payload.get("runtime_objects", []) is Array else []
@@ -10625,6 +12106,7 @@ func _save_map(folder: String) -> bool:
 				"material": child.get_meta("material_type", "Plastic"),
 				"transparency": child.get_meta("transparency", 0.0),
 				"can_collide": child.get_meta("can_collide", true),
+				"anchored": child.get_meta("anchored", true),
 				"deals_damage": child.get_meta("deals_damage", false),
 				"damage_amount": child.get_meta("damage_amount", DEFAULT_BLOCK_DAMAGE),
 				"is_spawn": child.get_meta("is_spawn", false)
@@ -10635,7 +12117,11 @@ func _save_map(folder: String) -> bool:
 				"roblox_mesh_exact_asset", "roblox_mesh_json_asset",
 				"roblox_texture_asset_file",
 				"roblox_proxy_geometry", "roblox_mesh_deferred",
-				"bobux_mesh_resource_asset"
+				"bobux_mesh_resource_asset", "bobux_ai_effects",
+				"bobux_ai_interaction", "bobux_physics_mode",
+				"bobux_physics_mass", "bobux_physics_friction",
+				"bobux_physics_bounce", "bobux_physics_gravity_scale",
+				"bobux_physics_linear_damp", "bobux_physics_angular_damp"
 			]:
 				if child.has_meta(meta_key):
 					block_entry[meta_key] = child.get_meta(meta_key)
@@ -10655,6 +12141,7 @@ func _save_map(folder: String) -> bool:
 		var authored_manifest: Variant = data_model.call("build_manifest", current_roblox_place_manifest)
 		if authored_manifest is Dictionary:
 			current_roblox_place_manifest = (authored_manifest as Dictionary).duplicate(false)
+	_store_manifest_asset_files(current_roblox_place_manifest, folder)
 	var data = {
 		"time_of_day": time_val,
 		"player_settings": _get_current_player_settings(),
@@ -10699,6 +12186,7 @@ func _load_map_from_folder(folder: String) -> void:
 		print("[Studio] Failed to parse map data.")
 		return
 	var data: Dictionary = json.data
+	current_map_folder = folder
 
 	for block in _get_editor_parts():
 		block.queue_free()
@@ -10785,7 +12273,7 @@ func _load_map_from_folder(folder: String) -> void:
 		target_parent.add_child(mesh_inst)
 
 	_load_runtime_objects_from_map(data.get("runtime_objects", []))
-	_install_roblox_manifest_data_model_preview()
+	await _install_roblox_manifest_data_model_preview()
 	print("[Studio] Loaded %d blocks from %s" % [blocks.size(), folder])
 	_refresh_explorer()
 
@@ -10805,14 +12293,25 @@ func _restore_saved_roblox_block_metadata(block: Node, block_data: Dictionary) -
 		"roblox_mesh_exact_asset", "roblox_mesh_json_asset",
 		"roblox_texture_asset_file",
 		"roblox_proxy_geometry", "roblox_mesh_deferred",
-		"bobux_mesh_resource_asset"
+		"bobux_mesh_resource_asset", "bobux_ai_effects",
+		"bobux_ai_interaction", "bobux_physics_mode",
+		"bobux_physics_mass", "bobux_physics_friction",
+		"bobux_physics_bounce", "bobux_physics_gravity_scale",
+		"bobux_physics_linear_damp", "bobux_physics_angular_damp"
 	]:
 		if block_data.has(meta_key):
 			block.set_meta(meta_key, block_data[meta_key])
+	if block_data.has("anchored"):
+		block.set_meta("anchored", bool(block_data.get("anchored", true)))
 	if block_data.get("roblox_properties", {}) is Dictionary:
 		block.set_meta("roblox_properties", (block_data.get("roblox_properties", {}) as Dictionary).duplicate(true))
+		var attributes: Dictionary = block_data.get("roblox_properties", {}).get("Attributes", {})
+		for attribute in attributes:
+			block.set_meta("attribute_" + str(attribute), attributes[attribute])
 	if block_data.get("roblox_special_mesh", {}) is Dictionary:
 		block.set_meta("roblox_special_mesh", (block_data.get("roblox_special_mesh", {}) as Dictionary).duplicate(true))
+	if block is MeshInstance3D:
+		_rebuild_studio_ai_components(block as MeshInstance3D)
 
 func _apply_saved_roblox_part_material(mesh_inst: MeshInstance3D, block_data: Dictionary) -> void:
 	if mesh_inst == null:

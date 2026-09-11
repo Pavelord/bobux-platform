@@ -634,7 +634,7 @@ func _sanitize_avatar_data_for_runtime(raw: Dictionary) -> Dictionary:
 		clean[texture_key] = _coerce_avatar_string(raw.get(texture_key, defaults.get(texture_key, "")), str(defaults.get(texture_key, "")))
 	clean["saved_shirt_texture_paths"] = _sanitize_string_list(raw.get("saved_shirt_texture_paths", []), MAX_AVATAR_SAVED_TEXTURES)
 	clean["saved_pants_texture_paths"] = _sanitize_string_list(raw.get("saved_pants_texture_paths", []), MAX_AVATAR_SAVED_TEXTURES)
-	clean["equipped"] = _sanitize_avatar_item_payloads(raw.get("equipped", []), MAX_AVATAR_EQUIPPED_ITEMS)
+	clean["equipped"] = _sanitize_avatar_item_ids(raw.get("equipped", []), MAX_AVATAR_EQUIPPED_ITEMS)
 	for list_key in ["equipped_avatar_item_payloads", "equipped_avatar_items", "avatar_items"]:
 		if raw.has(list_key):
 			clean[list_key] = _sanitize_avatar_item_payloads(raw.get(list_key, []), MAX_AVATAR_EQUIPPED_ITEMS)
@@ -690,6 +690,22 @@ func _sanitize_avatar_item_payloads(value: Variant, limit: int) -> Array:
 			var item_id: String = _coerce_avatar_string(raw_item, "")
 			if not item_id.is_empty():
 				result.append({"id": item_id})
+	return result
+
+func _sanitize_avatar_item_ids(value: Variant, limit: int) -> Array:
+	var result: Array = []
+	if not (value is Array):
+		return result
+	var source: Array = value
+	for index in range(mini(source.size(), maxi(limit, 0))):
+		var raw_item: Variant = source[index]
+		var item_id := ""
+		if raw_item is Dictionary:
+			item_id = _coerce_avatar_string((raw_item as Dictionary).get("id", (raw_item as Dictionary).get("item_id", "")), "")
+		else:
+			item_id = _coerce_avatar_string(raw_item, "")
+		if not item_id.is_empty() and not result.has(item_id):
+			result.append(item_id)
 	return result
 
 func _sanitize_avatar_payload_value(value: Variant, depth: int) -> Variant:

@@ -1407,6 +1407,76 @@ func fetch_my_creations() -> Dictionary:
 		return auth_result
 	return await _request_json_with_retries("/rpc/fetch_my_creations", HTTPClient.METHOD_POST, {}, "fetch_my_creations", PackedStringArray(), true)
 
+func request_studio_ai(prompt: String, context: Dictionary = {}) -> Dictionary:
+	var clean_prompt := prompt.strip_edges()
+	if clean_prompt.length() < 3:
+		return _make_error_result("studio_ai", "Describe what Bobux AI should create.")
+	if clean_prompt.length() > 4000:
+		return _make_error_result("studio_ai", "The Studio AI request is too long (maximum 4000 characters).")
+	var auth_result: Dictionary = await _ensure_data_api_session("studio_ai")
+	if not bool(auth_result.get("ok", false)):
+		return auth_result
+	var response: Dictionary = await _request_authenticated_auth_json(
+		"/studio/assistant",
+		HTTPClient.METHOD_POST,
+		{"prompt": clean_prompt, "context": _json_safe_value(context)},
+		"studio_ai",
+		55.0
+	)
+	return _normalize_studio_ai_response(response)
+
+
+func fetch_boblox_wallet() -> Dictionary:
+	var auth_result: Dictionary = await _ensure_data_api_session("boblox_wallet")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_authenticated_auth_json("/boblox/wallet", HTTPClient.METHOD_GET, null, "boblox_wallet", 12.0)
+
+func fetch_boblox_catalog() -> Dictionary:
+	return await _request_auth_json("/boblox/catalog", HTTPClient.METHOD_GET, null, "boblox_catalog", 12.0)
+
+func create_boblox_checkout(product_id: String, request_key: String, receipt_email: String) -> Dictionary:
+	var auth_result: Dictionary = await _ensure_data_api_session("boblox_checkout")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_authenticated_auth_json("/boblox/checkout", HTTPClient.METHOD_POST,
+		{"product_id": product_id, "request_key": request_key, "email": receipt_email}, "boblox_checkout", 25.0)
+
+func refresh_boblox_order(order_id: String) -> Dictionary:
+	var auth_result: Dictionary = await _ensure_data_api_session("boblox_order")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_authenticated_auth_json("/boblox/orders/%s/refresh" % order_id.uri_encode(), HTTPClient.METHOD_POST, {}, "boblox_order", 25.0)
+
+func _normalize_studio_ai_response(response: Dictionary) -> Dictionary:
+	if not bool(response.get("ok", false)):
+		return response
+	var normalized: Dictionary = response.duplicate(true)
+	var payload: Variant = response.get("data", response)
+	for _depth in range(4):
+		if payload is String:
+			var parsed_payload: Variant = JSON.parse_string((payload as String).strip_edges())
+			if parsed_payload == null:
+				break
+			payload = parsed_payload
+		if not payload is Dictionary:
+			break
+		var payload_dictionary := payload as Dictionary
+		if payload_dictionary.has("actions") or payload_dictionary.has("message"):
+			break
+		var nested_payload: Variant = null
+		for key in ["data", "body", "result"]:
+			if payload_dictionary.has(key):
+				nested_payload = payload_dictionary.get(key)
+				break
+		if nested_payload == null or nested_payload == payload:
+			break
+		payload = nested_payload
+	if not payload is Dictionary:
+		return normalized
+	var studio_payload := payload as Dictionary
+	for key_variant in studio_payload.keys():
+		normalized[key_variant] = studio_payload[key_variant]
+	normalized["ok"] = bool(response.get("ok", false)) and bool(studio_payload.get("ok", true))
+	return normalized
+
 func like_catalog_asset(target_type: String, target_id: String) -> Dictionary:
 	var auth_result: Dictionary = await _ensure_data_api_session("like_catalog_asset")
 	if not bool(auth_result.get("ok", false)):
@@ -3600,3 +3670,18 @@ func _extract_array_payload(payload: Variant) -> Array:
 			return payload_dict["data"]
 		return [payload_dict]
 	return []
+
+func get_direct_messages(peer: String, before := 0, after := 0) -> Dictionary:
+	var auth: Dictionary = await _ensure_data_api_session("direct_messages")
+	if not auth.get("ok", false): return auth
+	return await _request_authenticated_auth_json("/social/messages/%s?before=%d&after=%d" % [peer.uri_encode(), before, after], HTTPClient.METHOD_GET, null, "direct_messages")
+
+func send_direct_message(peer: String, text: String, request_id: String) -> Dictionary:
+	var auth: Dictionary = await _ensure_data_api_session("send_direct_message")
+	if not auth.get("ok", false): return auth
+	return await _request_authenticated_auth_json("/social/messages/" + peer.uri_encode(), HTTPClient.METHOD_POST, {"text": text, "request_id": request_id}, "send_direct_message")
+
+func vote_for_map(map_id: String, value: int) -> Dictionary:
+	var auth: Dictionary = await _ensure_data_api_session("vote_for_map")
+	if not auth.get("ok", false): return auth
+	return await _request_authenticated_auth_json("/social/maps/" + map_id.uri_encode() + "/vote", HTTPClient.METHOD_POST, {"vote": value}, "vote_for_map")

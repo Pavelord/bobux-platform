@@ -1,0 +1,138 @@
+{
+	"candidates": 2065.0,
+	"downloaded_this_run": 2.0,
+	"duplicates": 2.0,
+	"failed": 1.0,
+	"imported": 2065,
+	"missing_metadata": 0.0,
+	"models": 1598.0,
+	"models_validated": 1598,
+	"packs": [
+		{
+			"assets": 40.0,
+			"license": "CC0",
+			"pack": "blaster-kit"
+		},
+		{
+			"archive_bytes": 2148510.0,
+			"assets": 18.0,
+			"license": "CC0",
+			"pack": "blocky-characters"
+		},
+		{
+			"archive_bytes": 4814237.0,
+			"assets": 50.0,
+			"license": "CC0",
+			"pack": "car-kit"
+		},
+		{
+			"archive_bytes": 2232589.0,
+			"assets": 76.0,
+			"license": "CC0",
+			"pack": "castle-kit"
+		},
+		{
+			"archive_bytes": 4096974.0,
+			"assets": 41.0,
+			"license": "CC0",
+			"pack": "city-kit-commercial"
+		},
+		{
+			"archive_bytes": 2849382.0,
+			"assets": 95.0,
+			"license": "CC0",
+			"pack": "city-kit-roads"
+		},
+		{
+			"archive_bytes": 3038740.0,
+			"assets": 40.0,
+			"license": "CC0",
+			"pack": "city-kit-suburban"
+		},
+		{
+			"archive_bytes": 990367.0,
+			"assets": 62.0,
+			"license": "CC0",
+			"pack": "digital-audio"
+		},
+		{
+			"archive_bytes": 3854691.0,
+			"assets": 167.0,
+			"license": "CC0",
+			"pack": "fantasy-town-kit"
+		},
+		{
+			"archive_bytes": 4606270.0,
+			"assets": 200.0,
+			"license": "CC0",
+			"pack": "food-kit"
+		},
+		{
+			"assets": 140.0,
+			"license": "CC0",
+			"pack": "furniture-kit"
+		},
+		{
+			"assets": 130.0,
+			"license": "CC0",
+			"pack": "impact-sounds"
+		},
+		{
+			"archive_bytes": 834536.0,
+			"assets": 100.0,
+			"license": "CC0",
+			"pack": "interface-sounds"
+		},
+		{
+			"assets": 329.0,
+			"license": "CC0",
+			"pack": "nature-kit"
+		},
+		{
+			"archive_bytes": 3154665.0,
+			"assets": 72.0,
+			"license": "CC0",
+			"pack": "pirate-kit"
+		},
+		{
+			"archive_bytes": 4640135.0,
+			"assets": 153.0,
+			"license": "CC0",
+			"pack": "platformer-kit"
+		},
+		{
+			"assets": 51.0,
+			"license": "CC0",
+			"pack": "rpg-audio"
+		},
+		{
+			"archive_bytes": 5875104.0,
+			"assets": 73.0,
+			"license": "CC0",
+			"pack": "sci-fi-sounds"
+		},
+		{
+			"archive_bytes": 1835875.0,
+			"assets": 97.0,
+			"license": "CC0",
+			"pack": "space-station-kit"
+		},
+		{
+			"archive_bytes": 1948174.0,
+			"assets": 80.0,
+			"license": "CC0",
+			"pack": "survival-kit"
+		},
+		{
+			"archive_bytes": 411949.0,
+			"assets": 51.0,
+			"license": "CC0",
+			"pack": "ui-audio"
+		}
+	],
+	"skipped": 3.0,
+	"skipped_due_to_license": 2.0,
+	"sounds": 467.0,
+	"sounds_validated": 467,
+	"validation_failures": 0
+}

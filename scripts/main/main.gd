@@ -8,6 +8,7 @@ const RbxlWedgeMeshBuilder = preload("res://addons/rbxl_importer/wedge_mesh_buil
 const RobloxGuiRuntime = preload("res://addons/rbxl_importer/roblox_gui_runtime.gd")
 const RobloxInventoryControllerClass = preload("res://addons/roblox_runtime/roblox_inventory_controller.gd")
 const RobloxTerrainEditorClass = preload("res://addons/roblox_studio/roblox_terrain_editor.gd")
+const RobloxDataModelClass = preload("res://addons/roblox_studio/roblox_data_model.gd")
 const RobloxSkyMaterial = preload("res://addons/rbxl_importer/roblox_sky_material.gd")
 const RobloxMeshJsonLoader = preload("res://addons/rbxl_importer/roblox_mesh_json_loader.gd")
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
@@ -21,9 +22,9 @@ const TELEPORT_EXIT_HEIGHT: float = 2.5
 const TELEPORT_COOLDOWN_MSEC: int = 650
 const CHECKPOINT_RESPAWN_HEIGHT: float = 2.2
 const PLAYER_TRIGGER_COLLISION_MASK: int = 1 | 2
-const DEFAULT_PLAYER_MOVE_SPEED: float = 24.0
+const DEFAULT_PLAYER_MOVE_SPEED: float = 16.0
 const DEFAULT_PLAYER_SPRINT_MULTIPLIER: float = 1.25
-const DEFAULT_PLAYER_JUMP_VELOCITY: float = 31.0
+const DEFAULT_PLAYER_JUMP_VELOCITY: float = 53.15
 const DEFAULT_MODE_MUSIC_VOLUME: float = 0.65
 const NETWORK_SYNC_RATE_HZ: float = 60.0
 const HOST_KEEPALIVE_INTERVAL: float = 1.0
@@ -36,6 +37,8 @@ const LEADERBOARD_REFRESH_INTERVAL_MSEC: int = 220
 const FRIEND_REQUEST_POLL_INTERVAL_MSEC: int = 3000
 const FRIEND_STATUS_REFRESH_INTERVAL_MSEC: int = 15000
 const SNAPSHOT_SPAWN_WAIT_FRAMES: int = 45
+const CHARACTER_SPAWN_TIMEOUT_MSEC: int = 30000
+const MAX_REPLICATED_SPAWN_POINTS: int = 64
 const NETWORK_LOADING_TWEEN_SECONDS: float = 0.22
 const BOBUX_LOADING_LOGO_PATH: String = "res://assets/branding/bobux_logo_ui.png"
 const BOBUX_LOADING_SPINNER_PATH: String = "res://assets/branding/bobux_app_icon.png"
@@ -87,6 +90,7 @@ var _runtime_object_texture_cache: Dictionary = {}
 var _peer_checkpoint_positions: Dictionary = {}
 var _peer_spawn_infos: Dictionary = {}
 var _peer_teleport_ready_at_msec: Dictionary = {}
+var _peer_tool_damage_ready_at_msec: Dictionary = {}
 var _peer_registered: Dictionary = {}
 var _smart_play_failed: bool = false
 var _teleport_blocks_by_color: Dictionary = {}
@@ -102,6 +106,10 @@ var _health_bar: ProgressBar = null
 var _ping_label: Label = null
 var _game_menu_button: Button = null
 var _game_menu_panel: Panel = null
+var _system_menu_layer: CanvasLayer = null
+var _game_menu_tween: Tween
+var _tool_damage_protocol: Node
+var _server_supports_tool_damage: bool = false
 var _respawn_button: Button = null
 var _menu_leave_button: Button = null
 var _master_volume_slider: HSlider = null
@@ -191,6 +199,9 @@ func _is_dedicated_server_runtime() -> bool:
 	return GameState != null and GameState.has_method("is_dedicated_server_runtime") and bool(GameState.is_dedicated_server_runtime())
 
 func _ready() -> void:
+	_tool_damage_protocol = preload("res://scripts/main/tool_damage_protocol.gd").new()
+	_tool_damage_protocol.name = "ToolDamageProtocol"
+	add_child(_tool_damage_protocol)
 	_rng.randomize()
 	player_spawner.spawn_path = players.get_path()
 	player_spawner.spawn_function = _spawn_custom
@@ -349,7 +360,12 @@ func _build_runtime_hud() -> void:
 	_game_menu_button.add_theme_stylebox_override("hover", menu_button_hover)
 	_game_menu_button.add_theme_stylebox_override("pressed", menu_button_hover)
 	_game_menu_button.pressed.connect(_on_game_menu_button_pressed)
-	hud.add_child(_game_menu_button)
+	_system_menu_layer = CanvasLayer.new()
+	_system_menu_layer.name = "SystemMenu"
+	_system_menu_layer.layer = 900
+	_system_menu_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_system_menu_layer)
+	_system_menu_layer.add_child(_game_menu_button)
 	_game_menu_button.visible = false
 	_game_menu_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -369,7 +385,7 @@ func _build_runtime_hud() -> void:
 	var menu_panel_style := StyleBoxFlat.new()
 	menu_panel_style.bg_color = Color(0.05, 0.06, 0.08, 0.72)
 	_game_menu_panel.add_theme_stylebox_override("panel", menu_panel_style)
-	hud.add_child(_game_menu_panel)
+	_system_menu_layer.add_child(_game_menu_panel)
 
 	var menu_margin := MarginContainer.new()
 	menu_margin.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -386,6 +402,12 @@ func _build_runtime_hud() -> void:
 	menu_margin.add_theme_constant_override("margin_right", 0)
 	menu_margin.add_theme_constant_override("margin_bottom", 0)
 	_game_menu_panel.add_child(menu_margin)
+	var fit_menu := func():
+		var half_width := minf(420.0, maxf(140.0, get_viewport().get_visible_rect().size.x * 0.5 - 16.0))
+		menu_margin.offset_left = -half_width
+		menu_margin.offset_right = half_width
+	menu_margin.get_viewport().size_changed.connect(fit_menu)
+	fit_menu.call()
 
 	var menu_vbox := VBoxContainer.new()
 	menu_vbox.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -406,10 +428,6 @@ func _build_runtime_hud() -> void:
 	var settings_tab := _make_escape_menu_tab_button("Settings")
 	settings_tab.pressed.connect(func(): _set_escape_menu_page("settings"))
 	tab_bar.add_child(settings_tab)
-	for disabled_name in ["Report", "Help", "Record"]:
-		var disabled_tab := _make_escape_menu_tab_button(disabled_name)
-		disabled_tab.disabled = true
-		tab_bar.add_child(disabled_tab)
 
 	var page_card := Panel.new()
 	page_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -495,7 +513,8 @@ func _build_runtime_hud() -> void:
 
 	_respawn_button = Button.new()
 	_respawn_button.process_mode = Node.PROCESS_MODE_ALWAYS
-	_respawn_button.text = "Reset Character"
+	_respawn_button.text = "Reset"
+	_respawn_button.tooltip_text = "Reset Character"
 	_respawn_button.custom_minimum_size = Vector2(0, 62)
 	_respawn_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_respawn_button.focus_mode = Control.FOCUS_NONE
@@ -504,7 +523,7 @@ func _build_runtime_hud() -> void:
 
 	_menu_leave_button = Button.new()
 	_menu_leave_button.process_mode = Node.PROCESS_MODE_ALWAYS
-	_menu_leave_button.text = "Leave Game"
+	_menu_leave_button.text = "Leave"
 	_menu_leave_button.custom_minimum_size = Vector2(0, 62)
 	_menu_leave_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_menu_leave_button.focus_mode = Control.FOCUS_NONE
@@ -513,7 +532,7 @@ func _build_runtime_hud() -> void:
 
 	var resume_button := Button.new()
 	resume_button.process_mode = Node.PROCESS_MODE_ALWAYS
-	resume_button.text = "Resume Game"
+	resume_button.text = "Resume"
 	resume_button.custom_minimum_size = Vector2(0, 62)
 	resume_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	resume_button.focus_mode = Control.FOCUS_NONE
@@ -1706,6 +1725,10 @@ func _on_transport_status_changed(message: String) -> void:
 
 # BUG FIX #4: Update the loading bar in real-time using progress from the parallel connect poller.
 func _on_transport_progress_updated(phase: String, progress: float) -> void:
+	# The server also expires reserved peers while MapManager downloads files.
+	# Start at socket authentication, before either map download or construction.
+	if phase == "auth" or phase == "map":
+		_start_host_keepalive()
 	if _network_loading_overlay == null or not _network_loading_overlay.visible:
 		return
 	var bar_value: float = 0.0
@@ -1725,6 +1748,13 @@ func _on_transport_progress_updated(phase: String, progress: float) -> void:
 		bar_tween.tween_property(_network_loading_bar, "value", target_value, 0.12)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed and not event.echo:
+		_on_game_menu_button_pressed()
+		get_viewport().set_input_as_handled()
+		return
+	if is_instance_valid(_game_menu_panel) and _game_menu_panel.visible:
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
 		# BUGFIX: desktop starts windowed; F11 toggles fullscreen explicitly.
 		_toggle_fullscreen_mode()
@@ -1751,67 +1781,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _activate_nearest_roblox_proximity_prompt() -> bool:
-	if LuaScriptEngine == null or not LuaScriptEngine.has_method("fire_roblox_instance_event"):
-		return false
-	var local_player := _get_local_player()
-	if local_player == null:
-		return false
-	var nearest_prompt: Node = null
-	var nearest_distance := INF
-	for prompt_variant in get_tree().get_nodes_in_group("roblox_proximity_prompts"):
-		if not (prompt_variant is Node) or not is_instance_valid(prompt_variant):
-			continue
-		var prompt := prompt_variant as Node
-		if not _runtime_object_belongs_to_local_room(prompt):
-			continue
-		var prompt_anchor := _nearest_node3d_ancestor(prompt)
-		if prompt_anchor == null:
-			continue
-		var properties: Dictionary = prompt.get_meta("roblox_properties", {}) if prompt.get_meta("roblox_properties", {}) is Dictionary else {}
-		if not bool(properties.get("Enabled", true)):
-			continue
-		var max_distance := maxf(float(properties.get("MaxActivationDistance", 10.0)) * 0.5, 1.0)
-		var distance := local_player.global_position.distance_to(prompt_anchor.global_position)
-		if distance <= max_distance and distance < nearest_distance:
-			nearest_prompt = prompt
-			nearest_distance = distance
-	if nearest_prompt == null:
-		return false
-	return bool(LuaScriptEngine.fire_roblox_instance_event(nearest_prompt, "Triggered", [local_player]))
+	return preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").activate_nearest_prompt(
+		self, _get_local_player(), LuaScriptEngine, _perform_bobux_ai_interaction, _runtime_object_belongs_to_local_room)
+
 
 func _activate_roblox_click_detector(screen_position: Vector2) -> bool:
-	if (_game_menu_panel != null and _game_menu_panel.visible) or LuaScriptEngine == null or not LuaScriptEngine.has_method("fire_roblox_instance_event"):
+	if _game_menu_panel != null and _game_menu_panel.visible:
 		return false
 	if _pointer_is_over_interactive_runtime_ui():
 		return false
-	var camera: Camera3D = get_viewport().get_camera_3d()
-	if camera == null:
-		return false
-	var world: World3D = camera.get_world_3d()
-	if world == null:
-		return false
-	var ray_origin := camera.project_ray_origin(screen_position)
-	var ray_end := ray_origin + camera.project_ray_normal(screen_position) * 4096.0
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
-	query.collision_mask = 0xFFFFFFFF
-	query.collide_with_areas = true
-	query.collide_with_bodies = true
-	var hit: Dictionary = world.direct_space_state.intersect_ray(query)
-	if hit.is_empty() or not (hit.get("collider") is Node):
-		return false
-	var hit_node := hit.get("collider") as Node
-	var detector := _find_roblox_click_detector_near_hit(hit_node)
-	if detector == null:
-		return false
-	var local_player := _get_local_player()
-	var properties: Dictionary = detector.get_meta("roblox_properties", {}) if detector.get_meta("roblox_properties", {}) is Dictionary else {}
-	if local_player != null:
-		var anchor := _nearest_node3d_ancestor(detector)
-		if anchor != null:
-			var max_distance := maxf(float(properties.get("MaxActivationDistance", 32.0)) * 0.5, 1.0)
-			if local_player.global_position.distance_to(anchor.global_position) > max_distance:
-				return false
-	return bool(LuaScriptEngine.fire_roblox_instance_event(detector, "MouseClick", [local_player]))
+	return preload("res://addons/roblox_runtime/roblox_interaction_runtime.gd").activate_click(
+		get_viewport().get_camera_3d(), screen_position, self, _get_local_player(), LuaScriptEngine,
+		_perform_bobux_ai_interaction, _runtime_object_belongs_to_local_room)
+
 
 func _find_roblox_click_detector_near_hit(hit_node: Node) -> Node:
 	var cursor := hit_node
@@ -1833,6 +1815,132 @@ func _find_roblox_click_detector_near_hit(hit_node: Node) -> Node:
 		cursor = cursor.get_parent()
 		depth += 1
 	return null
+
+
+func _perform_bobux_ai_interaction(source: Node, actor: Node = null) -> bool:
+	if source == null or not is_instance_valid(source):
+		return false
+	var interaction: Dictionary = source.get_meta("bobux_ai_interaction", {}) if source.get_meta("bobux_ai_interaction", {}) is Dictionary else {}
+	var target: Node3D = null
+	var cursor: Node = source
+	while cursor != null:
+		if cursor is Node3D and cursor.get_meta("bobux_ai_interaction", {}) is Dictionary and not (cursor.get_meta("bobux_ai_interaction", {}) as Dictionary).is_empty():
+			target = cursor as Node3D
+			interaction = (cursor.get_meta("bobux_ai_interaction", {}) as Dictionary).duplicate(true)
+			break
+		cursor = cursor.get_parent()
+	if target == null or interaction.is_empty() or bool(target.get_meta("bobux_ai_interaction_busy", false)):
+		return false
+	var action := str(interaction.get("action", "toggle_effect"))
+	match action:
+		"toggle_effect":
+			var changed := false
+			var pending: Array[Node] = [target]
+			while not pending.is_empty():
+				var node: Node = pending.pop_back()
+				for child in node.get_children():
+					if child is Node:
+						pending.append(child as Node)
+				if node is GPUParticles3D and bool(node.get_meta("bobux_ai_component", false)):
+					(node as GPUParticles3D).emitting = not (node as GPUParticles3D).emitting
+					changed = true
+				elif node is Light3D and bool(node.get_meta("bobux_ai_component", false)):
+					(node as Light3D).visible = not (node as Light3D).visible
+					changed = true
+			return changed
+		"collect":
+			var local_player := _get_local_player()
+			if local_player == null or (actor != null and actor != local_player):
+				return false
+			var inventory: Dictionary = LuaScriptEngine.get_local_inventory_state(self, local_player) if LuaScriptEngine != null and LuaScriptEngine.has_method("get_local_inventory_state") else {}
+			var backpack: Node = inventory.get("backpack", null) as Node
+			if backpack == null:
+				return false
+			var tool := RobloxDataModelClass.create_instance("Tool", target.name)
+			tool.name = target.name
+			tool.set_meta("roblox_class", "Tool")
+			tool.set_meta("bobux_inventory_order", Time.get_ticks_msec())
+			if target is MeshInstance3D:
+				var handle := MeshInstance3D.new()
+				handle.name = "Handle"
+				handle.set_meta("roblox_class", "Part")
+				handle.mesh = (target as MeshInstance3D).mesh.duplicate(true) if (target as MeshInstance3D).mesh != null else null
+				handle.material_override = (target as MeshInstance3D).material_override
+				tool.add_child(handle)
+			backpack.add_child(tool)
+			_refresh_runtime_inventory()
+			target.set_meta("bobux_ai_interaction_busy", true)
+			_queue_free_runtime_ai_target(target)
+			return true
+		"toggle_door":
+			var is_open := bool(target.get_meta("bobux_door_open", false))
+			if not target.has_meta("bobux_door_closed_position"):
+				target.set_meta("bobux_door_closed_position", target.position)
+			var closed_position: Vector3 = target.get_meta("bobux_door_closed_position", target.position)
+			var open_distance := maxf(absf(target.global_basis.get_scale().y) + 0.35, 4.0)
+			var destination := closed_position if is_open else closed_position + Vector3.UP * open_distance
+			target.set_meta("bobux_ai_interaction_busy", true)
+			if is_open:
+				_set_runtime_ai_target_collision_enabled(target, true)
+			var tween := target.create_tween()
+			tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tween.tween_property(target, "position", destination, 0.38)
+			tween.finished.connect(func() -> void:
+				if target == null or not is_instance_valid(target):
+					return
+				target.set_meta("bobux_door_open", not is_open)
+				if not is_open:
+					_set_runtime_ai_target_collision_enabled(target, false)
+				target.set_meta("bobux_ai_interaction_busy", false)
+			)
+			return true
+		"hide":
+			target.visible = false
+			_set_runtime_ai_target_collision_enabled(target, false)
+			return true
+		"destroy":
+			target.set_meta("bobux_ai_interaction_busy", true)
+			_queue_free_runtime_ai_target(target)
+			return true
+	return false
+
+
+func _runtime_physics_body_for_visual(target: Node) -> RigidBody3D:
+	if target == null or not target.has_meta("_bobux_physics_body_instance_id"):
+		return null
+	var body_object := instance_from_id(int(target.get_meta("_bobux_physics_body_instance_id", 0)))
+	return body_object as RigidBody3D if body_object is RigidBody3D and is_instance_valid(body_object) else null
+
+
+func _set_runtime_ai_target_collision_enabled(target: Node, enabled: bool) -> void:
+	if target == null:
+		return
+	for descendant in target.find_children("*", "CollisionShape3D", true, false):
+		if descendant is CollisionShape3D:
+			(descendant as CollisionShape3D).set_deferred("disabled", not enabled)
+	var physics_body := _runtime_physics_body_for_visual(target)
+	if physics_body != null:
+		for descendant in physics_body.find_children("*", "CollisionShape3D", true, false):
+			if descendant is CollisionShape3D:
+				(descendant as CollisionShape3D).set_deferred("disabled", not enabled)
+
+
+func _queue_free_runtime_ai_target(target: Node) -> void:
+	if target == null:
+		return
+	var physics_body := _runtime_physics_body_for_visual(target)
+	if physics_body != null and not physics_body.is_queued_for_deletion():
+		physics_body.call_deferred("queue_free")
+	if not target.is_queued_for_deletion():
+		target.call_deferred("queue_free")
+
+
+func _on_bobux_ai_touch_interaction(body: Node, touch_area: Area3D) -> void:
+	if touch_area == null or not is_instance_valid(touch_area):
+		return
+	var local_player := _get_local_player()
+	if body == local_player:
+		_perform_bobux_ai_interaction(touch_area, body)
 
 func _nearest_node3d_ancestor(node: Node) -> Node3D:
 	var cursor := node
@@ -2684,11 +2792,19 @@ func _update_ping_indicator() -> void:
 		_ping_label.text = "Ping: ..."
 
 func _on_respawn_pressed() -> void:
-	request_authoritative_respawn_for_local_player()
+	var local_player := _get_local_player()
+	if is_instance_valid(local_player) and local_player.has_method("force_respawn"):
+		local_player.force_respawn()
+	else:
+		request_authoritative_respawn_for_local_player()
+	close_game_menu()
 
 func request_authoritative_respawn_for_local_player() -> void:
 	var local_peer_id: int = _get_runtime_local_peer_id()
-	if local_peer_id <= 0:
+	if local_peer_id <= 0 or multiplayer.multiplayer_peer == null:
+		var local_player := _get_local_player()
+		if is_instance_valid(local_player) and local_player.has_method("respawn_at_checkpoint"):
+			local_player.respawn_at_checkpoint()
 		return
 	if multiplayer.is_server():
 		_perform_authoritative_respawn_for_peer(local_peer_id)
@@ -2759,8 +2875,10 @@ func _on_game_menu_button_pressed() -> void:
 		return
 	var next_visible := not _game_menu_panel.visible
 	if next_visible:
-		if _runtime_inventory_controller != null and _runtime_inventory_controller.has_method("set_inventory_visible"):
-			_runtime_inventory_controller.call("set_inventory_visible", false)
+		var local_player := _get_local_player()
+		if is_instance_valid(local_player): local_player.set_meta("bobux_system_menu_open", true)
+		if is_instance_valid(_runtime_inventory_controller):
+			_runtime_inventory_controller.call("set_system_menu_open", true)
 		var chat_box := get_node_or_null("ChatBox")
 		if chat_box and chat_box.has_method("close_chat_panel"):
 			chat_box.call("close_chat_panel")
@@ -2773,24 +2891,31 @@ func _on_game_menu_button_pressed() -> void:
 		var mobile_runtime = get_node_or_null("/root/MobileRuntime")
 		if mobile_runtime != null:
 			mobile_runtime.call("set_gameplay_touch_controls_enabled", false)
-		var tween := create_tween()
-		tween.set_trans(Tween.TRANS_QUART)
-		tween.set_ease(Tween.EASE_OUT)
-		tween.tween_property(_game_menu_panel, "position:y", 0.0, 0.22)
+		if is_instance_valid(_game_menu_tween): _game_menu_tween.kill()
+		_game_menu_tween = create_tween()
+		_game_menu_tween.set_trans(Tween.TRANS_QUART)
+		_game_menu_tween.set_ease(Tween.EASE_OUT)
+		_game_menu_tween.tween_property(_game_menu_panel, "position:y", 0.0, 0.22)
 	else:
 		close_game_menu()
 
 func close_game_menu() -> void:
-	if _game_menu_panel == null:
+	if not is_instance_valid(_game_menu_panel):
 		return
+	if is_instance_valid(_game_menu_tween): _game_menu_tween.kill()
 	var tween := create_tween()
+	_game_menu_tween = tween
 	tween.set_trans(Tween.TRANS_QUART)
 	tween.set_ease(Tween.EASE_IN)
 	tween.tween_property(_game_menu_panel, "position:y", -get_viewport().get_visible_rect().size.y, 0.16)
 	tween.tween_callback(func():
-		if _game_menu_panel != null:
+		if is_instance_valid(_game_menu_panel):
 			_game_menu_panel.visible = false
 			_game_menu_panel.position.y = 0.0
+			var local_player := _get_local_player()
+			if is_instance_valid(local_player): local_player.set_meta("bobux_system_menu_open", false)
+			if is_instance_valid(_runtime_inventory_controller):
+				_runtime_inventory_controller.call("set_system_menu_open", false)
 			_set_runtime_top_hud_visible(true)
 			var mobile_runtime = get_node_or_null("/root/MobileRuntime")
 			if mobile_runtime != null and bool(mobile_runtime.call("is_mobile_beta")):
@@ -2884,9 +3009,7 @@ func _sync_master_volume_slider() -> void:
 	_master_volume_slider.set_value_no_signal(roundf(current_linear * 100.0))
 
 func _on_master_volume_changed(value: float) -> void:
-	var master_bus := AudioServer.get_bus_index("Master")
-	var linear := clampf(value / 100.0, 0.0, 1.0)
-	AudioServer.set_bus_volume_db(master_bus, linear_to_db(maxf(linear, 0.0001)) if linear > 0.0 else -80.0)
+	ClientPreferences.update("volume", clampf(value / 100.0, 0.0, 1.0))
 
 func _add_mobile_controls_settings_if_needed(parent: VBoxContainer) -> void:
 	var mobile_runtime: Node = get_node_or_null("/root/MobileRuntime")
@@ -3152,25 +3275,17 @@ func _load_selected_map() -> void:
 			mesh_inst.add_to_group(_get_room_spawn_group_name(local_room_id))
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 
-		# Collision
-		var static_body := StaticBody3D.new()
-		var coll_shape := CollisionShape3D.new()
-		coll_shape.shape = _create_collision_for_shape(shape_type)
-		_apply_collision_shape_size(coll_shape, shape_type, mesh_inst.scale)
-		coll_shape.disabled = not can_collide
-		static_body.add_child(coll_shape)
-		static_body.set_meta("material_type", mat_type)
-		static_body.set_meta("surface_type", mat_type)
-		mesh_inst.add_child(static_body)
+		map_target.add_child(mesh_inst)
+		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
 		_configure_runtime_special_object(mesh_inst, shape_type, col, local_room_id)
 		_configure_runtime_damage_block(mesh_inst, deals_damage, damage_amount)
 		if bool(mesh_inst.get_meta("breakable", false)):
 			_register_destructible_block(mesh_inst, local_room_id)
-		if can_collide and not deals_damage and shape_type != "Teleport":
+		if can_collide and not deals_damage and shape_type != "Teleport" and not _block_uses_dynamic_physics(block_data):
 			_register_fallback_spawn_surface(mesh_inst)
-		map_target.add_child(mesh_inst)
+		_configure_runtime_ai_components(mesh_inst, block_data)
 		blocks_loaded += 1
 		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
 			await get_tree().process_frame
@@ -3196,14 +3311,106 @@ func _restore_runtime_roblox_block_metadata(block: Node, block_data: Dictionary)
 		"roblox_mesh_exact_asset", "roblox_mesh_json_asset",
 		"roblox_texture_asset_file",
 		"roblox_proxy_geometry", "roblox_mesh_deferred",
-		"bobux_mesh_resource_asset"
+		"bobux_mesh_resource_asset", "bobux_ai_effects",
+		"bobux_ai_interaction", "bobux_physics_mode",
+		"bobux_physics_mass", "bobux_physics_friction",
+		"bobux_physics_bounce", "bobux_physics_gravity_scale",
+		"bobux_physics_linear_damp", "bobux_physics_angular_damp"
 	]:
 		if block_data.has(meta_key):
 			block.set_meta(meta_key, block_data[meta_key])
+	if block_data.has("anchored"):
+		block.set_meta("anchored", bool(block_data.get("anchored", true)))
 	if block_data.get("roblox_properties", {}) is Dictionary:
 		block.set_meta("roblox_properties", (block_data.get("roblox_properties", {}) as Dictionary).duplicate(true))
 	if block_data.get("roblox_special_mesh", {}) is Dictionary:
 		block.set_meta("roblox_special_mesh", (block_data.get("roblox_special_mesh", {}) as Dictionary).duplicate(true))
+
+
+func _configure_runtime_ai_components(block: MeshInstance3D, block_data: Dictionary) -> void:
+	if block == null or not is_instance_valid(block):
+		return
+	for child in block.get_children():
+		if bool(child.get_meta("bobux_ai_component", false)):
+			child.queue_free()
+	var effects: Array = block_data.get("bobux_ai_effects", []) if block_data.get("bobux_ai_effects", []) is Array else []
+	block.set_meta("bobux_ai_effects", effects.duplicate(true))
+	for index in range(effects.size()):
+		if not effects[index] is Dictionary:
+			continue
+		var effect_spec: Dictionary = effects[index]
+		var effect_type := str(effect_spec.get("type", ""))
+		if not effect_type in ["Fire", "Smoke", "Sparkles", "PointLight"]:
+			continue
+		var effect_node := RobloxDataModelClass.create_instance(effect_type, "%s_%d" % [effect_type, index + 1])
+		if effect_node == null:
+			continue
+		_configure_runtime_ai_effect_node(effect_node, effect_spec)
+		block.add_child(effect_node)
+	var interaction: Dictionary = block_data.get("bobux_ai_interaction", {}) if block_data.get("bobux_ai_interaction", {}) is Dictionary else {}
+	block.set_meta("bobux_ai_interaction", interaction.duplicate(true))
+	if interaction.is_empty():
+		return
+	var mode := str(interaction.get("mode", "click"))
+	var interaction_node: Node
+	if mode == "touch":
+		var area := Area3D.new()
+		area.name = "TouchInterest"
+		area.collision_layer = 0
+		area.collision_mask = PLAYER_TRIGGER_COLLISION_MASK
+		area.monitoring = true
+		var shape_node := CollisionShape3D.new()
+		shape_node.name = "CollisionShape3D"
+		var box := BoxShape3D.new()
+		box.size = Vector3.ONE
+		shape_node.shape = box
+		area.add_child(shape_node)
+		area.body_entered.connect(_on_bobux_ai_touch_interaction.bind(area))
+		area.add_to_group("roblox_touch_interests")
+		interaction_node = area
+	else:
+		interaction_node = Node.new()
+		interaction_node.name = "ProximityPrompt" if mode == "proximity" else "ClickDetector"
+		if mode == "proximity":
+			interaction_node.add_to_group("roblox_proximity_prompts")
+		else:
+			interaction_node.add_to_group("roblox_click_detectors")
+	interaction_node.set_meta("roblox_class", interaction_node.name)
+	interaction_node.set_meta("bobux_ai_component", true)
+	interaction_node.set_meta("bobux_runtime_generated", true)
+	interaction_node.set_meta("bobux_ai_interaction", interaction.duplicate(true))
+	interaction_node.set_meta("roblox_properties", {
+		"Enabled": true,
+		"ActionText": str(interaction.get("prompt", "Use")),
+		"MaxActivationDistance": float(interaction.get("max_distance", 16.0))
+	})
+	block.add_child(interaction_node)
+
+
+func _configure_runtime_ai_effect_node(effect_node: Node, effect_spec: Dictionary) -> void:
+	var effect_type := str(effect_spec.get("type", effect_node.name))
+	var primary := Color.from_string(str(effect_spec.get("color", "#FF7814")), Color("#FF7814"))
+	effect_node.name = effect_type
+	effect_node.set_meta("roblox_class", effect_type)
+	effect_node.set_meta("bobux_ai_component", true)
+	effect_node.set_meta("bobux_runtime_generated", true)
+	effect_node.set_meta("bobux_ai_effect", effect_spec.duplicate(true))
+	if effect_node is GPUParticles3D:
+		var particles := effect_node as GPUParticles3D
+		particles.emitting = bool(effect_spec.get("enabled", true))
+		particles.amount = maxi(1, int(effect_spec.get("rate", 20.0)))
+		var process := particles.process_material as ParticleProcessMaterial
+		if process == null:
+			process = ParticleProcessMaterial.new()
+			particles.process_material = process
+		process.color = primary
+	elif effect_node is Light3D:
+		var light := effect_node as Light3D
+		light.light_color = primary
+		light.light_energy = float(effect_spec.get("brightness", 2.0))
+		light.visible = bool(effect_spec.get("enabled", true))
+		if light is OmniLight3D:
+			(light as OmniLight3D).omni_range = float(effect_spec.get("range", 12.0))
 
 func _apply_saved_bobux_mesh_resource(mesh_inst: MeshInstance3D, block_data: Dictionary, map_folder: String = "") -> void:
 	if mesh_inst == null:
@@ -3437,6 +3644,10 @@ func _block_texture_asset_id(data: Dictionary) -> String:
 	return ""
 
 func reload_runtime_map_from_game_state() -> Dictionary:
+	# Initial joins prepare files in MapManager, then build once on the server's
+	# world confirmation. Building here as well duplicated every map and script.
+	if not _runtime_world_ready and not multiplayer.is_server():
+		return {"ok": true, "deferred": true, "map_folder": GameState.selected_map_folder}
 	if world == null:
 		return {
 			"ok": false,
@@ -3548,12 +3759,23 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 		"Sphere":
 			return SphereMesh.new()
 		"Cylinder":
-			return CylinderMesh.new()
-		"Wedge":
+			var cylinder := CylinderMesh.new()
+			cylinder.cap_top = true
+			cylinder.cap_bottom = true
+			return cylinder
+		"Cone":
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = 0.5
+			cone.height = 1.0
+			cone.cap_top = true
+			cone.cap_bottom = true
+			return cone
+		"Wedge", "WedgePart":
 			return RbxlWedgeMeshBuilder.build_wedge(Vector3.ONE)
-		"CornerWedge":
+		"CornerWedge", "CornerWedgePart":
 			return RbxlWedgeMeshBuilder.build_corner_wedge(Vector3.ONE)
-		"Truss":
+		"Truss", "TrussPart":
 			return RbxlWedgeMeshBuilder.build_truss(Vector3.ONE)
 		_:
 			return BoxMesh.new()
@@ -3564,19 +3786,11 @@ func _create_collision_for_shape(shape_name: String) -> Shape3D:
 	match shape_name:
 		"Sphere":
 			return SphereShape3D.new()
-		"Cylinder":
+		"Cylinder", "Cone":
 			return CylinderShape3D.new()
-		"Wedge":
-			var wedge_shape := ConvexPolygonShape3D.new()
-			wedge_shape.points = PackedVector3Array([
-				Vector3(-0.5, -0.5, -0.5),
-				Vector3(0.5, -0.5, -0.5),
-				Vector3(-0.5, -0.5, 0.5),
-				Vector3(0.5, -0.5, 0.5),
-				Vector3(-0.5, 0.5, 0.5),
-				Vector3(0.5, 0.5, 0.5)
-			])
-			return wedge_shape
+		"Wedge", "WedgePart", "CornerWedge", "CornerWedgePart":
+			var custom_mesh := _create_mesh_for_shape(shape_name)
+			return custom_mesh.create_convex_shape(true, false) if custom_mesh != null else BoxShape3D.new()
 		_:
 			return BoxShape3D.new()
 
@@ -3590,6 +3804,81 @@ func _create_material(color: Color, mat_type: String, transparency: float = 0.0)
 	if transparency > 0.0:
 		fallback.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	return fallback
+
+
+func _block_uses_dynamic_physics(block_data: Dictionary) -> bool:
+	var physics_mode := str(block_data.get("bobux_physics_mode", block_data.get("physics_mode", ""))).strip_edges().to_lower()
+	if physics_mode == "dynamic":
+		return true
+	return block_data.has("anchored") and not bool(block_data.get("anchored", true))
+
+
+func _attach_runtime_block_physics(
+	mesh_inst: MeshInstance3D,
+	block_data: Dictionary,
+	shape_type: String,
+	mat_type: String,
+	can_collide: bool,
+	map_parent: Node
+) -> CollisionShape3D:
+	if mesh_inst == null or map_parent == null:
+		return null
+	if shape_type in ["Cone", "Wedge", "WedgePart", "CornerWedge", "CornerWedgePart", "Truss", "TrussPart"]:
+		_ensure_mesh_materials_double_sided(mesh_inst)
+	if not _block_uses_dynamic_physics(block_data):
+		var static_body := StaticBody3D.new()
+		var static_shape := CollisionShape3D.new()
+		static_shape.shape = _create_collision_for_shape(shape_type)
+		_apply_collision_shape_size(static_shape, shape_type, mesh_inst.scale)
+		static_shape.disabled = not can_collide
+		static_body.add_child(static_shape)
+		static_body.set_meta("material_type", mat_type)
+		static_body.set_meta("surface_type", mat_type)
+		mesh_inst.add_child(static_body)
+		return static_shape
+	var rigid_body := RigidBody3D.new()
+	rigid_body.name = "%s_PhysicsBody" % mesh_inst.name
+	rigid_body.set_meta("bobux_runtime_generated", true)
+	rigid_body.set_meta("bobux_visual_instance_id", mesh_inst.get_instance_id())
+	rigid_body.set_meta("material_type", mat_type)
+	rigid_body.set_meta("surface_type", mat_type)
+	rigid_body.set_meta("room_id", mesh_inst.get_meta("room_id", ""))
+	rigid_body.collision_layer = 1
+	rigid_body.collision_mask = PLAYER_TRIGGER_COLLISION_MASK | 1
+	rigid_body.mass = maxf(0.05, float(block_data.get("bobux_physics_mass", block_data.get("mass", 1.0))))
+	rigid_body.gravity_scale = maxf(0.0, float(block_data.get("bobux_physics_gravity_scale", block_data.get("gravity_scale", 1.0))))
+	rigid_body.linear_damp = maxf(0.0, float(block_data.get("bobux_physics_linear_damp", block_data.get("linear_damp", 0.1))))
+	rigid_body.angular_damp = maxf(0.0, float(block_data.get("bobux_physics_angular_damp", block_data.get("angular_damp", 0.1))))
+	rigid_body.continuous_cd = true
+	rigid_body.contact_monitor = true
+	rigid_body.max_contacts_reported = 8
+	var physics_material := PhysicsMaterial.new()
+	physics_material.friction = clampf(float(block_data.get("bobux_physics_friction", block_data.get("friction", 0.5))), 0.0, 1.0)
+	physics_material.bounce = clampf(float(block_data.get("bobux_physics_bounce", block_data.get("bounce", 0.0))), 0.0, 1.0)
+	rigid_body.physics_material_override = physics_material
+	map_parent.add_child(rigid_body, true)
+	var visual_scale := mesh_inst.global_basis.get_scale().abs()
+	rigid_body.global_transform = Transform3D(mesh_inst.global_basis.orthonormalized(), mesh_inst.global_position)
+	var dynamic_shape := CollisionShape3D.new()
+	dynamic_shape.name = "CollisionShape3D"
+	if bool(mesh_inst.get_meta("roblox_mesh_applied", false)) and mesh_inst.mesh != null:
+		dynamic_shape.shape = mesh_inst.mesh.create_convex_shape(true, false)
+	else:
+		dynamic_shape.shape = _create_collision_for_shape(shape_type)
+		_apply_collision_shape_size(dynamic_shape, shape_type, visual_scale)
+	dynamic_shape.scale = visual_scale
+	dynamic_shape.disabled = not can_collide
+	rigid_body.add_child(dynamic_shape)
+	var remote := RemoteTransform3D.new()
+	remote.name = "VisualFollower"
+	remote.update_position = true
+	remote.update_rotation = true
+	remote.update_scale = false
+	rigid_body.add_child(remote)
+	remote.remote_path = remote.get_path_to(mesh_inst)
+	mesh_inst.set_meta("_bobux_physics_body_instance_id", rigid_body.get_instance_id())
+	mesh_inst.set_meta("anchored", false)
+	return dynamic_shape
 
 func _attach_runtime_water_volume(block: MeshInstance3D, source_collision: CollisionShape3D) -> void:
 	if block == null or source_collision == null or source_collision.shape == null:
@@ -3623,7 +3912,7 @@ func _apply_collision_shape_size(collision_shape: CollisionShape3D, shape_name: 
 			var sphere_shape := collision_shape.shape as SphereShape3D
 			if sphere_shape:
 				sphere_shape.radius = 0.5
-		"Cylinder":
+		"Cylinder", "Cone":
 			var cylinder_shape := collision_shape.shape as CylinderShape3D
 			if cylinder_shape:
 				cylinder_shape.radius = 0.5
@@ -3774,7 +4063,7 @@ func _add_teleport_trigger(block: MeshInstance3D, body_handler: Callable) -> voi
 	area.collision_mask = PLAYER_TRIGGER_COLLISION_MASK
 	var area_shape := CollisionShape3D.new()
 	var trigger_cylinder := CylinderShape3D.new()
-	trigger_cylinder.radius = maxf(0.65, minf(block.scale.x, block.scale.z) * 0.22)
+	trigger_cylinder.radius = maxf(0.8, minf(block.scale.x, block.scale.z) * 0.46)
 	trigger_cylinder.height = maxf(TELEPORT_TRIGGER_HEIGHT, block.scale.y + 1.6)
 	area_shape.shape = trigger_cylinder
 	area_shape.position = Vector3(0.0, (trigger_cylinder.height * 0.5) - (block.scale.y * 0.5) + 0.15, 0.0)
@@ -3911,6 +4200,7 @@ func _add_damage_trigger(block: MeshInstance3D, damage_amount: float, body_handl
 
 func _register_teleport_block(block: MeshInstance3D, block_color: Color, room_id: String = "") -> void:
 	var color_key := _make_color_key(block_color)
+	block.set_meta("teleport_color_key", color_key)
 	var registry: Dictionary = _get_room_teleport_registry(room_id)
 	var teleports: Array = registry.get(color_key, [])
 	teleports.append(block)
@@ -3990,15 +4280,15 @@ func _on_teleport_entered(source_block: MeshInstance3D, body: Node3D) -> void:
 	var room_id: String = str(source_block.get_meta("room_id", "")).strip_edges()
 	if not room_id.is_empty() and room_id != _get_peer_room_id(teleport_peer_id):
 		return
-	if not _is_body_centered_in_teleport(source_block, body as CharacterBody3D):
-		return
 	var now_msec: int = Time.get_ticks_msec()
 	if now_msec < int(_peer_teleport_ready_at_msec.get(teleport_peer_id, 0)):
 		return
 
-	var block_material := source_block.get_active_material(0) as StandardMaterial3D
-	var block_color := block_material.albedo_color if block_material else Color.WHITE
-	var color_key := _make_color_key(block_color)
+	var color_key := str(source_block.get_meta("teleport_color_key", "")).strip_edges()
+	if color_key.is_empty():
+		var block_material := source_block.get_active_material(0) as StandardMaterial3D
+		var block_color := block_material.albedo_color if block_material else Color.WHITE
+		color_key = _make_color_key(block_color)
 	var teleports: Array = _get_room_teleport_registry(room_id).get(color_key, [])
 	var valid_teleports: Array[MeshInstance3D] = []
 	for entry in teleports:
@@ -4063,6 +4353,45 @@ func _apply_damage_to_player_node(player_node: CharacterBody3D, damage_amount: f
 		player_node.call("kill_now")
 	elif player_node.has_method("take_damage"):
 		player_node.call("take_damage", damage_amount)
+
+func request_lua_tool_damage(target_body: CharacterBody3D, damage_amount: float, source_body: CharacterBody3D = null) -> bool:
+	if target_body == null or not is_instance_valid(target_body):
+		return false
+	var target_peer_id := _get_trigger_peer_id_from_body(target_body)
+	if target_peer_id <= 0:
+		# Studio/local play tests do not own multiplayer peer ids.
+		_apply_damage_to_player_node(target_body, clampf(damage_amount, 0.0, 100.0))
+		return true
+	var source_peer_id := _get_trigger_peer_id_from_body(source_body) if source_body != null else _get_runtime_local_peer_id()
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
+		if not _server_supports_tool_damage or not is_instance_valid(_tool_damage_protocol): return false
+		_tool_damage_protocol.rpc_id(1, "request_damage", target_peer_id, clampf(damage_amount, 0.0, 100.0))
+		return true
+	return _validate_and_apply_lua_tool_damage(source_peer_id, target_peer_id, damage_amount)
+
+func _request_lua_tool_damage(target_peer_id: int, damage_amount: float) -> void:
+	if multiplayer.multiplayer_peer == null or not multiplayer.is_server():
+		return
+	_validate_and_apply_lua_tool_damage(multiplayer.get_remote_sender_id(), target_peer_id, damage_amount)
+
+func _validate_and_apply_lua_tool_damage(source_peer_id: int, target_peer_id: int, damage_amount: float) -> bool:
+	if source_peer_id <= 0 or target_peer_id <= 0 or source_peer_id == target_peer_id:
+		return false
+	if _get_peer_room_id(source_peer_id) != _get_peer_room_id(target_peer_id):
+		return false
+	var source_player := _find_player_node_by_peer_id(source_peer_id)
+	var target_player := _find_player_node_by_peer_id(target_peer_id)
+	if source_player == null or target_player == null:
+		return false
+	var max_distance := 8.0 * maxf(float(source_player.get_meta("roblox_stud_scale", 1.0)), 0.25)
+	if source_player.global_position.distance_to(target_player.global_position) > max_distance:
+		return false
+	var now_msec := Time.get_ticks_msec()
+	if now_msec < int(_peer_tool_damage_ready_at_msec.get(source_peer_id, 0)):
+		return false
+	_peer_tool_damage_ready_at_msec[source_peer_id] = now_msec + 180
+	_apply_damage_to_peer(target_peer_id, clampf(damage_amount, 1.0, 100.0))
+	return true
 
 func _on_vehicle_spawner_entered(spawner_block: MeshInstance3D, body: Node3D) -> void:
 	if not (body is CharacterBody3D):
@@ -4491,8 +4820,8 @@ func _spawn_destructible_debris(block: MeshInstance3D, hit_position: Vector3, im
 
 func _is_body_centered_in_teleport(source_block: MeshInstance3D, body: CharacterBody3D) -> bool:
 	var local_position := source_block.to_local(body.global_position)
-	var half_width := maxf(0.75, source_block.scale.x * 0.55)
-	var half_depth := maxf(0.75, source_block.scale.z * 0.55)
+	var half_width := maxf(0.9, source_block.scale.x * 0.62)
+	var half_depth := maxf(0.9, source_block.scale.z * 0.62)
 	return absf(local_position.x) <= half_width and absf(local_position.z) <= half_depth
 
 func _start_session_from_game_state() -> void:
@@ -4950,6 +5279,7 @@ func _generate_default_ground_for_room(room_id: String, map_target: Node3D) -> v
 	_register_fallback_spawn_surface(mesh_inst, room_id)
 
 func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target: Node3D) -> Dictionary:
+	map_target.set_meta("bobux_map_asset_folder", map_folder)
 	var clean_room_id: String = room_id.strip_edges()
 	var clean_map_folder: String = map_folder.strip_edges()
 	_room_runtime_player_settings[clean_room_id] = _get_default_player_settings()
@@ -5042,23 +5372,16 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 		if is_spawn_block:
 			mesh_inst.add_to_group(_get_room_spawn_group_name(clean_room_id))
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
-		var static_body := StaticBody3D.new()
-		var coll_shape := CollisionShape3D.new()
-		coll_shape.shape = _create_collision_for_shape(shape_type)
-		_apply_collision_shape_size(coll_shape, shape_type, mesh_inst.scale)
-		coll_shape.disabled = not can_collide
-		static_body.add_child(coll_shape)
-		static_body.set_meta("material_type", mat_type)
-		static_body.set_meta("surface_type", mat_type)
-		mesh_inst.add_child(static_body)
+		map_target.add_child(mesh_inst)
+		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
 		_configure_runtime_special_object(mesh_inst, shape_type, col, clean_room_id)
 		_configure_runtime_damage_block(mesh_inst, deals_damage, damage_amount)
-		map_target.add_child(mesh_inst)
+		_configure_runtime_ai_components(mesh_inst, block_data)
 		if bool(mesh_inst.get_meta("breakable", false)):
 			_register_destructible_block(mesh_inst, clean_room_id)
-		if can_collide and not deals_damage and shape_type != "Teleport":
+		if can_collide and not deals_damage and shape_type != "Teleport" and not _block_uses_dynamic_physics(block_data):
 			_register_fallback_spawn_surface(mesh_inst, clean_room_id)
 		blocks_loaded += 1
 		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
@@ -5127,6 +5450,7 @@ func _clear_peer_runtime_state(peer_id: int, remove_player: bool = true, preserv
 	_peer_checkpoint_positions.erase(peer_id)
 	_peer_spawn_infos.erase(peer_id)
 	_peer_teleport_ready_at_msec.erase(peer_id)
+	_peer_tool_damage_ready_at_msec.erase(peer_id)
 	peer_user_ids.erase(peer_id)
 	_peer_registered.erase(peer_id)
 	_pending_existing_peer_snapshots.erase(str(peer_id))
@@ -5159,8 +5483,7 @@ func _on_connected_to_server(_peer_id: int) -> void:
 	_show_network_loading("Syncing...", "Registering your avatar and waiting for spawn.", 0.72)
 	print("[Client] Connected as peer %s via %s. Sending avatar..." % [str(_get_runtime_local_peer_id()), NetworkManager.get_active_transport_label()])
 	_host_last_pong_msec = Time.get_ticks_msec()
-	# Keepalive is NOT started here — it moves to _confirm_room_join so the
-	# watchdog only runs after the server has definitely responded.
+	_start_host_keepalive()
 	_register_local_color_with_server()
 
 func _on_connection_failed(_message: String) -> void:
@@ -5357,6 +5680,7 @@ func _finalize_player_registration_async(sender_id: int, chosen_colors: Dictiona
 	# FIX B (Death Loop): After spawning the peer, tell the client which map to load.
 	# The client does NOT load any map until it receives this RPC.
 	var confirm_payload: Dictionary = {
+		"tool_damage_protocol": 1,
 		"map_id": str(room_state.get("map_id", GameState.get_selected_map_identifier())),
 		"map_name": str(room_state.get("map_name", GameState.get_selected_map_display_name())),
 		"cloud_version_id": str(room_state.get("cloud_version_id", "")),
@@ -5600,6 +5924,7 @@ func _register_local_color_with_server(retry_count: int = 0) -> void:
 # arrives, preventing the premature local map load that caused the state desync.
 @rpc("authority", "call_local", "reliable")
 func _confirm_room_join(payload: Dictionary) -> void:
+	_server_supports_tool_damage = int(payload.get("tool_damage_protocol", 0)) >= 1
 	if _map_loaded or _map_load_in_progress:
 		return
 	_map_load_in_progress = true
@@ -5612,8 +5937,9 @@ func _confirm_room_join(payload: Dictionary) -> void:
 	var map_id: String = str(payload.get("map_id", "")).strip_edges()
 	var map_name: String = str(payload.get("map_name", "")).strip_edges()
 	print("[Client] Room join confirmed by server. map_id=%s map_name=%s" % [map_id, map_name])
-	# Apply the server-dictated map folder if provided
-	if not map_folder.is_empty():
+	# A server's user:// cache lives on another machine. MapManager has already
+	# resolved the agreed version into this client's own cache during room auth.
+	if GameState.selected_map_folder.is_empty() and not map_folder.is_empty() and FileAccess.file_exists(map_folder.path_join("map_data.json")):
 		GameState.selected_map_folder = map_folder
 	elif not map_id.is_empty():
 		GameState.selected_map = map_id
@@ -5635,7 +5961,8 @@ func _confirm_room_join(payload: Dictionary) -> void:
 	_start_host_keepalive()
 
 func _hide_network_loading_after_spawn_ready() -> void:
-	for _retry_count in range(180):
+	var deadline_msec := Time.get_ticks_msec() + CHARACTER_SPAWN_TIMEOUT_MSEC
+	while is_inside_tree() and Time.get_ticks_msec() < deadline_msec:
 		var local_player: CharacterBody3D = _get_local_player()
 		if local_player != null and _runtime_world_ready:
 			local_player.visible = true
@@ -5836,6 +6163,18 @@ func _bind_runtime_local_character(character_instance_id: int) -> void:
 	if LuaScriptEngine != null and LuaScriptEngine.has_method("bind_local_player_character"):
 		LuaScriptEngine.bind_local_player_character(character)
 	_refresh_runtime_inventory()
+	_start_live_player_scripts(character)
+
+
+func _start_live_player_scripts(character: Node = null) -> void:
+	if _is_dedicated_server_runtime():
+		return
+	for script_node in LuaScriptEngine.collect_live_player_scripts(self, character):
+		if script_node.has_meta("bobux_script_runtime_id"):
+			continue
+		var source := str(script_node.get_meta("lua_source", script_node.get_meta("code", "")))
+		if not source.strip_edges().is_empty():
+			_queue_runtime_lua_script(script_node, source)
 
 func _get_default_player_settings() -> Dictionary:
 	return {
@@ -6035,7 +6374,7 @@ func _apply_map_sky() -> void:
 
 func _apply_roblox_environment_to_runtime_environment(env: Environment, settings: Dictionary) -> void:
 	var sky_color := _color_from_array(settings.get("background_color", [0.52, 0.76, 0.96]), Color(0.52, 0.76, 0.96))
-	if settings.has("lighting") and settings["lighting"] is Dictionary:
+	if settings.has("lighting") and settings["lighting"] is Dictionary and not bool(settings.get("custom_sky_color", false)):
 		var lighting: Dictionary = settings["lighting"]
 		sky_color = _roblox_sky_color_for_hour(_hour_from_lighting_props(lighting))
 	if settings.has("atmosphere") and settings["atmosphere"] is Dictionary:
@@ -6250,10 +6589,14 @@ func _apply_roblox_manifest_to_runtime_root(map_target: Node3D, manifest_variant
 	await _install_roblox_manifest_data_model(manifest, map_target)
 	await _load_manifest_scripts_into_map(manifest, loaded_runtime_refs, map_target, origin_offset, room_id)
 	await _refresh_runtime_roblox_ui(manifest, room_id)
+	var local_character := _get_local_player()
+	if is_instance_valid(local_character):
+		_bind_runtime_local_character(local_character.get_instance_id())
 
 func _install_roblox_manifest_data_model(manifest: Dictionary, context_node: Node) -> void:
 	if LuaScriptEngine == null:
 		return
+	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").resolve(manifest, str(context_node.get_meta("bobux_map_asset_folder", GameState.selected_map_folder)))
 	var result: Dictionary = {}
 	if LuaScriptEngine.has_method("install_roblox_manifest_async"):
 		result = await LuaScriptEngine.install_roblox_manifest_async(manifest, context_node, MAP_LOAD_MANIFEST_NODES_PER_FRAME)
@@ -6405,9 +6748,9 @@ func _manifest_script_runs_in_current_runtime(script_data: Dictionary, roblox_cl
 	if roblox_class == "Script":
 		# ServerStorage and ReplicatedStorage are inert libraries in Roblox. Scripts
 		# begin executing only after they are moved into a live server container.
-		return service_name in ["Workspace", "ServerScriptService", "StarterPlayer", "StarterPack", "Players"]
+		return service_name in ["Workspace", "ServerScriptService", "Players"]
 	if roblox_class == "LocalScript":
-		return service_name in ["Workspace", "StarterGui", "StarterPlayer", "StarterPack", "ReplicatedFirst", "Players"]
+		return service_name in ["ReplicatedFirst", "Players"]
 	return false
 
 func _create_runtime_object_from_map_data(data: Dictionary) -> Node3D:
@@ -6483,6 +6826,15 @@ func _start_runtime_lua_script_if_needed(runtime_node: Node, data: Dictionary) -
 
 func _queue_runtime_lua_script(runtime_node: Node, lua_source: String) -> void:
 	if not is_instance_valid(runtime_node):
+		return
+	# Starter containers hold templates. Their live clones run after the character
+	# is bound; running the template gives script.Parent the wrong identity.
+	var ancestor := runtime_node.get_parent()
+	while ancestor != null:
+		if str(ancestor.get_meta("roblox_class", "")) in ["StarterPlayer", "StarterGui", "StarterPack", "ServerStorage", "ReplicatedStorage"]:
+			return
+		ancestor = ancestor.get_parent()
+	if runtime_node.has_meta("bobux_script_runtime_id"):
 		return
 	var roblox_class := str(runtime_node.get_meta("roblox_class", "Script"))
 	var realm := "client" if roblox_class == "LocalScript" else "server"
@@ -6680,16 +7032,41 @@ func _get_spawn_position_candidates_for_peer(peer_id: int) -> Array[Vector3]:
 	if spawns.is_empty():
 		var fallback_spawns: Array[Vector3] = _get_room_fallback_spawns(room_id) if not room_id.is_empty() else _fallback_spawn_positions
 		for fallback_spawn in fallback_spawns:
-			candidates.append(fallback_spawn + peer_offset)
+			# These points may sit on narrow imported platforms; an arbitrary ring
+			# offset can put every player after the first beyond the collision edge.
+			candidates.append(fallback_spawn)
+			if candidates.size() >= MAX_REPLICATED_SPAWN_POINTS:
+				break
 		if candidates.is_empty():
 			var room_origin: Vector3 = _get_room_visual_origin(room_id) if not room_id.is_empty() else Vector3.ZERO
 			candidates.append(room_origin + Vector3(0.0, CHECKPOINT_RESPAWN_HEIGHT, 0.0) + peer_offset)
 		return candidates
 	for spawn_block in spawns:
-		var spawn_pos: Vector3 = spawn_block.global_position
-		spawn_pos.y += (spawn_block.scale.y * 0.5) + CHECKPOINT_RESPAWN_HEIGHT
-		candidates.append(spawn_pos + peer_offset)
+		if not spawn_block is Node3D or not is_instance_valid(spawn_block) or spawn_block.is_queued_for_deletion():
+			continue
+		var props: Dictionary = spawn_block.get_meta("roblox_properties", {})
+		if not bool(spawn_block.get_meta("Enabled", props.get("Enabled", true))):
+			continue
+		candidates.append(_spawn_position_above_surface(spawn_block, peer_offset))
+		if candidates.size() >= MAX_REPLICATED_SPAWN_POINTS:
+			break
 	return candidates
+
+func _spawn_position_above_surface(surface: Node3D, peer_offset: Vector3 = Vector3.ZERO) -> Vector3:
+	var bounds := AABB(-Vector3.ONE * 0.5, Vector3.ONE)
+	if surface is MeshInstance3D and surface.mesh != null:
+		bounds = surface.mesh.get_aabb()
+	var surface_transform := surface.global_transform if surface.is_inside_tree() else surface.transform
+	var local_offset := surface_transform.basis.inverse() * peer_offset
+	var center := bounds.get_center()
+	var inset_x := minf(0.6 / maxf(surface_transform.basis.x.length(), 0.001), bounds.size.x * 0.5)
+	var inset_z := minf(0.6 / maxf(surface_transform.basis.z.length(), 0.001), bounds.size.z * 0.5)
+	var local_top := Vector3(
+		clampf(center.x + local_offset.x, bounds.position.x + inset_x, bounds.end.x - inset_x),
+		bounds.end.y,
+		clampf(center.z + local_offset.z, bounds.position.z + inset_z, bounds.end.z - inset_z)
+	)
+	return surface_transform * local_top + Vector3.UP * CHECKPOINT_RESPAWN_HEIGHT
 
 func _get_spawn_slot_index_for_peer(peer_id: int) -> int:
 	var peer_room_id: String = _get_peer_room_id(peer_id)
@@ -6716,14 +7093,18 @@ func _register_fallback_spawn_surface(block: MeshInstance3D, room_id: String = "
 		return
 	if block.scale.x < 0.75 or block.scale.z < 0.75:
 		return
-	var fallback_spawn := block.global_position if block.is_inside_tree() else block.position
-	fallback_spawn.y += (block.scale.y * 0.5) + CHECKPOINT_RESPAWN_HEIGHT
+	var surface_basis := block.global_basis if block.is_inside_tree() else block.basis
+	if surface_basis.y.normalized().dot(Vector3.UP) < 0.74:
+		return
+	var fallback_spawn := _spawn_position_above_surface(block)
 	var clean_room_id: String = room_id.strip_edges()
 	if clean_room_id.is_empty():
-		_fallback_spawn_positions.append(fallback_spawn)
+		if _fallback_spawn_positions.size() < MAX_REPLICATED_SPAWN_POINTS:
+			_fallback_spawn_positions.append(fallback_spawn)
 		return
 	var room_spawns: Array = _room_runtime_fallback_spawns.get(clean_room_id, [])
-	room_spawns.append(fallback_spawn)
+	if room_spawns.size() < MAX_REPLICATED_SPAWN_POINTS:
+		room_spawns.append(fallback_spawn)
 	_room_runtime_fallback_spawns[clean_room_id] = room_spawns
 
 func _reset_network_state() -> void:
@@ -6788,6 +7169,7 @@ func leave_game() -> void:
 	if _leave_in_progress:
 		return
 	_leave_in_progress = true
+	_stop_scene_scripts()
 	get_tree().paused = false
 	_set_gameplay_frozen(false)
 	if _game_menu_panel != null:
@@ -6821,6 +7203,16 @@ func leave_game() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_leave_in_progress = false
 	get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+
+func _stop_scene_scripts() -> void:
+	if is_instance_valid(_runtime_inventory_controller):
+		_runtime_inventory_controller.set_process(false)
+		_runtime_inventory_controller.set_process_unhandled_input(false)
+	LuaScriptEngine.stop_all_scripts(self)
+
+func _exit_tree() -> void:
+	# Also cover scene changes caused by a failed connection or editor Stop.
+	_stop_scene_scripts()
 
 func _on_leave_pressed() -> void:
 	await leave_game()
@@ -6998,6 +7390,7 @@ func _on_host_keepalive_timeout() -> void:
 		return
 	if _network_loading_overlay != null and _network_loading_overlay.visible:
 		_host_last_pong_msec = Time.get_ticks_msec()
+		_dispatch_host_keepalive_probe(false)
 		return
 	# Drain the transport so a pong queued on the wire is applied before we
 	# measure silence (WebSocket can otherwise miss a window and false-timeout).

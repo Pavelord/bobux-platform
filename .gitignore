@@ -50,6 +50,11 @@ __pycache__/
 # Downloaded third-party reference repositories
 /tools/reference_repos/
 
+# Reproducible CC0 Toolbox payloads (metadata, licenses and build scripts are tracked).
+/toolbox_assets/models/
+/toolbox_assets/sounds/
+/toolbox_assets/thumbnails/
+
 # Importer/server runtime data
 **/asset_cache/
 **/rbxl_assets/
@@ -60,6 +65,8 @@ __pycache__/
 *.db-shm
 *.db-wal
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.sqlite3
 
 # Credentials and signing material
@@ -85,6 +92,7 @@ id_ed25519.*
 *.TMP
 *~
 ~$*
+~*.dll
 .DS_Store
 Thumbs.db
 .idea/
