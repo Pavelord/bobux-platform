@@ -67,14 +67,14 @@ $resolvedMobileVersion = if ($MobileVersion.Equals("auto", [StringComparison]::O
 }
 $resolvedMobileBuild = Resolve-Build $MobileBuild ([int]$remoteMobile.build) "MobileBuild"
 $resolvedLauncherVersion = if ($LauncherVersion.Equals("current", [StringComparison]::OrdinalIgnoreCase)) {
-	[string]$localWindows.launcher.version
+	[string]$remoteWindows.launcher.version
 } else {
 	$LauncherVersion
 }
 $resolvedLauncherBuild = if ($LauncherBuild.Equals("current", [StringComparison]::OrdinalIgnoreCase)) {
-	[int]$localWindows.launcher.build
+	[int]$remoteWindows.launcher.build
 } else {
-	Resolve-Build $LauncherBuild 0 "LauncherBuild"
+	Resolve-Build $LauncherBuild ([int]$remoteWindows.launcher.build) "LauncherBuild"
 }
 
 if ($resolvedVersion -notmatch '^\d+\.\d+\.\d+$') {
@@ -87,6 +87,9 @@ if ($resolvedLauncherVersion -notmatch '^\d+\.\d+\.\d+$') {
 	throw "LauncherVersion must match MAJOR.MINOR.PATCH."
 }
 if ($Production -and -not $AllowRedeploy) {
+	if ($resolvedLauncherBuild -lt [int]$remoteWindows.launcher.build -or [version]$resolvedLauncherVersion -lt [version]$remoteWindows.launcher.version) {
+		throw "Production launcher cannot be older than the deployed launcher."
+	}
 	if ($resolvedBuild -le [int]$remoteWindows.build) {
 		throw "Production build $resolvedBuild must be newer than deployed build $($remoteWindows.build)."
 	}
