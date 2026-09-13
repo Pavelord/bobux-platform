@@ -52,7 +52,7 @@ script.Parent:SetAttribute("Literal", "asset_123_456; text")
 local part = Instance.new("Part")
 part.Name = "Multi_123_456"; part.Anchored = true; part.CanCollide = false
 part.Parent = script.Parent
-script.Parent.Value = (label == "ok" and casted == 6 and template == "Total {total}" and inline == " ok" and color ~= nil and params ~= nil and enumValue == 0 and current == nil and runContext == "server" and typedCallback ~= nil and optional.Value == nil and optional.Occupies == 1) and add(4) or -1;
+script.Parent.Value = (label == "ok" and casted == 6 and template == "Total 6" and inline == " ok" and color ~= nil and params ~= nil and enumValue == 0 and current == nil and runContext == "server" and typedCallback ~= nil and optional.Value == nil and optional.Occupies == 1) and add(4) or -1;
 """
 	var result: Dictionary = engine.start_script(
 		source,

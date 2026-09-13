@@ -169,6 +169,9 @@ func _tier_button(tier: Dictionary) -> Button:
 	var button := _button("Бесплатно" if free else "%s ₽ / 30 дней" % _rubles(tier.price_kopecks), not free)
 	button.name = "Buy" + str(tier.id)
 	button.disabled = free
+	if bool(account.get("membership", {}).get("lifetime", false)):
+		button.disabled = true
+		button.text = "Ваш клуб · навсегда" if str(tier.id) == "TBC" else "У вас уже есть TBC"
 	if not free: button.pressed.connect(func(): _show_checkout(tier))
 	return button
 
@@ -255,7 +258,9 @@ func _render_history() -> void:
 	_body.add_child(_label("Мои покупки", 32))
 	var membership: Dictionary = account.get("membership", {})
 	var ends := int(membership.get("paid_until_ms", 0))
-	if ends > 0:
+	if membership.get("lifetime", false):
+		_body.add_child(_label("Turbo Bricks Club — пожизненно", 20, GREEN))
+	elif ends > 0:
 		_body.add_child(_label("Клуб оплачен до %s" % _date(ends), 16, GREEN))
 	if account.is_empty():
 		_body.add_child(_label("Подключитесь к серверу, чтобы увидеть баланс и историю.", 16, MUTED))
@@ -310,6 +315,7 @@ func _set_account(data: Dictionary) -> void:
 	_balance.text = "%d Boblox%s" % [int(account.get("balance", 0)), " (тест)" if account.get("test", false) else ""]
 	var member: Dictionary = account.get("membership", {})
 	_club.text = "%s · %s" % [str(member.get("tier", "BC")), "Бесплатный клуб" if member.get("tier", "BC") == "BC" else "%d Boblox в день" % int(member.get("daily", 0))]
+	if member.get("lifetime", false): _club.text += " · навсегда"
 	account_updated.emit(account)
 
 func _show_checkout(product: Dictionary) -> void:

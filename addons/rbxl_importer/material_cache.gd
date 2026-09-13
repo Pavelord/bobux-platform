@@ -107,19 +107,32 @@ static func resolve_material_enum(value: Variant) -> Dictionary:
 ## Build (or fetch a cached) StandardMaterial3D for the given Roblox properties.
 ## `color_rgb` is [r,g,b] in 0..1, `material_id` is the Roblox Material enum.
 func get_part_material(props: Dictionary) -> StandardMaterial3D:
-	var pattern := ""
-	if use_roblox_surface_patterns:
-		pattern = surface_pattern_from_properties(props)
-	if use_procedural_material_fallbacks:
-		if pattern.is_empty():
-			pattern = material_pattern_from_properties(props)
-	return get_material(
-		part_color_from_properties(props),
-		_prop(props, "Material", 256),
-		_prop(props, "Transparency", 0.0),
-		_prop(props, "Reflectance", 0.0),
-		pattern
-	)
+	# SurfaceType belongs to an individual face, independently of Material.
+	var pattern := material_pattern_from_properties(props) if use_procedural_material_fallbacks else ""
+	var base := get_material(part_color_from_properties(props), _prop(props, "Material", 256),
+		_prop(props, "Transparency", 0.0), _prop(props, "Reflectance", 0.0), pattern)
+	if not use_roblox_surface_patterns:
+		return base
+	var faces := Vector4(float(_prop(props, "TopSurface", 0)), float(_prop(props, "BottomSurface", 0)),
+		float(_prop(props, "RightSurface", 0)), float(_prop(props, "LeftSurface", 0)))
+	var ends := Vector2(float(_prop(props, "FrontSurface", 0)), float(_prop(props, "BackSurface", 0)))
+	if faces == Vector4.ZERO and ends == Vector2.ZERO:
+		return base
+	var scale_ := maxf(float(_prop(props, "BobuxStudScale", 0.5)), 0.001)
+	var key := "faces|%s|%s|%s|%s" % [base.get_instance_id(), faces, ends, scale_]
+	if _cache.has(key): return _cache[key]
+	var result := base.duplicate() as StandardMaterial3D
+	var overlay := ShaderMaterial.new()
+	overlay.shader = preload("res://addons/rbxl_importer/brick_surfaces.gdshader")
+	overlay.set_shader_parameter("studs_texture", preload("res://assets/materials/brick_surfaces/studs.png"))
+	overlay.set_shader_parameter("inlets_texture", preload("res://assets/materials/brick_surfaces/inlets.png"))
+	overlay.set_shader_parameter("face_types", faces)
+	overlay.set_shader_parameter("end_types", ends)
+	overlay.set_shader_parameter("stud_scale", scale_)
+	overlay.set_shader_parameter("opacity", base.albedo_color.a)
+	result.next_pass = overlay
+	_cache[key] = result
+	return result
 
 
 ## Build a Roblox material while preserving the canonical color serialized by

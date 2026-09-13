@@ -1,16 +1,65 @@
 extends RefCounted
 
+static var cache: Dictionary = {}
+const CELL := 16.0
+
+static func invalidate() -> void:
+	cache.clear()
+
+static func _candidates(root: Node, center: Vector3, radius: float) -> Array:
+	var id := root.get_instance_id()
+	var frame := Engine.get_process_frames()
+	var count := root.get_tree().get_node_count()
+	var index: Dictionary = cache.get(id, {})
+	if index.get("frame", -1) != frame or index.get("count", -1) != count:
+		index = {"frame": frame, "count": count, "grid": {}, "large": []}
+		for part in root.find_children("*", "MeshInstance3D", true, false):
+			if part.mesh == null or not part.is_visible_in_tree() or part.is_queued_for_deletion(): continue
+			var box: AABB = part.global_transform * part.get_aabb()
+			var low := Vector3i((box.position / CELL).floor())
+			var high := Vector3i((box.end / CELL).floor())
+			var span := high - low + Vector3i.ONE
+			if span.x * span.y * span.z > 512:
+				index.large.append(part.get_instance_id())
+				continue
+			for x in range(low.x, high.x + 1):
+				for y in range(low.y, high.y + 1):
+					for z in range(low.z, high.z + 1):
+						var key := Vector3i(x, y, z)
+						var bucket: Array = index.grid.get(key, [])
+						bucket.append(part.get_instance_id())
+						index.grid[key] = bucket
+		cache[id] = index
+	var ids := {}
+	for part_id in index.large: ids[part_id] = true
+	var low := Vector3i(((center - Vector3.ONE * radius) / CELL).floor())
+	var high := Vector3i(((center + Vector3.ONE * radius) / CELL).floor())
+	var span := high - low + Vector3i.ONE
+	if span.x * span.y * span.z > 4096:
+		for bucket in index.grid.values():
+			for part_id in bucket: ids[part_id] = true
+	else:
+		for x in range(low.x, high.x + 1):
+			for y in range(low.y, high.y + 1):
+				for z in range(low.z, high.z + 1):
+					for part_id in index.grid.get(Vector3i(x, y, z), []): ids[part_id] = true
+	var result: Array = []
+	for part_id in ids:
+		var part: Variant = instance_from_id(part_id)
+		if is_instance_valid(part) and not part.is_queued_for_deletion(): result.append(part)
+	return result
+
 # Mesh bounding boxes, including non-collidable queryable Parts. Evaluate in
 # part-local space so a rotated building doesn't become a huge world AABB.
 static func in_radius(root: Node, position_: Vector3, radius: float, filters: Array, include: bool, max_parts: int, respect_collision: bool) -> Array[Node]:
 	var result: Array[Node] = []
 	if not is_instance_valid(root) or not root.is_inside_tree() or not is_finite(radius) or radius < 0: return result
-	for candidate in root.find_children("*", "MeshInstance3D", true, false):
+	for candidate in _candidates(root, position_, radius):
 		var part := candidate as MeshInstance3D
 		if part.mesh == null or not part.is_visible_in_tree(): continue
 		var props: Dictionary = part.get_meta("roblox_properties", {})
 		var property := "CanCollide" if respect_collision else "CanQuery"
-		if not bool(part.get_meta(property, props.get(property, true))): continue
+		if not bool(part.get_meta("can_collide" if respect_collision else property, props.get(property, true))): continue
 		var filtered := false
 		for filter in filters:
 			if is_instance_valid(filter) and (filter == part or filter.is_ancestor_of(part)): filtered = true; break

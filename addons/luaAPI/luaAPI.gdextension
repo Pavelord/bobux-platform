@@ -8,7 +8,7 @@ linux.x86_64.release = "bin/libluaapi.linux.template_release.x86_64.so"
 linux.x86_32.debug = "bin/libluaapi.linux.template_debug.x86_32.so"
 linux.x86_32.release = "bin/libluaapi.linux.template_release.x86_32.so"
 
-windows.x86_64.debug = "bin/libluaapi.windows.template_debug.x86_64.dll"
+windows.x86_64.debug = "bin/libluaapi.windows.template_debug.x86_64.bobux.dll"
 windows.x86_64.release = "bin/libluaapi.windows.template_release.x86_64.dll"
 windows.x86_32.debug = "bin/libluaapi.windows.template_debug.x86_32.dll"
 windows.x86_32.release = "bin/libluaapi.windows.template_release.x86_32.dll"

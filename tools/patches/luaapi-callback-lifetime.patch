@@ -1,0 +1,93 @@
+diff --git a/lua_libraries/codegen.py b/lua_libraries/codegen.py
+index b0d142c..f82b17d 100644
+--- a/lua_libraries/codegen.py
++++ b/lua_libraries/codegen.py
+@@ -61,7 +61,8 @@ def code_gen(luaJIT=False):
+     if luaJIT:
+         luaLibraries_gen_cpp += """
+ bool loadLuaLibrary(lua_State *L, String libraryName) {
+-	const char *lib_c_str = libraryName.ascii().get_data();
++	const CharString library_bytes = libraryName.ascii();
++	const char *lib_c_str = library_bytes.get_data();
+ 	if (luaLibraries[lib_c_str] == nullptr) {
+ 		return false;
+ 	}
+@@ -79,7 +80,8 @@ bool loadLuaLibrary(lua_State *L, String libraryName) {
+     else:
+         luaLibraries_gen_cpp += """
+ bool loadLuaLibrary(lua_State *L, String libraryName) {
+-	const char *lib_c_str = libraryName.ascii().get_data();
++	const CharString library_bytes = libraryName.ascii();
++	const char *lib_c_str = library_bytes.get_data();
+ 	if (luaLibraries[lib_c_str] == nullptr) {
+ 		return false;
+ 	}
+diff --git a/src/classes/luaAPI.cpp b/src/classes/luaAPI.cpp
+index 1b7ad58..503c7c9 100644
+--- a/src/classes/luaAPI.cpp
++++ b/src/classes/luaAPI.cpp
+@@ -20,7 +20,9 @@ LuaAPI::LuaAPI() {
+ }
+ 
+ LuaAPI::~LuaAPI() {
+-	lua_close(lState);
++	lua_State *closing_state = lState;
++	lState = nullptr;
++	lua_close(closing_state);
+ }
+ 
+ // Bind C++ functions to GDScript
+diff --git a/src/classes/luaCallable.cpp b/src/classes/luaCallable.cpp
+index 8f67078..af05adb 100644
+--- a/src/classes/luaCallable.cpp
++++ b/src/classes/luaCallable.cpp
+@@ -12,12 +12,14 @@
+ LuaCallable::LuaCallable(Ref<LuaAPI> obj, int ref, lua_State *p_state) {
+ 	objectID = obj->get_instance_id();
+ 	funcRef = ref;
+-	state = p_state;
++	// The shared registry outlives exporting coroutines.
++	state = obj->getState();
+ 	h = (uint32_t)hash_djb2_one_64((uint64_t)this);
+ }
+ 
+ LuaCallable::~LuaCallable() {
+-	luaL_unref(state, LUA_REGISTRYINDEX, funcRef);
++	LuaAPI *owner = Object::cast_to<LuaAPI>(ObjectDB::get_instance(objectID));
++	if (owner && owner->getState()) luaL_unref(owner->getState(), LUA_REGISTRYINDEX, funcRef);
+ }
+ 
+ bool LuaCallable::compare_equal(const CallableCustom *p_a, const CallableCustom *p_b) {
+@@ -57,10 +59,21 @@ uint32_t LuaCallable::hash() const {
+ }
+ 
+ bool LuaCallable::is_valid() const {
+-	return ObjectDB::get_instance(objectID);
++	LuaAPI *owner = Object::cast_to<LuaAPI>(ObjectDB::get_instance(objectID));
++	return owner && owner->getState();
+ }
+ 
+ void LuaCallable::call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, LAPI_CALL_ERROR &r_call_error) const {
++	if (!is_valid()) {
++		r_return_value = Variant();
++#ifdef LAPI_GDEXTENSION
++		r_call_error.error = GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL;
++#else
++		r_call_error.error = Callable::CallError::CALL_ERROR_INSTANCE_IS_NULL;
++#endif
++		return;
++	}
++	const int stack_base = lua_gettop(state);
+ 	lua_pushcfunction(state, LuaState::luaErrorHandler);
+ 
+ 	// Getting the lua function via the reference stored in funcRef
+@@ -79,7 +92,8 @@ void LuaCallable::call(const Variant **p_arguments, int p_argcount, Variant &r_r
+ 		r_return_value = LuaState::getVariant(state, -1);
+ 	}
+ 
+-	lua_pop(state, 1);
++	// Restore the caller stack, including the error handler.
++	lua_settop(state, stack_base);
+ // TODO: Tie the error handling systems together?
+ #ifndef LAPI_GDEXTENSION
+ 	r_call_error.error = LAPI_CALL_ERROR::CALL_OK;

@@ -35,7 +35,7 @@ func _refresh() -> void:
 	var physics := preload("res://addons/roblox_runtime/roblox_part_physics.gd")
 	var body_a := physics.body_for(a, true)
 	var body_b := physics.body_for(b, true)
-	if body_a == null or body_b == null: return
+	if body_a == null or body_b == null or body_a == body_b: return
 	if str(source.get_meta("roblox_class", "")) != "WeldConstraint":
 		var c0 = wrapper._get(&"C0")
 		var c1 = wrapper._get(&"C1")
@@ -55,3 +55,5 @@ func _refresh() -> void:
 	joint.node_a = joint.get_path_to(body_a)
 	joint.node_b = joint.get_path_to(body_b)
 	joint.exclude_nodes_from_collision = true
+	preload("res://addons/roblox_runtime/roblox_surface_joints.gd").register_joint(a, source)
+	preload("res://addons/roblox_runtime/roblox_surface_joints.gd").register_joint(b, source)

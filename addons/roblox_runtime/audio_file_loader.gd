@@ -1,6 +1,15 @@
 extends RefCounted
 
 
+static func has_audio_header(path: String) -> bool:
+	if not FileAccess.file_exists(path): return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return false
+	var bytes := file.get_buffer(mini(file.get_length(), 65536))
+	if bytes.size() < 12: return false
+	return (bytes.slice(0, 4).get_string_from_ascii() == "RIFF" and bytes.slice(8, 12).get_string_from_ascii() == "WAVE") or bytes.slice(0, 4).get_string_from_ascii() == "OggS" or is_probably_valid_mp3_data(bytes)
+
+
 static func load_stream(path: String, disable_loop: bool = false) -> AudioStream:
 	var resolved_path := resolve_existing_path(path)
 	if resolved_path.is_empty():

@@ -779,6 +779,7 @@ static func _create_follow_card(lobby, profile: Dictionary, active_server: Dicti
 		lobby.call("_open_profile_for_user", str(profile.get("id", "")).strip_edges(), str(profile.get("username", "")).strip_edges(), profile, active_server)
 	)
 	info.add_child(username_btn)
+	preload("res://scripts/lobby/account_badges.gd").attach(username_btn, profile)
 
 	var status := Label.new()
 	status.text = str(lobby.call("_get_profile_status_text", profile, active_server))

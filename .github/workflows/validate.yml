@@ -60,6 +60,13 @@ jobs:
         run: |
           $tests = @(
             "res://tools/validate_runtime_load.gd",
+            "res://tools/validate_lua_runtime_regressions.gd",
+            "res://tools/validate_lua_instruction_budget.gd",
+            "res://tools/validate_luau_control_strings.gd",
+            "res://tools/validate_legacy_disaster_runtime.gd",
+            "res://tools/validate_legacy_media_physics.gd",
+            "res://tools/validate_account_badges.gd",
+            "res://tools/validate_founder_reward_ui.gd",
             "res://tools/validate_rbxl_converter_runtime.gd",
             "res://tools/validate_model_publish_roundtrip.gd",
             "res://tools/validate_lobby_friend_preview_queue.gd",

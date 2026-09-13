@@ -1431,6 +1431,11 @@ func fetch_boblox_wallet() -> Dictionary:
 	if not bool(auth_result.get("ok", false)): return auth_result
 	return await _request_authenticated_auth_json("/boblox/wallet", HTTPClient.METHOD_GET, null, "boblox_wallet", 12.0)
 
+func claim_founder_reward() -> Dictionary:
+	var auth_result: Dictionary = await _ensure_data_api_session("founder_reward")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_authenticated_auth_json("/boblox/founder-reward/claim", HTTPClient.METHOD_POST, {}, "founder_reward", 12.0)
+
 func fetch_boblox_catalog() -> Dictionary:
 	return await _request_auth_json("/boblox/catalog", HTTPClient.METHOD_GET, null, "boblox_catalog", 12.0)
 

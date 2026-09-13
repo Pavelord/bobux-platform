@@ -180,7 +180,7 @@ function Invoke-GameSmokeTest([string]$ExecutablePath, [string]$LogDirectory) {
 	Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 	$startInfo = New-Object System.Diagnostics.ProcessStartInfo
 	$startInfo.FileName = $ExecutablePath
-	$startInfo.Arguments = "--headless --audio-driver Dummy --quit-after 3"
+	$startInfo.Arguments = "--headless --audio-driver Dummy -- --verify-lua-runtime"
 	$startInfo.WorkingDirectory = Split-Path -Parent $ExecutablePath
 	$startInfo.UseShellExecute = $false
 	$startInfo.CreateNoWindow = $true
@@ -211,7 +211,7 @@ function Invoke-GameSmokeTest([string]$ExecutablePath, [string]$LogDirectory) {
 			throw "Windows game smoke test failed with exit code $exitCode. $stderrText"
 		}
 		$combinedLog = $stdoutText + "`n" + $stderrText
-		if ($combinedLog -match 'Couldn''t load project data|PCK file is missing|Parse Error|Compile Error|Failed to load script') {
+		if ($combinedLog -match 'Couldn''t load project data|PCK file is missing|Parse Error|Compile Error|Failed to load script|GDExtension.*not found|Could not load.*library' -or $combinedLog -notmatch 'BOBUX_LUA_SMOKE_OK') {
 			throw "Windows game smoke test found a fatal project/PCK error. See $stdoutPath and $stderrPath"
 		}
 	} finally {

@@ -141,6 +141,32 @@ try {
   assert.equal((await fetch(base + "/return")).status, 200);
   assert.equal(wallet.read("player1").balance, 100);
   console.log("[boblox-commerce] PASS: HTTP routes, provider request, tampering, duplicate callbacks, restart, lost response, cancellation, atomic rollback, daily catch-up, renewal, expiry, refund review");
+
+  commerce.grantFounder("founder1", "pavelord");
+  commerce.grantFounder("founder1", "pavelord");
+  commerce.grantFounder("impostor", "PAVELORD");
+  assert.equal(commerce.founderReward("impostor"), null, "A renamed account must not transfer the campaign reward");
+  assert.equal(commerce.account("founder1").founder_reward.pending, true);
+  assert.equal(commerce.publicBadges("founder1").verified_badge, false);
+  assert.equal((await fetch(base + "/founder-reward/claim", { method: "POST" })).status, 401);
+  assert.equal((await fetch(base + "/founder-reward/claim", { method: "POST", headers: { Authorization: "impostor", "Content-Type": "application/json" }, body: JSON.stringify({ user_id: "founder1" }) })).status, 404);
+  for (let i = 0; i < 3; i++) {
+    const claimed = await (await fetch(base + "/founder-reward/claim", { method: "POST", headers: { Authorization: "founder1" } })).json();
+    assert.equal(claimed.balance, 38);
+    assert.equal(claimed.membership.lifetime, true);
+    assert.equal(claimed.founder_reward.pending, false);
+    assert.equal(claimed.verified_badge, true);
+  }
+  clock += 400 * DAY;
+  assert.equal(commerce.account("founder1").balance, 401 * 38);
+  assert.equal(commerce.publicBadges("founder1").club_tier, "TBC");
+  await assert.rejects(commerce.checkout("founder1", request("BBC")), /пожизненный/);
+  wallet.close();
+  wallet = new BobloxWallet(join(folder, "commerce.sqlite"));
+  commerce = new BobloxCommerce(wallet, { provider, now });
+  assert.equal(commerce.claimFounder("founder1").balance, 401 * 38);
+  assert.equal(commerce.founderReward("founder1").pending, false);
+  console.log("[founder-rewards] PASS: persistent lifetime TBC, identity binding, authenticated claim, retry, daily catch-up, no expiry");
 } finally {
   if (server) await new Promise(resolve => server.close(resolve));
   wallet.close();

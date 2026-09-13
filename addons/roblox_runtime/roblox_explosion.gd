@@ -21,18 +21,20 @@ func _explode() -> void:
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = sphere
 	query.transform.origin = explosion.global_position
-	query.collision_mask = 1 | 2 | 4 | 16
+	query.collision_mask = 1 | 2 | 4 | 16 | 64
 	query.collide_with_areas = true
 	var seen := {}
 	var hit_bodies: Array = explosion.get_world_3d().direct_space_state.intersect_shape(query, 1024)
 	for hit in hit_bodies:
-		var part: Node = instance._part_from_raycast_collider(hit.collider)
+		var part: Node = instance._part_from_raycast_collider(hit.collider, int(hit.get("shape", -1)))
 		if part == null or seen.has(part.get_instance_id()): continue
 		seen[part.get_instance_id()] = true
 		var distance := (part as Node3D).global_position.distance_to(explosion.global_position) / scale_
 		engine.fire_roblox_instance_event(explosion, "Hit", [part, distance])
 		if pressure <= 0: continue
 		var part_instance = engine.BobuxInstance.new(part)
+		if distance <= radius * float(explosion.get_meta("DestroyJointRadiusPercent", 1.0)):
+			part_instance.BreakJoints()
 		var body: CharacterBody3D = part_instance._character_body()
 		if body != null and distance <= radius * float(explosion.get_meta("DestroyJointRadiusPercent", 1.0)):
 			if body.has_method("take_damage"):

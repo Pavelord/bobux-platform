@@ -1143,7 +1143,9 @@ func _spawn_part_block(ref_id: String, roblox_class: String, props: Dictionary, 
 		var exact_mesh_applied := _apply_exact_import_mesh_if_needed(mesh_block, roblox_class, props)
 		if not exact_mesh_applied and _is_csg_operation_class(roblox_class):
 			exact_mesh_applied = _apply_embedded_csg_hull_if_needed(mesh_block, props)
-		var part_material := _material_cache.get_part_material(props)
+		var material_props := props.duplicate(false)
+		material_props["BobuxStudScale"] = scale_factor
+		var part_material := _material_cache.get_part_material(material_props)
 		if exact_mesh_applied:
 			part_material = part_material.duplicate(true) as StandardMaterial3D
 			part_material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -1324,7 +1326,7 @@ func _build_sound_runtime_object(ref_id: String, props: Dictionary, parent_map: 
 	data["sound_id"] = sound_id
 	data["volume"] = clampf(float(_prop(props, "Volume", 1.0)), 0.0, 10.0)
 	data["looped"] = bool(_prop(props, "Looped", _prop(props, "looped", false)))
-	data["playing"] = bool(_prop(props, "Playing", _prop(props, "playing", true)))
+	data["playing"] = bool(_prop(props, "Playing", _prop(props, "playing", false)))
 	data["resolved_path"] = _resolve_sound_content_to_local_path(sound_id)
 	data["as_music"] = _is_global_sound(ref_id, parent_map, instances)
 	return data
@@ -1876,11 +1878,10 @@ func _create_runtime_object_preview_node(data: Dictionary) -> Node3D:
 			light.spot_angle = float(data.get("angle", 45.0))
 			runtime_node = light
 		"Sound":
-			runtime_node = Node3D.new()
 			var player := AudioStreamPlayer3D.new()
-			player.name = "AudioPreview"
 			player.volume_db = linear_to_db(maxf(float(data.get("volume", 1.0)), 0.0001))
-			runtime_node.add_child(player, false)
+			player.stream = preload("res://addons/roblox_runtime/audio_file_loader.gd").load_stream(str(data.get("resolved_path", "")), not bool(data.get("looped", false)))
+			runtime_node = player
 		"ParticleEmitter", "Fire", "Smoke", "Sparkles":
 			var particles := GPUParticles3D.new()
 			particles.amount = maxi(1, int(data.get("rate", 16.0)))
@@ -2248,7 +2249,7 @@ func _resolve_sound_content_to_local_path(content: Variant) -> String:
 		var builtin_path := "res://addons/rbxl_importer/builtin_assets/%s" % asset_path
 		if FileAccess.file_exists(builtin_path):
 			return builtin_path
-	return ""
+	return _find_cached_sound_asset(_sanitize_asset_id(source))
 
 
 func _resolve_texture_content_to_local_path(content: Variant) -> String:
@@ -2323,7 +2324,7 @@ func _find_cached_sound_asset(asset_id: String) -> String:
 	for ext in SOUND_CACHE_EXTENSIONS_CSV.split(","):
 		for base in [SOUND_CACHE_DIR, "res://addons/rbxl_importer/builtin_assets"]:
 			var candidate := "%s/%s.%s" % [base, asset_id, ext]
-			if _texture_file_has_supported_magic(candidate):
+			if preload("res://addons/roblox_runtime/audio_file_loader.gd").has_audio_header(candidate):
 				return candidate
 	return ""
 

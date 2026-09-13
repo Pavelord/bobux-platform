@@ -21,6 +21,9 @@ export function mountBoblox(app, commerce, authenticate) {
   app.get("/api/boblox/catalog", route(async (_req, res) => res.json({ ok: true,
     ...(commerce?.publicCatalog() || { ...catalog, sales_enabled: false, test: false }) })));
   app.get("/api/boblox/wallet", route(async (req, res) => res.json({ ok: true, ...requireCommerce().account(await user(req)) })));
+  app.post("/api/boblox/founder-reward/claim", route(async (req, res) => {
+    res.json({ ok: true, ...requireCommerce().claimFounder(await user(req)) });
+  }));
   app.post("/api/boblox/checkout", express.json({ limit: "4kb" }), route(async (req, res) => {
     res.json({ ok: true, order: await requireCommerce().checkout(await user(req), req.body || {}) });
   }));

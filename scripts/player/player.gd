@@ -94,7 +94,7 @@ const AVATAR_TEMPLATE_MIN_GLOBAL_GRAY_RATIO: float = 0.38
 const ENABLE_AVATAR_DECAL_LAYER: bool = true
 const ENABLE_AVATAR_CLOTHING_DECALS: bool = true
 const PLAYER_COLLISION_LAYER: int = 2
-const WORLD_COLLISION_MASK: int = 1
+const WORLD_COLLISION_MASK: int = 1 | 4 | 32
 const PLAYER_AND_WORLD_COLLISION_MASK: int = WORLD_COLLISION_MASK | PLAYER_COLLISION_LAYER
 const FLOOR_SNAP_LENGTH: float = 0.68
 const COYOTE_TIME: float = 0.14
@@ -4563,7 +4563,7 @@ func _world_units(value: float) -> float:
 
 func _get_world_collision_mask() -> int:
 	if _is_studio_playtest_instance():
-		return maxi(1, int(get_meta("bobux_world_collision_mask", WORLD_COLLISION_MASK)))
+		return maxi(1, int(get_meta("bobux_world_collision_mask", WORLD_COLLISION_MASK))) | 1 | 32
 	return WORLD_COLLISION_MASK
 
 func _get_player_and_world_collision_mask() -> int:

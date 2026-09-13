@@ -9,6 +9,8 @@ const MODEL_EDITOR_SCENE: PackedScene = preload("res://scenes/model_editor/model
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
 const BOBLOX_SHOP_SCRIPT := preload("res://scripts/lobby/boblox_shop.gd")
 var _boblox_shop: Control
+var _founder_reward_dialog: CanvasLayer
+const ACCOUNT_BADGES = preload("res://scripts/lobby/account_badges.gd")
 var _bricks_club_button: Button
 
 # --- Tab Navigation ---
@@ -688,6 +690,18 @@ func _open_boblox_shop(section: int) -> void:
 	_boblox_shop.call("select_section", section)
 
 func _on_boblox_account_updated(account: Dictionary) -> void:
+	ACCOUNT_BADGES.attach(sidebar_username, account)
+	if selected_profile_user_id == UserSession.user_id:
+		ACCOUNT_BADGES.attach(profile_username_label, account)
+	var reward: Dictionary = account.get("founder_reward", {}) if account.get("founder_reward") is Dictionary else {}
+	if reward.get("pending", false) and not is_instance_valid(_founder_reward_dialog):
+		_founder_reward_dialog = preload("res://scripts/lobby/founder_reward.gd").new()
+		_founder_reward_dialog.claimed.connect(func(updated: Dictionary):
+			_boblox_shop.call("_set_account", updated)
+			_boblox_shop.call("_render")
+			_refresh_selected_profile_async()
+		)
+		add_child(_founder_reward_dialog)
 	var nav := get_node_or_null("TopBar/HBox/Nav4") as Button
 	if nav: nav.text = "Boblox"
 	var wallet := get_node_or_null("TopBar/HBox/HeaderBobloxBalance") as Button
@@ -5467,6 +5481,7 @@ func _create_home_friend_avatar(profile: Dictionary, server_map_by_user: Diction
 	name_button.add_theme_color_override("font_color", Color(0.16, 0.17, 0.2, 1))
 	name_button.add_theme_font_size_override("font_size", 11)
 	root.add_child(name_button)
+	ACCOUNT_BADGES.attach(name_button, profile)
 
 	var open_popup := func() -> void:
 		var live_active_server: Dictionary = card.get_meta("active_server", {}) if card.get_meta("active_server", {}) is Dictionary else {}
@@ -6284,6 +6299,7 @@ func _show_external_profile_popup(profile_data: Dictionary, active_server: Dicti
 	username_label.add_theme_font_size_override("font_size", 32)
 	username_label.add_theme_color_override("font_color", Color(0.08, 0.08, 0.09, 1))
 	info.add_child(username_label)
+	ACCOUNT_BADGES.attach(username_label, profile_data)
 
 	var status := Label.new()
 	status.text = _get_profile_status_text(profile_data, active_server)
@@ -6512,8 +6528,10 @@ func _refresh_selected_profile_async() -> void:
 	selected_profile_snapshot = profile_data.duplicate(true)
 	if profile_username_label:
 		profile_username_label.text = resolved_username
+		ACCOUNT_BADGES.attach(profile_username_label, profile_data)
 	if sidebar_username and target_user_id == UserSession.user_id:
 		sidebar_username.text = resolved_username
+		ACCOUNT_BADGES.attach(sidebar_username, profile_data)
 	var active_server_lookup: Dictionary = {}
 	var active_servers_result: Dictionary = await CloudAPI.fetch_active_servers("", 64, 3.0, 1)
 	if bool(active_servers_result.get("ok", false)):

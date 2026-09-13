@@ -61,6 +61,34 @@ export class BobloxCommerce {
     CREATE INDEX IF NOT EXISTS boblox_memberships_user ON boblox_memberships(user_id,start_ms);`);
     if (!this.db.prepare("PRAGMA table_info(boblox_orders)").all().some(column => column.name === "checked_ms"))
       this.db.exec("ALTER TABLE boblox_orders ADD COLUMN checked_ms INTEGER NOT NULL DEFAULT 0");
+	this.db.exec(`CREATE TABLE IF NOT EXISTS bobux_founder_rewards (
+	  user_id TEXT PRIMARY KEY, campaign TEXT NOT NULL, username TEXT NOT NULL,
+	  granted_ms INTEGER NOT NULL, claimed_ms INTEGER, credited_days INTEGER NOT NULL DEFAULT 0
+	) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS bobux_founder_name ON bobux_founder_rewards(campaign, username COLLATE NOCASE);`);
+  }
+  grantFounder(userId, username) {
+    if (!userId || !username) throw fail("Account identity is required");
+    this.db.prepare("INSERT OR IGNORE INTO bobux_founder_rewards(user_id,campaign,username,granted_ms) VALUES (?,?,?,?)")
+      .run(userId, "community-founders-2026", username, this.now());
+  }
+  founderReward(userId) {
+    const row = this.db.prepare("SELECT campaign,claimed_ms FROM bobux_founder_rewards WHERE user_id=?").get(userId);
+    return row ? { id: row.campaign, pending: row.claimed_ms === null, claimed: row.claimed_ms !== null, tier: "TBC", lifetime: true, verified: true } : null;
+  }
+  claimFounder(userId) {
+    this.wallet.transaction(() => {
+      if (!this.founderReward(userId)) throw fail("Награда для этого аккаунта не назначена.", 404);
+      this.db.prepare("UPDATE bobux_founder_rewards SET claimed_ms=COALESCE(claimed_ms,?) WHERE user_id=?").run(this.now(), userId);
+      this.settleInTransaction(userId);
+    });
+    return this.account(userId);
+  }
+  publicBadges(userId) {
+    const founder = this.founderReward(userId);
+    const active = this.db.prepare("SELECT tier FROM boblox_memberships WHERE user_id=? AND suspended=0 AND start_ms<=? AND end_ms>? ORDER BY start_ms LIMIT 1")
+      .get(userId, this.now(), this.now());
+    return { verified_badge: !!founder?.claimed, club_tier: founder?.claimed ? "TBC" : (active?.tier || "BC"), club_lifetime: !!founder?.claimed };
   }
   publicCatalog() {
     return { ...catalog, sales_enabled: !!this.provider, test: this.provider?.test ?? false,
@@ -74,6 +102,15 @@ export class BobloxCommerce {
     throw fail("Товар не найден.");
   }
   settleInTransaction(userId) {
+    const founder = this.db.prepare("SELECT * FROM bobux_founder_rewards WHERE user_id=? AND claimed_ms IS NOT NULL").get(userId);
+    if (founder) {
+      const due = Math.max(0, Math.floor((this.now() - founder.claimed_ms) / DAY) + 1);
+      if (due > founder.credited_days) {
+        this.wallet.applyInTransaction({ userId, amount: (due - founder.credited_days) * catalog.tiers.find(t => t.id === "TBC").daily,
+          operationId: `founder:${userId}:${due}`, reason: "TBC:lifetime:daily" });
+        this.db.prepare("UPDATE bobux_founder_rewards SET credited_days=? WHERE user_id=?").run(due, userId);
+      }
+    }
     for (const period of this.db.prepare("SELECT * FROM boblox_memberships WHERE user_id=? AND suspended=0").all(userId)) {
       const due = Math.min(period.days, Math.max(0, Math.floor((this.now() - period.start_ms) / DAY) + 1));
       if (due <= period.credited_days) continue;
@@ -88,7 +125,8 @@ export class BobloxCommerce {
       .get(userId, this.now(), this.now());
     const lastEnd = this.db.prepare("SELECT MAX(end_ms) AS end_ms FROM boblox_memberships WHERE user_id=? AND suspended=0 AND end_ms>?").get(userId, this.now()).end_ms;
     return { ...this.wallet.read(userId), test: this.provider?.test ?? false,
-      membership: active ? { ...active, paid_until_ms: lastEnd } : { tier: "BC", daily: 0 },
+      founder_reward: this.founderReward(userId), ...this.publicBadges(userId),
+      membership: this.founderReward(userId)?.claimed ? { tier: "TBC", lifetime: true, daily: catalog.tiers.find(t => t.id === "TBC").daily } : (active ? { ...active, paid_until_ms: lastEnd } : { tier: "BC", daily: 0 }),
       operations: this.wallet.history(userId), orders: this.db.prepare("SELECT id,product,status,created_ms,review FROM boblox_orders WHERE user_id=? ORDER BY created_ms DESC LIMIT 10")
         .all(userId).map(o => ({ ...o, product: JSON.parse(o.product).name })) };
   }
@@ -115,6 +153,7 @@ export class BobloxCommerce {
       }
       const product = this.product(productId);
       if (product.kind === "membership") {
+        if (this.founderReward(userId)?.claimed) throw fail("У вас уже есть пожизненный Turbo Bricks Club.", 409);
         const other = this.db.prepare("SELECT tier FROM boblox_memberships WHERE user_id=? AND end_ms>? AND suspended=0 AND tier!=?").get(userId, this.now(), product.id);
         if (other) throw fail("Другой уровень клуба можно выбрать после окончания текущего срока.", 409);
         const pending = this.db.prepare("SELECT product FROM boblox_orders WHERE user_id=? AND status IN ('creating','pending','waiting_for_capture')").all(userId);

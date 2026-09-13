@@ -6,6 +6,7 @@ import express from "express";
 import { createBobloxFromEnv, mountBoblox } from "./boblox_routes.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
+let bobloxCommerce = null;
 const PB_URL = (process.env.POCKETBASE_URL || "http://127.0.0.1:8090").replace(/\/+$/, "");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "http://109.71.245.162").replace(/\/+$/, "");
 const STORAGE_DIR = process.env.STORAGE_DIR || "/var/www/bobux/storage";
@@ -169,7 +170,21 @@ async function main() {
     isPublicMap: async id => (await listRows("maps", ["id", "is_published"])).some(row => row.id === id && row.is_published)
   });
 
-  const bobloxCommerce = await createBobloxFromEnv();
+  bobloxCommerce = await createBobloxFromEnv();
+  if (bobloxCommerce) {
+    // Resolved from the owner's existing accounts. Names may change; ownership must not.
+    for (const [userId, username] of [
+      ["z9ovqynlv860sgw", "pavelord"], ["c0crv2dgka130x6", "denchiz"],
+      ["0lf79436w2q2is7", "Master_Void"], ["fc39kwx4dt1s2u0", "Insar43k"],
+      ["644ot865524y2b3", "oxlpekxx"], ["4am11hqkmmm81xv", "pondev"],
+      ["37j41m875xucshz", "vorexx"], ["w7tgv3g9tuf3304", "stickmasterluke"],
+      ["24j34m88py3372r", "zsertok"], ["434551yu51wb221", "Не знающий"]
+    ]) {
+      const account = await getAuthUserById(userId);
+      if (!account?.id) { console.warn(`Founder reward: authentication record missing: ${username}`); continue; }
+      bobloxCommerce.grantFounder(account.id, username);
+    }
+  }
   mountBoblox(app, bobloxCommerce, userFromRequest);
   if (bobloxCommerce?.provider) {
     const reconcileBoblox = () => bobloxCommerce.reconcile().catch(() => console.warn("Boblox payment reconciliation will retry."));
@@ -2042,6 +2057,7 @@ function sanitizeMarketplaceDataForClient(data) {
 
 function sanitizePublicProfileOutput(profile) {
   const output = { ...(profile || {}) };
+  Object.assign(output, bobloxCommerce?.publicBadges(String(output.id || "")) || { verified_badge: false, club_tier: "BC", club_lifetime: false });
   delete output._pb_id;
   if (output.avatar_data && typeof output.avatar_data === "object" && !Array.isArray(output.avatar_data)) {
     output.avatar_data = sanitizePublicAvatarData(output.avatar_data);
