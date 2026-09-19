@@ -87,6 +87,7 @@ var peer_colors: Dictionary = {}
 var peer_usernames: Dictionary = {}
 var peer_user_ids: Dictionary = {}
 var peer_profiles: Dictionary = {}
+var _room_runtime_preparations: Dictionary = {}
 var peer_avatar_visuals: Dictionary = {}
 var _runtime_rbxl_material_cache := RbxlMaterialCache.new()
 var _runtime_object_texture_cache: Dictionary = {}
@@ -4859,6 +4860,12 @@ func _on_room_peer_profiles_updated(profiles_by_peer: Dictionary) -> void:
 func _on_room_emptied(_server_key: String, room_id: String) -> void:
 	if not multiplayer.is_server():
 		return
+	if _room_runtime_preparations.has(room_id):
+		var pending: Dictionary = _room_runtime_preparations[room_id]
+		while bool(pending.loading):
+			await get_tree().process_frame
+	if NetworkManager != null and not NetworkManager.get_room_member_peer_ids(room_id).is_empty():
+		return
 	_free_room_runtime(room_id)
 
 func _get_peer_room_id(peer_id: int) -> String:
@@ -5310,6 +5317,23 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 	}
 
 func _ensure_server_room_runtime(room_id: String, room_state: Dictionary) -> Dictionary:
+	var key := room_id.strip_edges()
+	if _room_runtime_preparations.has(key):
+		var pending: Dictionary = _room_runtime_preparations[key]
+		while bool(pending.loading):
+			await get_tree().process_frame
+		if pending.state == room_state:
+			return pending.result
+		return await _ensure_server_room_runtime(room_id, room_state)
+	var job := {"loading": true, "state": room_state.duplicate(true), "result": {}}
+	_room_runtime_preparations[key] = job
+	var result: Dictionary = await _prepare_server_room_runtime(room_id, room_state)
+	job.result = result
+	job.loading = false
+	_room_runtime_preparations.erase(key)
+	return result
+
+func _prepare_server_room_runtime(room_id: String, room_state: Dictionary) -> Dictionary:
 	if not _is_dedicated_server_runtime() or not multiplayer.is_server():
 		return {"ok": true, "room_id": room_id.strip_edges()}
 	var clean_room_id: String = room_id.strip_edges()
@@ -5590,6 +5614,8 @@ func _finalize_player_registration_async(sender_id: int, chosen_colors: Dictiona
 		_reject_duplicate_session.rpc_id(sender_id, "Could not prepare the selected room.")
 		if NetworkManager != null and NetworkManager.has_method("_disconnect_peer_after_reject"):
 			NetworkManager.call_deferred("_disconnect_peer_after_reject", sender_id)
+		return
+	if not multiplayer.get_peers().has(sender_id):
 		return
 	_spawn_player_for_peer(sender_id)
 	if _find_player_node_by_peer_id(sender_id) == null:

@@ -61,6 +61,7 @@ jobs:
           $tests = @(
             "res://tools/validate_runtime_load.gd",
             "res://tools/validate_workspace_network_boundary.gd",
+            "res://tools/validate_room_load_coalescing.gd",
             "res://tools/validate_experience_loading.gd",
             "res://tools/validate_lua_runtime_regressions.gd",
             "res://tools/validate_lua_instruction_budget.gd",

@@ -29,8 +29,8 @@ export function mountPlaceImport(app, authenticate, options = {}) {
     } catch {
       res.status(422).json({ error: "Не удалось преобразовать карту: повреждённый файл или превышен лимит обработки (45 секунд / 96 МБ структуры). Текущая карта сохранена." });
     } finally {
-      if (directory) await rm(directory, { recursive: true, force: true });
       active--;
+      if (directory) await rm(directory, { recursive: true, force: true });
     }
   });
 }

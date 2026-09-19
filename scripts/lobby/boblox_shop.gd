@@ -117,6 +117,7 @@ func _render_club() -> void:
 			column.add_child(_label("%d Boblox в день · %d за 30 дней" % [int(tier.daily), int(tier.daily) * 30], 16, GREEN, true))
 			var rules: Dictionary = tier.get("creator", {})
 			column.add_child(_label("Одежда: %d бесплатно / месяц · затем %d Boblox\n3D-предметы: %d бесплатно / месяц · затем %d Boblox" % [int(rules.get("clothing_limit", 0)), int(rules.get("clothing_fee", 0)), int(rules.get("items_limit", 0)), int(rules.get("items_fee", 0))], 14, MUTED))
+			column.add_child(_label("Общий предел: %d одежды и %d 3D.\nТоваров с ценой 0: %d / месяц." % [int(rules.get("clothing_max", 0)), int(rules.get("items_max", 0)), int(rules.get("free_items_limit", 0))], 14, MUTED))
 			column.add_child(_tier_button(tier))
 	else:
 		var grid := GridContainer.new()
