@@ -4751,7 +4751,7 @@ func _restore_manifest_hierarchy_async(raw_hierarchy: Variant, node_by_ref: Dict
 			if node_by_ref.has(child_ref) and node_by_ref.has(parent_ref):
 				var child := node_by_ref[child_ref] as Node
 				var parent := node_by_ref[parent_ref] as Node
-				if child != null and parent != null and child != parent and child.get_parent() != parent and not child.is_ancestor_of(parent):
+				if child != null and parent != null and child != parent and child.get_parent() != parent and not child.is_ancestor_of(parent) and not bool(child.get_meta("bobux_workspace_alias", false)):
 					child.reparent(parent, true)
 					reparented += 1
 		processed += 1
@@ -4778,7 +4778,8 @@ func _restore_manifest_hierarchy(raw_hierarchy: Variant, node_by_ref: Dictionary
 		var parent := node_by_ref[parent_ref] as Node
 		if child == null or parent == null or child == parent or child.get_parent() == parent:
 			continue
-		if child.is_ancestor_of(parent):
+		# Workspace aliases belong to the native scene; only their Lua parent is game.
+		if child.is_ancestor_of(parent) or bool(child.get_meta("bobux_workspace_alias", false)):
 			continue
 		child.reparent(parent, true)
 		reparented += 1
@@ -4889,7 +4890,7 @@ func _apply_manifest_entry_metadata(node: Node, entry: Dictionary) -> void:
 func _apply_manifest_properties_to_node(node: Node, properties: Dictionary) -> void:
 	for attribute in properties.get("Attributes", {}):
 		node.set_meta("attribute_" + str(attribute), properties.Attributes[attribute])
-	if node is Node3D:
+	if node is Node3D and not bool(node.get_meta("bobux_workspace_alias", false)):
 		var node_3d := node as Node3D
 		node_3d.position = _vector3_from_manifest_value(properties.get("BobuxPosition", properties.get("Position", [0.0, 0.0, 0.0])), node_3d.position)
 		node_3d.rotation_degrees = _vector3_from_manifest_value(properties.get("BobuxRotation", properties.get("Rotation", [0.0, 0.0, 0.0])), node_3d.rotation_degrees)

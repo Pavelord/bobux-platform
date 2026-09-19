@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js",
-    "test": "node server.test.mjs && node boblox_wallet.test.mjs && node boblox_commerce.test.mjs && node social_store.test.mjs"
+    "test": "node server.test.mjs && node boblox_wallet.test.mjs && node boblox_commerce.test.mjs && node social_store.test.mjs && node creator_publishing.test.mjs && node place_import.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2"

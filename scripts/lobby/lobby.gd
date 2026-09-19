@@ -692,7 +692,7 @@ func _open_boblox_shop(section: int) -> void:
 func _on_boblox_account_updated(account: Dictionary) -> void:
 	ACCOUNT_BADGES.attach(sidebar_username, account)
 	if selected_profile_user_id == UserSession.user_id:
-		ACCOUNT_BADGES.attach(profile_username_label, account)
+		ACCOUNT_BADGES.attach(profile_username_label, account, true)
 	var reward: Dictionary = account.get("founder_reward", {}) if account.get("founder_reward") is Dictionary else {}
 	if reward.get("pending", false) and not is_instance_valid(_founder_reward_dialog):
 		_founder_reward_dialog = preload("res://scripts/lobby/founder_reward.gd").new()
@@ -6299,7 +6299,7 @@ func _show_external_profile_popup(profile_data: Dictionary, active_server: Dicti
 	username_label.add_theme_font_size_override("font_size", 32)
 	username_label.add_theme_color_override("font_color", Color(0.08, 0.08, 0.09, 1))
 	info.add_child(username_label)
-	ACCOUNT_BADGES.attach(username_label, profile_data)
+	ACCOUNT_BADGES.attach(username_label, profile_data, true)
 
 	var status := Label.new()
 	status.text = _get_profile_status_text(profile_data, active_server)
@@ -6528,7 +6528,7 @@ func _refresh_selected_profile_async() -> void:
 	selected_profile_snapshot = profile_data.duplicate(true)
 	if profile_username_label:
 		profile_username_label.text = resolved_username
-		ACCOUNT_BADGES.attach(profile_username_label, profile_data)
+		ACCOUNT_BADGES.attach(profile_username_label, profile_data, true)
 	if sidebar_username and target_user_id == UserSession.user_id:
 		sidebar_username.text = resolved_username
 		ACCOUNT_BADGES.attach(sidebar_username, profile_data)
@@ -8422,6 +8422,18 @@ func _ensure_loading_overlay() -> void:
 	_loading_progress_bar.add_theme_stylebox_override("fill", progress_fill)
 	root.add_child(_loading_progress_bar)
 
+func _ensure_experience_loading_overlay() -> void:
+	if _loading_overlay != null and _loading_overlay.has_method("set_experience"): return
+	if _loading_overlay != null: _loading_overlay.queue_free()
+	var overlay = load("res://scripts/ui/experience_loading.gd").new()
+	overlay.visible = false
+	add_child(overlay)
+	_loading_overlay = overlay
+	_loading_title_label = overlay.title
+	_loading_subtitle_label = overlay.subtitle
+	_loading_transport_badge_label = overlay.transport_badge
+	_loading_progress_bar = overlay.bar
+
 func _show_loading_overlay(title: String, subtitle: String, progress_ratio: float) -> void:
 	_ensure_loading_overlay()
 	_loading_overlay.modulate.a = 1.0
@@ -8862,7 +8874,9 @@ func _join_live_server(server_info: Dictionary) -> void:
 		"folder": "",
 		"icon_path": ""
 	}
+	_ensure_experience_loading_overlay()
 	_show_loading_overlay("Loading...", "Joining %s" % str(game_info.get("name", "a game")), 0.08)
+	_loading_overlay.call("set_experience", str(game_info.get("name", "Bobux")), game_info)
 	await _join_server_flow(game_info, resolved_server_info)
 
 func _resolve_join_server_info(server_info: Dictionary) -> Dictionary:
@@ -10239,7 +10253,9 @@ func _find_child_by_name_recursive(root: Node, desired_name: String) -> Node:
 	return null
 
 func _start_smart_play_for_game(game_info: Dictionary) -> void:
+	_ensure_experience_loading_overlay()
 	_show_loading_overlay("Loading...", "Preparing %s for smart play" % str(game_info.get("name", "this game")), 0.05)
+	_loading_overlay.call("set_experience", str(game_info.get("name", "Bobux")), game_info)
 	_update_loading_overlay("Preparing world...", "Loading the newest local or cached version.", 0.38)
 	var map_result: Dictionary = await _prepare_map_for_game(game_info, {})
 	if not bool(map_result.get("ok", false)):

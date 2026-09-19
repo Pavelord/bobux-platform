@@ -76,8 +76,8 @@ func _initialize() -> void:
 		"ip": host,
 		"port": port,
 		"create_if_missing": create_if_missing,
-		"map_name": "classic",
-		"map_id": "classic"
+		"map_name": OS.get_environment("DEDICATED_PROBE_MAP_NAME") if not OS.get_environment("DEDICATED_PROBE_MAP_NAME").is_empty() else "classic",
+		"map_id": OS.get_environment("DEDICATED_PROBE_MAP_ID") if not OS.get_environment("DEDICATED_PROBE_MAP_ID").is_empty() else "classic"
 	}, {})
 	change_scene_to_file(MAIN_SCENE_PATH)
 	var hold_seconds_raw: String = OS.get_environment("DEDICATED_PROBE_HOLD_SECONDS").strip_edges()
@@ -93,7 +93,7 @@ func _initialize() -> void:
 		if scene != null and scene.has_method("leave_game"):
 			await scene.call("leave_game")
 			await create_timer(1.0).timeout
-	quit(0 if _connected and not _failed else 1)
+	quit(0 if _connected and _spawn_confirmed and not _failed else 1)
 
 func _process(_delta: float) -> bool:
 	if _spawn_confirmed:

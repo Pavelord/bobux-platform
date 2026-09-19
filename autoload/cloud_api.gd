@@ -1358,6 +1358,13 @@ func publish_avatar_item(item_data: Dictionary, item_name: String, metadata: Dic
 	for key in item_data.keys():
 		if not payload.has(key):
 			payload[key] = _json_safe_value(item_data[key])
+	if str(payload.get("id", "")).is_empty():
+		payload["id"] = Crypto.new().generate_random_bytes(16).hex_encode()
+		item_data["id"] = payload["id"]
+		metadata["id"] = payload["id"]
+	var permission: Dictionary = await _confirm_catalog_publication(payload)
+	if not bool(permission.get("ok", false)): return permission
+	payload["publication_fee"] = int(permission.get("fee", 0))
 	return await _request_json_with_retries(
 		"/rpc/publish_avatar_item",
 		HTTPClient.METHOD_POST,
@@ -1499,10 +1506,15 @@ func update_catalog_asset_visibility(target_type: String, target_id: String, vis
 	var auth_result: Dictionary = await _ensure_data_api_session("update_catalog_asset_visibility")
 	if not bool(auth_result.get("ok", false)):
 		return auth_result
+	var payload := {"target_type": target_type, "target_id": target_id, "visibility": visibility}
+	if target_type == "avatar_item" and visibility == "public":
+		var permission: Dictionary = await _confirm_catalog_publication({"id": target_id, "visibility": visibility})
+		if not bool(permission.get("ok", false)): return permission
+		payload["publication_fee"] = int(permission.get("fee", 0))
 	return await _request_json_with_retries(
 		"/rpc/update_catalog_asset_visibility",
 		HTTPClient.METHOD_POST,
-		{"target_type": target_type, "target_id": target_id, "visibility": visibility},
+		payload,
 		"update_catalog_asset_visibility",
 		PackedStringArray(),
 		true
@@ -3690,3 +3702,41 @@ func vote_for_map(map_id: String, value: int) -> Dictionary:
 	var auth: Dictionary = await _ensure_data_api_session("vote_for_map")
 	if not auth.get("ok", false): return auth
 	return await _request_authenticated_auth_json("/social/maps/" + map_id.uri_encode() + "/vote", HTTPClient.METHOD_POST, {"vote": value}, "vote_for_map")
+
+func convert_roblox_place(path: String) -> Dictionary:
+	var auth: Dictionary = await _ensure_data_api_session("import_place")
+	if not bool(auth.get("ok", false)): return auth
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return {"ok": false, "error": "Не удалось открыть выбранный файл. Скопируйте его в Downloads и выберите снова."}
+	if file.get_length() > 32 * 1024 * 1024:
+		file.close()
+		return {"ok": false, "error": "Мобильный импорт поддерживает файлы до 32 МБ."}
+	var bytes := file.get_buffer(file.get_length())
+	file.close()
+	var headers := PackedStringArray(["Content-Type: application/octet-stream", "Authorization: Bearer " + _auth_access_token])
+	return await _request_http_bytes(project_url.trim_suffix("/") + "/studio/import-place", HTTPClient.METHOD_POST, bytes, "import_place", headers, 60.0)
+
+
+func _confirm_catalog_publication(payload: Dictionary) -> Dictionary:
+	if str(payload.get("visibility", "public")) == "private": return {"ok": true, "fee": 0}
+	var response: Dictionary = await _request_authenticated_auth_json("/creator/quote", HTTPClient.METHOD_POST,
+		{"item_id": str(payload.get("id", "")), "category": str(payload.get("category", payload.get("item_kind", "model"))), "visibility": "public", "price_robux": payload.get("price_robux", null)}, "publication_quote")
+	if not bool(response.get("ok", false)): return response
+	var quote: Dictionary = response.get("data", {})
+	if not bool(quote.get("allowed", false)):
+		return {"ok": false, "error": str(quote.get("error", "Публикация недоступна."))}
+	var fee := int(quote.get("fee", 0))
+	if fee <= 0: return {"ok": true, "fee": 0}
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Публикация в каталоге"
+	dialog.dialog_text = "Бесплатные публикации этого типа на месяц закончились.\nДополнительная публикация: %d Boblox.\nОсталось до общего месячного предела: %d.\nРедактирование этой вещи бесплатно." % [fee, int(quote.get("remaining", 0))]
+	dialog.ok_button_text = "Опубликовать · %d Boblox" % fee
+	dialog.cancel_button_text = "Отмена"
+	var accepted := [false]
+	dialog.confirmed.connect(func(): accepted[0] = true)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(480, 190))
+	while is_instance_valid(dialog) and dialog.visible:
+		await get_tree().process_frame
+	dialog.queue_free()
+	return {"ok": accepted[0], "fee": fee, "error": "Публикация отменена." if not accepted[0] else ""}

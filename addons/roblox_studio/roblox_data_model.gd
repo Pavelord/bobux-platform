@@ -148,6 +148,7 @@ func register_workspace_alias(world_container: Node3D) -> void:
 	# Tag the real container so the Explorer shows it as a Workspace row.
 	if world_container != null:
 		world_container.set_meta(ROBLOX_CLASS_META, "Workspace")
+		world_container.set_meta("bobux_workspace_alias", true)
 		world_container.set_meta("is_roblox_service", true)
 		if not world_container.is_in_group("roblox_service"):
 			world_container.add_to_group("roblox_service")

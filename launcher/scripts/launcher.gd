@@ -11,8 +11,8 @@ const DOWNLOAD_TIMEOUT_SECONDS: float = 120.0
 const HTTP_ATTEMPTS_PER_URL: int = 3
 const DOWNLOAD_ATTEMPTS_PER_URL: int = 8
 const DOWNLOAD_CHUNK_BYTES: int = 512 * 1024
-const LAUNCHER_VERSION: String = "0.1.12"
-const LAUNCHER_BUILD: int = 14
+const LAUNCHER_VERSION: String = "0.1.14"
+const LAUNCHER_BUILD: int = 16
 const MIN_GAME_EXECUTABLE_BYTES: int = 10 * 1024 * 1024
 
 var _title_label: Label = null
@@ -188,7 +188,7 @@ func _run_update_flow() -> void:
 		return
 	var local_version: String = _get_local_version()
 	var local_build: int = _get_local_game_build()
-	if not _is_remote_manifest_newer(manifest, local_version, local_build) and _is_game_install_usable(manifest):
+	if _is_game_install_usable(manifest):
 		_set_status("Game is up to date.", "Version %s build %d is ready." % [local_version, local_build], 1.0)
 		_action_button.disabled = false
 		_launch_game()
@@ -280,26 +280,29 @@ func _maybe_self_update_launcher(manifest: Dictionary) -> Dictionary:
 	return {"ok": true, "restarting": true}
 
 func _write_and_run_self_update_script() -> Dictionary:
-	var launcher_exe: String = OS.get_executable_path()
-	if launcher_exe.strip_edges().is_empty() or not FileAccess.file_exists(launcher_exe):
-		return {"ok": false, "error": "Cannot locate running launcher executable."}
-	var launcher_dir: String = launcher_exe.get_base_dir()
-	var bat_path: String = _temp_dir.path_join("apply_launcher_update.bat")
+	var launcher_exe := OS.get_executable_path()
+	var source_exe := _launcher_staging_dir.path_join("BobuxLauncher.exe")
+	if not FileAccess.file_exists(launcher_exe) or not FileAccess.file_exists(source_exe):
+		return {"ok": false, "error": "Launcher executable is missing."}
+	var helper_path := _temp_dir.path_join("apply_launcher_update.ps1")
 	DirAccess.make_dir_recursive_absolute(_temp_dir)
-	var bat := FileAccess.open(bat_path, FileAccess.WRITE)
-	if bat == null:
-		return {"ok": false, "error": "Could not write launcher self-update script."}
-	bat.store_string("@echo off\r\n")
-	bat.store_string("setlocal\r\n")
-	bat.store_string("timeout /t 2 /nobreak >nul\r\n")
-	bat.store_string("xcopy /E /Y /I \"%s\\*\" \"%s\\\" >nul\r\n" % [_windows_path(_launcher_staging_dir), _windows_path(launcher_dir)])
-	bat.store_string("start \"\" \"%s\"\r\n" % _windows_path(launcher_exe))
-	bat.store_string("exit /b 0\r\n")
-	bat.close()
-	var pid: int = OS.create_process("cmd.exe", PackedStringArray(["/C", _windows_path(bat_path)]), false)
-	if pid <= 0:
-		return {"ok": false, "error": "Could not start launcher self-update helper."}
-	return {"ok": true}
+	var helper := FileAccess.open(helper_path, FileAccess.WRITE)
+	if helper == null:
+		return {"ok": false, "error": "Could not save update helper."}
+	# Single-quoted PowerShell literals preserve spaces, Cyrillic and metacharacters.
+	var target_literal := "'" + launcher_exe.replace("'", "''") + "'"
+	var source_literal := "'" + source_exe.replace("'", "''") + "'"
+	helper.store_buffer(PackedByteArray([0xEF, 0xBB, 0xBF])) # Windows PowerShell 5 needs a UTF-8 BOM.
+	helper.store_string("$ErrorActionPreference = 'Stop'\n")
+	helper.store_string("Wait-Process -Id %d -ErrorAction SilentlyContinue\n" % OS.get_process_id())
+	helper.store_string("$updated = $false\nfor ($attempt = 0; $attempt -lt 20; $attempt++) {\n try {\n")
+	helper.store_string(" Copy-Item -LiteralPath %s -Destination %s -Force\n" % [source_literal, target_literal])
+	helper.store_string(" $updated = $true; break\n } catch { Start-Sleep -Milliseconds 500 }\n}\n")
+	helper.store_string("if (-not $updated) { exit 1 }\n")
+	helper.store_string("Start-Process -FilePath %s -WindowStyle Hidden\n" % target_literal)
+	helper.close()
+	var pid := OS.create_process("powershell.exe", PackedStringArray(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", helper_path]), false)
+	return {"ok": pid > 0, "error": "Could not start update helper." if pid <= 0 else ""}
 
 func _download_file_from_urls(urls: Array[String], destination_path: String, label: String, expected_hash: String = "") -> Dictionary:
 	var last_error: String = ""
@@ -719,7 +722,16 @@ func _is_game_install_usable(manifest: Dictionary) -> bool:
 	if not bool(validate_result.get("ok", false)):
 		_delete_broken_game_install_if_needed()
 		return false
-	return _local_install_contract_matches_manifest(manifest)
+	if _local_install_contract_matches_manifest(manifest) and not _is_remote_manifest_newer(manifest, _get_local_version(), _get_local_game_build()):
+		return true
+	# A missing/stale marker is not a reason to download an identical package.
+	# Adopt it only after checking the executable and every required file hash.
+	if str(manifest.get("executable_sha256", "")).is_empty():
+		return false
+	if not bool(_validate_game_install_directory(_game_dir, manifest, true).get("ok", false)):
+		return false
+	_write_local_version(manifest)
+	return true
 
 func _validate_game_install_directory(directory: String, manifest: Dictionary, verify_hashes: bool = true) -> Dictionary:
 	var executable_path: String = _find_usable_game_executable(directory, manifest)

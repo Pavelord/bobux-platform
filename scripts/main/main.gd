@@ -40,6 +40,9 @@ const SNAPSHOT_SPAWN_WAIT_FRAMES: int = 45
 const CHARACTER_SPAWN_TIMEOUT_MSEC: int = 30000
 const MAX_REPLICATED_SPAWN_POINTS: int = 64
 const NETWORK_LOADING_TWEEN_SECONDS: float = 0.22
+var _account_badge_cache: Dictionary = {}
+var _account_badge_requests: Dictionary = {}
+
 const BOBUX_LOADING_LOGO_PATH: String = "res://assets/branding/bobux_logo_ui.png"
 const BOBUX_LOADING_SPINNER_PATH: String = "res://assets/branding/bobux_app_icon.png"
 const DUPLICATE_SESSION_ERROR_MESSAGE: String = "Этот аккаунт уже находится в игре."
@@ -203,7 +206,7 @@ func _ready() -> void:
 	_tool_damage_protocol.name = "ToolDamageProtocol"
 	add_child(_tool_damage_protocol)
 	_rng.randomize()
-	player_spawner.spawn_path = players.get_path()
+	player_spawner.spawn_path = player_spawner.get_path_to(players)
 	player_spawner.spawn_function = _spawn_custom
 	if leave_button != null:
 		leave_button.visible = false
@@ -665,115 +668,23 @@ func _build_vehicle_spawn_prompt(hud: CanvasLayer) -> void:
 	_vehicle_spawn_prompt_panel.add_child(_vehicle_spawn_prompt_label)
 
 func _build_network_loading_overlay(hud: CanvasLayer) -> void:
-	if hud == null or _network_loading_overlay != null:
-		return
+	if _network_loading_overlay != null: return
 	_network_loading_layer = CanvasLayer.new()
-	_network_loading_layer.name = "NetworkLoadingLayer"
 	_network_loading_layer.layer = 1000
-	_network_loading_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_network_loading_layer)
-	_network_loading_overlay = ColorRect.new()
-	_network_loading_overlay.visible = false
-	_network_loading_overlay.color = Color(0.075, 0.078, 0.085, 0.995)
-	_network_loading_overlay.modulate.a = 0.0
-	_network_loading_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_network_loading_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_network_loading_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_network_loading_layer.add_child(_network_loading_overlay)
-
-	_network_loading_card = Panel.new()
-	_network_loading_card.set_anchors_preset(Control.PRESET_CENTER)
-	_network_loading_card.offset_left = -290.0
-	_network_loading_card.offset_top = -220.0
-	_network_loading_card.offset_right = 290.0
-	_network_loading_card.offset_bottom = 190.0
-	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = Color(0.075, 0.078, 0.085, 0.0)
-	_network_loading_card.add_theme_stylebox_override("panel", card_style)
-	_network_loading_card.pivot_offset = Vector2(290.0, 205.0)
-	_network_loading_card.scale = Vector2(0.96, 0.96)
-	_network_loading_overlay.add_child(_network_loading_card)
-
-	var center_box := VBoxContainer.new()
-	center_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center_box.offset_left = 34.0
-	center_box.offset_top = 8.0
-	center_box.offset_right = -34.0
-	center_box.offset_bottom = -16.0
-	center_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_box.add_theme_constant_override("separation", 9)
-	_network_loading_card.add_child(center_box)
-
-	var logo := TextureRect.new()
-	logo.custom_minimum_size = Vector2(360.0, 128.0)
-	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var logo_resource := load(BOBUX_LOADING_LOGO_PATH)
-	if logo_resource is Texture2D:
-		logo.texture = logo_resource as Texture2D
-	center_box.add_child(logo)
-
-	_network_loading_experience_label = Label.new()
-	_network_loading_experience_label.text = GameState.get_selected_map_display_name() if GameState != null and GameState.has_method("get_selected_map_display_name") else "Bobux Experience"
-	_network_loading_experience_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_network_loading_experience_label.add_theme_font_size_override("font_size", 34)
-	_network_loading_experience_label.add_theme_color_override("font_color", Color(0.97, 0.97, 0.98, 1.0))
-	center_box.add_child(_network_loading_experience_label)
-
-	_network_loading_title = Label.new()
-	_network_loading_title.text = "Loading..."
-	_network_loading_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_network_loading_title.add_theme_font_size_override("font_size", 18)
-	_network_loading_title.add_theme_color_override("font_color", Color(0.84, 0.85, 0.88, 1.0))
-	center_box.add_child(_network_loading_title)
-
-	_network_loading_subtitle = Label.new()
-	_network_loading_subtitle.text = "Preparing your session."
-	_network_loading_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_network_loading_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_network_loading_subtitle.add_theme_font_size_override("font_size", 13)
-	_network_loading_subtitle.add_theme_color_override("font_color", Color(0.66, 0.68, 0.72, 1.0))
-	center_box.add_child(_network_loading_subtitle)
-
-	_network_loading_transport = Label.new()
-	_network_loading_transport.text = "Connecting via dedicated WebSocket..."
-	_network_loading_transport.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_network_loading_transport.add_theme_font_size_override("font_size", 12)
-	_network_loading_transport.add_theme_color_override("font_color", Color(0.55, 0.67, 0.80, 1.0))
-	center_box.add_child(_network_loading_transport)
-
-	_network_loading_transport_badge = Label.new()
-	_network_loading_transport_badge.text = "Transport: Dedicated WebSocket"
-	_network_loading_transport_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_network_loading_transport_badge.add_theme_font_size_override("font_size", 11)
-	_network_loading_transport_badge.add_theme_color_override("font_color", Color(0.26, 0.67, 0.98, 1.0))
-	center_box.add_child(_network_loading_transport_badge)
-
-	_network_loading_bar = ProgressBar.new()
-	_network_loading_bar.custom_minimum_size = Vector2(320.0, 18.0)
-	_network_loading_bar.min_value = 0.0
-	_network_loading_bar.max_value = 100.0
-	_network_loading_bar.value = 18.0
-	_network_loading_bar.show_percentage = false
-	center_box.add_child(_network_loading_bar)
-
-	_network_loading_spinner = TextureRect.new()
-	_network_loading_spinner.anchor_left = 1.0
-	_network_loading_spinner.anchor_top = 1.0
-	_network_loading_spinner.anchor_right = 1.0
-	_network_loading_spinner.anchor_bottom = 1.0
-	_network_loading_spinner.offset_left = -104.0
-	_network_loading_spinner.offset_top = -104.0
-	_network_loading_spinner.offset_right = -32.0
-	_network_loading_spinner.offset_bottom = -32.0
-	_network_loading_spinner.pivot_offset = Vector2(36.0, 36.0)
-	_network_loading_spinner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_network_loading_spinner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_network_loading_spinner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var spinner_resource := load(BOBUX_LOADING_SPINNER_PATH)
-	if spinner_resource is Texture2D:
-		_network_loading_spinner.texture = spinner_resource as Texture2D
-	_network_loading_overlay.add_child(_network_loading_spinner)
+	var overlay = load("res://scripts/ui/experience_loading.gd").new()
+	overlay.visible = false
+	overlay.rotate_spinner = false # Main's existing animation owns this spinner.
+	_network_loading_layer.add_child(overlay)
+	_network_loading_overlay = overlay
+	_network_loading_card = overlay.card
+	_network_loading_experience_label = overlay.experience
+	_network_loading_title = overlay.title
+	_network_loading_subtitle = overlay.subtitle
+	_network_loading_transport = overlay.transport
+	_network_loading_transport_badge = overlay.transport_badge
+	_network_loading_bar = overlay.bar
+	_network_loading_spinner = overlay.spinner
 
 func _build_leaderboard_panel(hud: CanvasLayer) -> void:
 	if hud == null or _leaderboard_panel != null:
@@ -1081,6 +992,7 @@ func _build_mobile_player_list_row(peer_id: int) -> Control:
 	name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.48))
 	name_label.add_theme_constant_override("shadow_offset_y", 1)
 	hbox.add_child(name_label)
+	_attach_runtime_account_badges(name_label, peer_id)
 
 	if username.to_lower() == "pavelord":
 		hbox.add_child(_make_mobile_badge_icon(MOBILE_BOBUX_BADGE_ICON_PATH))
@@ -1281,6 +1193,7 @@ func _build_leaderboard_row(peer_id: int) -> Control:
 	var is_host_row: bool = peer_id == 1
 	name_label.text = "%s%s" % [username, "  [Host]" if is_host_row else ""]
 	hbox.add_child(name_label)
+	_attach_runtime_account_badges(name_label, peer_id)
 
 	var user_id: String = _get_user_id_for_leaderboard_peer(peer_id)
 	if not user_id.is_empty() and _leaderboard_pending_requests.has(user_id):
@@ -2969,6 +2882,7 @@ func _build_escape_menu_player_row(peer_id: int) -> Control:
 	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", Color.WHITE)
 	row.add_child(name_label)
+	_attach_runtime_account_badges(name_label, peer_id)
 	var view_button := Button.new()
 	view_button.text = "View"
 	view_button.custom_minimum_size = Vector2(120.0, 40.0)
@@ -5055,6 +4969,7 @@ func _ensure_room_runtime_root(room_id: String) -> Dictionary:
 	world.add_child(room_root)
 	map_root = Node3D.new()
 	map_root.name = "MapRoot"
+	map_root.set_meta("roblox_class", "Workspace")
 	map_root.set_meta("room_id", clean_room_id)
 	room_root.add_child(map_root)
 	_room_runtime_roots[clean_room_id] = room_root
@@ -5677,6 +5592,11 @@ func _finalize_player_registration_async(sender_id: int, chosen_colors: Dictiona
 			NetworkManager.call_deferred("_disconnect_peer_after_reject", sender_id)
 		return
 	_spawn_player_for_peer(sender_id)
+	if _find_player_node_by_peer_id(sender_id) == null:
+		_reject_duplicate_session.rpc_id(sender_id, "Could not create your character. Please reconnect.")
+		if NetworkManager != null and NetworkManager.has_method("_disconnect_peer_after_reject"):
+			NetworkManager.call_deferred("_disconnect_peer_after_reject", sender_id)
+		return
 	# FIX B (Death Loop): After spawning the peer, tell the client which map to load.
 	# The client does NOT load any map until it receives this RPC.
 	var confirm_payload: Dictionary = {
@@ -6064,7 +5984,12 @@ func _spawn_player_for_peer(peer_id: int) -> void:
 	if _peer_checkpoint_positions.has(peer_id):
 		spawn_data["checkpoint_position"] = _peer_checkpoint_positions[peer_id]
 		spawn_data["has_checkpoint"] = true
-	player_spawner.spawn(spawn_data)
+	if not is_instance_valid(player_spawner) or not is_instance_valid(players):
+		push_error("[RoomHub] Player replication containers are unavailable")
+		return
+	player_spawner.spawn_path = player_spawner.get_path_to(players)
+	if player_spawner.spawn(spawn_data) == null:
+		push_error("[RoomHub] Failed to create player for peer %d" % peer_id)
 
 func _despawn_player_for_peer(peer_id: int) -> void:
 	if not multiplayer.is_server():
@@ -6582,6 +6507,7 @@ func _apply_roblox_manifest_to_runtime_root(map_target: Node3D, manifest_variant
 	# The manifest can be tens of megabytes. A deep duplicate here used to double
 	# peak memory just before DataModel/GUI construction and was enough to crash
 	# large published places. The importer and runtime treat it as immutable.
+	map_target.set_meta("roblox_class", "Workspace")
 	map_target.set_meta("roblox_manifest", manifest.duplicate(false))
 	map_target.set_meta("roblox_asset_refs_count", (manifest.get("assets", []) as Array).size() if manifest.get("assets", []) is Array else 0)
 	map_target.set_meta("roblox_script_refs_count", (manifest.get("scripts", []) as Array).size() if manifest.get("scripts", []) is Array else 0)
@@ -7553,3 +7479,24 @@ func _load_spawn_decal_texture() -> Texture2D:
 	if img:
 		return ImageTexture.create_from_image(img)
 	return _create_placeholder_spawn_decal()
+
+func _attach_runtime_account_badges(label: Label, peer_id: int) -> void:
+	var profile: Dictionary = peer_profiles.get(peer_id, {})
+	if profile.has("club_tier") or profile.has("verified_badge"):
+		load("res://scripts/lobby/account_badges.gd").attach(label, profile)
+		return
+	var user_id := _get_user_id_for_leaderboard_peer(peer_id)
+	if user_id.is_empty(): return
+	if _account_badge_cache.has(user_id):
+		load("res://scripts/lobby/account_badges.gd").attach(label, _account_badge_cache[user_id])
+	elif not _account_badge_requests.has(user_id):
+		_account_badge_requests[user_id] = true
+		_fetch_runtime_account_badges.call_deferred(user_id)
+
+func _fetch_runtime_account_badges(user_id: String) -> void:
+	var result: Dictionary = await CloudAPI.load_player_profile(user_id)
+	if not is_inside_tree(): return
+	if bool(result.get("ok", false)):
+		_account_badge_cache[user_id] = result.get("data", {})
+		_refresh_mobile_player_list()
+		_refresh_leaderboard_rows()

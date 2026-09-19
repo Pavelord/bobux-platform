@@ -1,3 +1,5 @@
+import { mountPlaceImport } from "./place_import.mjs";
+import { CreatorPublishing } from "./creator_publishing.mjs";
 import crypto from "node:crypto";
 import { SocialStore, mountSocial } from "./social_store.mjs";
 import fs from "node:fs/promises";
@@ -7,6 +9,7 @@ import { createBobloxFromEnv, mountBoblox } from "./boblox_routes.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 let bobloxCommerce = null;
+let creatorPublishing = null;
 const PB_URL = (process.env.POCKETBASE_URL || "http://127.0.0.1:8090").replace(/\/+$/, "");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "http://109.71.245.162").replace(/\/+$/, "");
 const STORAGE_DIR = process.env.STORAGE_DIR || "/var/www/bobux/storage";
@@ -185,7 +188,18 @@ async function main() {
       bobloxCommerce.grantFounder(account.id, username);
     }
   }
+  creatorPublishing = bobloxCommerce ? new CreatorPublishing(bobloxCommerce) : null;
+  app.post("/api/creator/quote", express.json({ limit: "4kb" }), async (req, res) => {
+    try {
+      const user = await userFromRequest(req);
+      if (!creatorPublishing) return res.status(503).json({ message: "Кошелёк недоступен." });
+      const itemId = String(req.body?.item_id || "");
+      const existing = (await listRows("avatar_items")).find(row => row.id === itemId);
+      res.json({ ok: true, ...creatorPublishing.quote(user.record.id, itemId, existing?.category || req.body?.category || "model", existing, req.body?.visibility || "public", Number(req.body?.price_robux ?? existing?.price_robux ?? 0)) });
+    } catch (error) { sendError(res, error); }
+  });
   mountBoblox(app, bobloxCommerce, userFromRequest);
+  mountPlaceImport(app, userFromRequest);
   if (bobloxCommerce?.provider) {
     const reconcileBoblox = () => bobloxCommerce.reconcile().catch(() => console.warn("Boblox payment reconciliation will retry."));
     void reconcileBoblox();
@@ -508,6 +522,8 @@ async function main() {
       const now = nowIso();
       const modelId = String(payload.id || payload.model_id || crypto.randomUUID()).trim();
       const visibility = normalizeVisibility(payload.visibility || (payload.is_public === false ? "private" : "public"));
+      const existingModel = (await listRows("model_assets")).find(row => row.id === modelId);
+      if (existingModel && existingModel.owner_id !== user.record.id) return res.status(403).json({ message: "Only the owner can edit this model." });
       const saved = await upsertRow("model_assets", {
         id: modelId,
         name: modelName,
@@ -545,7 +561,7 @@ async function main() {
       const visibility = normalizeVisibility(payload.visibility || (payload.is_public === false ? "private" : "public"));
       const payloadData = payload.data && typeof payload.data === "object" ? payload.data : {};
       const category = String(payload.category || payload.item_kind || payloadData.category || payloadData.item_kind || "model").trim().toLowerCase() || "model";
-      const saved = await upsertRow("avatar_items", {
+      const save = () => upsertRow("avatar_items", {
         id: itemId,
         name: itemName,
         owner_id: user.record.id,
@@ -567,6 +583,9 @@ async function main() {
         created_at: String(payload.created_at || now),
         updated_at: now
       }, ["id"]);
+      if (!creatorPublishing) return res.status(503).json({ message: "Сервис публикаций временно недоступен." });
+      const saved = await creatorPublishing.publish({ userId: user.record.id, itemId, category, visibility, price: Number(payload.price_robux || 0), acceptedFee: payload.publication_fee,
+        lookup: async () => (await listRows("avatar_items")).find(row => row.id === itemId), save });
       await grantInventoryItemToUser(user.record.id, itemId, "avatar_item");
       res.status(201).json({ ...saved, owned: true });
     } catch (error) {
@@ -681,11 +700,14 @@ async function main() {
       const row = rows.find((candidate) => candidate.id === targetId || candidate._pb_id === targetId);
       if (!row) return res.status(404).json({ message: "Catalog asset not found." });
       if (row.owner_id !== user.record.id) return res.status(403).json({ message: "Only the asset owner can change visibility." });
-      const saved = await updatePbRecord(collection, row._pb_id || row.id, {
+      const save = async () => fromPbRecord(await updatePbRecord(collection, row._pb_id || row.id, {
         visibility,
         is_public: visibility === "public",
         updated_at: nowIso()
-      });
+      }));
+      if (collection === "avatar_items" && !creatorPublishing) return res.status(503).json({ message: "Сервис публикаций недоступен." });
+      const saved = collection === "avatar_items" ? await creatorPublishing.publish({ userId: user.record.id, itemId: row.id, category: row.category, visibility, price: Number(row.price_robux || 0),
+        acceptedFee: req.body?.publication_fee, lookup: async () => (await listRows(collection)).find(candidate => candidate.id === row.id), save }) : await save();
       res.json(sanitizeMarketplaceOutput(saved));
     } catch (error) {
       sendError(res, error);
@@ -788,6 +810,7 @@ async function main() {
   app.post("/api/rest/v1/:collection", express.json({ limit: "80mb" }), async (req, res) => {
     try {
       assertCollection(req.params.collection);
+      if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const payloads = Array.isArray(req.body) ? req.body : [req.body || {}];
       const conflictKeys = conflictKeysFromQuery(req.query, req.params.collection);
       const saved = [];
@@ -802,6 +825,7 @@ async function main() {
   app.patch("/api/rest/v1/:collection", express.json({ limit: "80mb" }), async (req, res) => {
     try {
       assertCollection(req.params.collection);
+      if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const rows = await queryRows(req.params.collection, req.query, false);
       const updated = [];
       for (const row of rows) {
@@ -816,6 +840,7 @@ async function main() {
   app.delete("/api/rest/v1/:collection", async (req, res) => {
     try {
       assertCollection(req.params.collection);
+      if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const rows = await queryRows(req.params.collection, req.query, false);
       for (const row of rows) await pbDeleteRecord(req.params.collection, row._pb_id);
       res.status(204).send("");

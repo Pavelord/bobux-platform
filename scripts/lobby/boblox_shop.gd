@@ -115,6 +115,8 @@ func _render_club() -> void:
 			card.add_child(column)
 			column.add_child(_tier_heading(tier))
 			column.add_child(_label("%d Boblox в день · %d за 30 дней" % [int(tier.daily), int(tier.daily) * 30], 16, GREEN, true))
+			var rules: Dictionary = tier.get("creator", {})
+			column.add_child(_label("Одежда: %d бесплатно / месяц · затем %d Boblox\n3D-предметы: %d бесплатно / месяц · затем %d Boblox" % [int(rules.get("clothing_limit", 0)), int(rules.get("clothing_fee", 0)), int(rules.get("items_limit", 0)), int(rules.get("items_fee", 0))], 14, MUTED))
 			column.add_child(_tier_button(tier))
 	else:
 		var grid := GridContainer.new()
@@ -132,6 +134,11 @@ func _render_club() -> void:
 		_compare_row(grid, "Значок клуба", ["BC", "BBC", "PBC", "TBC"])
 		_compare_row(grid, "Игры и Bobux Studio", ["Доступны", "Доступны", "Доступны", "Доступны"])
 		_compare_row(grid, "Автосписания", ["Нет", "Нет", "Нет", "Нет"])
+		for benefit in [["clothing_limit", "Одежда без сбора / месяц"], ["items_limit", "3D без сбора / месяц"], ["clothing_fee", "Сверх лимита: одежда, Boblox"], ["items_fee", "Сверх лимита: 3D, Boblox"], ["clothing_max", "Всего одежды / месяц"], ["items_max", "Всего 3D / месяц"], ["free_items_limit", "Товары с ценой 0 / месяц"]]:
+			var values: Array = []
+			for tier in catalog.tiers: values.append(str(int(tier.get("creator", {}).get(benefit[0], 0))))
+			_compare_row(grid, benefit[1], values)
+
 		var price_label := _label("Стоимость", 16)
 		price_label.custom_minimum_size.y = 70
 		grid.add_child(price_label)
@@ -142,6 +149,7 @@ func _render_club() -> void:
 			holder.add_theme_constant_override("margin_right", 10)
 			grid.add_child(holder)
 			holder.add_child(_tier_button(tier))
+	_body.add_child(_label("Лимиты обновляются 1-го числа по UTC. Черновики, карты и правки опубликованных вещей бесплатны. Платная одежда — от 5 Boblox, 3D-предметы — от 20. Товары с ценой 0 имеют отдельный лимит; удаление его не возвращает. Модели для Toolbox остаются бесплатными.", 14, MUTED))
 	_body.add_child(_label("30 дней клуба · Без автоматического продления", 16, GREEN))
 	_body.add_child(_label("Первая награда — после активации, следующие — каждые 24 часа. Награды за пропущенные дни сохраняются. Продление того же уровня добавляет ещё 30 дней; другой уровень можно выбрать после окончания текущего.", 14, MUTED))
 	_body.add_child(HSeparator.new())

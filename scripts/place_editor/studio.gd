@@ -7221,7 +7221,21 @@ func _on_rbxl_file_selected(path: String) -> void:
 		return
 	if toolbar_status_label:
 		toolbar_status_label.text = "Importing RBXL..."
-	if _should_prefetch_rbxl_assets_remotely():
+	var remote_place: Dictionary = {}
+	if OS.has_feature("mobile"):
+		toolbar_status_label.text = "Преобразование карты на сервере..."
+		var converted: Dictionary = await CloudAPI.convert_roblox_place(clean_path)
+		if not bool(converted.get("ok", false)):
+			toolbar_status_label.text = str(converted.get("error", "Ошибка серверного импорта"))
+			_end_studio_operation()
+			return
+		var payload: Dictionary = converted.get("data", {}) if converted.get("data") is Dictionary else {}
+		remote_place = payload.get("place", {}) if payload.get("place") is Dictionary else {}
+		if not remote_place.get("instances") is Dictionary:
+			toolbar_status_label.text = "Сервер не вернул структуру карты. Текущая карта сохранена."
+			_end_studio_operation()
+			return
+	elif _should_prefetch_rbxl_assets_remotely():
 		await _prefetch_rbxl_assets_from_server(clean_path)
 	_clear_map_for_rbxl_import()
 	show_grid_enabled = false
@@ -7238,7 +7252,7 @@ func _on_rbxl_file_selected(path: String) -> void:
 		if toolbar_status_label:
 			toolbar_status_label.text = "Importing %s (%d/%d)" % [message, done, maxi(total, 1)]
 	)
-	var report: Dictionary = await importer.import_file_async(clean_path, self)
+	var report: Dictionary = await importer.import_json_async(remote_place, placement_parent, self) if not remote_place.is_empty() else await importer.import_file_async(clean_path, self)
 	last_rbxl_import_report = report.duplicate(true)
 	show_grid_enabled = false
 	_toggle_grid_visibility(false)

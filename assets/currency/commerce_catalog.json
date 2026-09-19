@@ -1,16 +1,104 @@
 {
-  "version": 1,
+  "version": 3,
   "currency": "BOBLOX",
   "tiers": [
-    {"id":"BC","name":"Bricks Club","price_kopecks":0,"daily":0,"days":0,"color":"a5a5a5"},
-    {"id":"BBC","name":"Basic Bricks Club","price_kopecks":14900,"daily":10,"days":30,"color":"40b8ec"},
-    {"id":"PBC","name":"Pro Bricks Club","price_kopecks":29900,"daily":22,"days":30,"color":"efb500"},
-    {"id":"TBC","name":"Turbo Bricks Club","price_kopecks":49900,"daily":38,"days":30,"color":"e71923"}
+    {
+      "id": "BC",
+      "name": "Bricks Club",
+      "price_kopecks": 0,
+      "daily": 0,
+      "days": 0,
+      "color": "a5a5a5",
+      "creator": {
+        "clothing_limit": 5,
+        "items_limit": 2,
+        "clothing_fee": 5,
+        "items_fee": 20,
+        "clothing_max": 25,
+        "items_max": 10,
+        "free_items_limit": 1,
+        "clothing_min_price": 5,
+        "items_min_price": 20
+      }
+    },
+    {
+      "id": "BBC",
+      "name": "Basic Bricks Club",
+      "price_kopecks": 14900,
+      "daily": 10,
+      "days": 30,
+      "color": "40b8ec",
+      "creator": {
+        "clothing_limit": 30,
+        "items_limit": 10,
+        "clothing_fee": 3,
+        "items_fee": 12,
+        "clothing_max": 100,
+        "items_max": 40,
+        "free_items_limit": 2,
+        "clothing_min_price": 5,
+        "items_min_price": 20
+      }
+    },
+    {
+      "id": "PBC",
+      "name": "Pro Bricks Club",
+      "price_kopecks": 29900,
+      "daily": 22,
+      "days": 30,
+      "color": "efb500",
+      "creator": {
+        "clothing_limit": 100,
+        "items_limit": 35,
+        "clothing_fee": 2,
+        "items_fee": 8,
+        "clothing_max": 250,
+        "items_max": 100,
+        "free_items_limit": 5,
+        "clothing_min_price": 5,
+        "items_min_price": 20
+      }
+    },
+    {
+      "id": "TBC",
+      "name": "Turbo Bricks Club",
+      "price_kopecks": 49900,
+      "daily": 38,
+      "days": 30,
+      "color": "e71923",
+      "creator": {
+        "clothing_limit": 300,
+        "items_limit": 100,
+        "clothing_fee": 1,
+        "items_fee": 5,
+        "clothing_max": 600,
+        "items_max": 200,
+        "free_items_limit": 10,
+        "clothing_min_price": 5,
+        "items_min_price": 20
+      }
+    }
   ],
   "packs": [
-    {"id":"boblox_100","amount":100,"price_kopecks":5000},
-    {"id":"boblox_500","amount":500,"price_kopecks":25000},
-    {"id":"boblox_1000","amount":1000,"price_kopecks":50000},
-    {"id":"boblox_2500","amount":2500,"price_kopecks":125000}
+    {
+      "id": "boblox_100",
+      "amount": 100,
+      "price_kopecks": 5000
+    },
+    {
+      "id": "boblox_500",
+      "amount": 500,
+      "price_kopecks": 25000
+    },
+    {
+      "id": "boblox_1000",
+      "amount": 1000,
+      "price_kopecks": 50000
+    },
+    {
+      "id": "boblox_2500",
+      "amount": 2500,
+      "price_kopecks": 125000
+    }
   ]
 }

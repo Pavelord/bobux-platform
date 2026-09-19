@@ -60,6 +60,8 @@ jobs:
         run: |
           $tests = @(
             "res://tools/validate_runtime_load.gd",
+            "res://tools/validate_workspace_network_boundary.gd",
+            "res://tools/validate_experience_loading.gd",
             "res://tools/validate_lua_runtime_regressions.gd",
             "res://tools/validate_lua_instruction_budget.gd",
             "res://tools/validate_luau_control_strings.gd",
@@ -77,3 +79,23 @@ jobs:
             & $env:GODOT_BIN --headless --path . --script $test
             if ($LASTEXITCODE -ne 0) { throw "Validation failed: $test" }
           }
+
+      - name: Validate launcher install detection
+        shell: pwsh
+        run: |
+          & $env:GODOT_BIN --headless --path ./launcher --script res://tools/validate_install_contract.gd
+          if ($LASTEXITCODE -ne 0) { throw "Launcher install validation failed." }
+
+  api-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci && npm test
+        working-directory: services/bobux_api

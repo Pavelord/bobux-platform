@@ -18,7 +18,14 @@ func _run() -> void:
 	assert(row.get_meta("account_badge_row", false))
 	var before := label.text
 	load("res://scripts/lobby/account_badges.gd").attach(label, {"club_tier": "BC"})
-	assert(row.get_child_count() == 2, "Previous user's verified badge must be cleared")
+	assert(row.get_child_count() == 1, "Free BC is hidden outside profiles")
+	load("res://scripts/lobby/account_badges.gd").attach(label, {"club_tier": "BC"}, true)
+	assert(row.get_child_count() == 2, "Profiles may show free BC")
+	label.text = "pavelord"
+	await process_frame
+	await process_frame
+	assert(label.size.x > 50, "Nickname must receive usable width")
+	label.text = before
 	assert(label.text == before)
 	print("[account_badges] PASS lobby compiles, server fields render, refresh deduplicates, badges clear")
 	lobby.queue_free()
