@@ -2697,7 +2697,7 @@ func _show_avatar_item_creator_page() -> void:
 	)
 	orbit_controls.add_child(reset_orbit_btn)
 
-	var form_panel := Panel.new()
+	var form_panel := PanelContainer.new()
 	form_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	form_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
@@ -11089,7 +11089,7 @@ func _avatar_creator_label(value: String) -> Label:
 func _style_avatar_creator_controls(node: Node) -> void:
 	if node is Label: node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if node is Button and get_viewport_rect().size.x < 1000:
-		node.clip_text = true
+		node.clip_text = not (node.get_parent() is HFlowContainer)
 		node.custom_minimum_size.y = maxf(node.custom_minimum_size.y, 38)
 	if node is SpinBox: _style_avatar_creator_controls(node.get_line_edit())
 	if node is LineEdit:
