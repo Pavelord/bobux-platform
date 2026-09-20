@@ -130,8 +130,8 @@ func _render_club() -> void:
 		first.custom_minimum_size.x = 175
 		grid.add_child(first)
 		for tier in catalog.tiers: grid.add_child(_tier_heading(tier))
-		_compare_row(grid, "Boblox каждый день", ["—", str(int(catalog.tiers[1].daily)), str(int(catalog.tiers[2].daily)), str(int(catalog.tiers[3].daily))], true)
-		_compare_row(grid, "Всего за 30 дней", ["—", str(int(catalog.tiers[1].daily) * 30), str(int(catalog.tiers[2].daily) * 30), str(int(catalog.tiers[3].daily) * 30)], true)
+		_compare_row(grid, "Boblox каждый день", ["0", str(int(catalog.tiers[1].daily)), str(int(catalog.tiers[2].daily)), str(int(catalog.tiers[3].daily))], true)
+		_compare_row(grid, "Всего за 30 дней", ["0", str(int(catalog.tiers[1].daily) * 30), str(int(catalog.tiers[2].daily) * 30), str(int(catalog.tiers[3].daily) * 30)], true)
 		_compare_row(grid, "Значок клуба", ["BC", "BBC", "PBC", "TBC"])
 		_compare_row(grid, "Игры и Bobux Studio", ["Доступны", "Доступны", "Доступны", "Доступны"])
 		_compare_row(grid, "Автосписания", ["Нет", "Нет", "Нет", "Нет"])
@@ -308,7 +308,15 @@ func refresh() -> void:
 	if not is_inside_tree() or UserSession.user_id != _session_id: return
 	if response.get("ok", false):
 		var data := _payload(response)
-		if data.has("tiers") and data.has("packs"): catalog = data
+		if data.has("tiers") and data.has("packs"):
+			# Older servers omit creator benefits. Keep the shipped revision until
+			# the server supplies its own complete rules; never render missing data as 0.
+			var shipped: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CATALOG_PATH))
+			for tier in data.tiers:
+				if not tier.get("creator", {}) is Dictionary or tier.get("creator", {}).is_empty():
+					for baseline in shipped.tiers:
+						if baseline.id == tier.id: tier["creator"] = baseline.creator.duplicate(true)
+			catalog = data
 	if UserSession.is_logged_in:
 		response = await CloudAPI.fetch_boblox_wallet()
 		if not is_inside_tree() or UserSession.user_id != _session_id: return

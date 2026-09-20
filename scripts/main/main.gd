@@ -6630,7 +6630,7 @@ func _ensure_runtime_roblox_gui_host(hud: CanvasLayer) -> Control:
 	if host == null:
 		host = Control.new()
 		host.name = "RobloxRuntimeGuiHost"
-		host.mouse_filter = Control.MOUSE_FILTER_PASS
+		host.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		host.clip_contents = true
 		host.z_index = 78
 		host.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -6727,7 +6727,7 @@ func _create_runtime_object_from_map_data(data: Dictionary) -> Node3D:
 			var player := AudioStreamPlayer3D.new()
 			player.name = "AudioStreamPlayer3D"
 			player.volume_db = linear_to_db(maxf(float(data.get("volume", 1.0)), 0.0001))
-			player.autoplay = bool(data.get("playing", true))
+			player.autoplay = bool(data.get("playing", false))
 			var sound_file := _runtime_sound_file_name(data)
 			var sound_path := _runtime_sound_path(data)
 			if not sound_path.is_empty():

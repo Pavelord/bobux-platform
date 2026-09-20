@@ -141,8 +141,8 @@ static func load_model(path: String) -> Node3D:
 		var resource := ResourceLoader.load(path)
 		if resource is PackedScene: return resource.instantiate() as Node3D
 	if not FileAccess.file_exists(path): return null
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
+	var document: GLTFDocument = FBXDocument.new() if path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
+	var state: GLTFState = FBXState.new() if path.get_extension().to_lower() == "fbx" else GLTFState.new()
 	if document.append_from_file(path, state) != OK: return null
 	return document.generate_scene(state) as Node3D
 

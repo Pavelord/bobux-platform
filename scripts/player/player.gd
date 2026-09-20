@@ -2161,9 +2161,9 @@ func _instantiate_avatar_attachment_source(source_path: String) -> Node:
 	if local_path.is_empty():
 		return null
 	var extension := local_path.get_extension().to_lower()
-	if extension == "glb" or extension == "gltf":
-		var gltf_document := GLTFDocument.new()
-		var gltf_state := GLTFState.new()
+	if extension in ["glb", "gltf", "fbx"]:
+		var gltf_document: GLTFDocument = FBXDocument.new() if local_path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
+		var gltf_state: GLTFState = FBXState.new() if local_path.get_extension().to_lower() == "fbx" else GLTFState.new()
 		var error := gltf_document.append_from_file(local_path, gltf_state)
 		if error == OK:
 			var scene := gltf_document.generate_scene(gltf_state)
@@ -2198,7 +2198,7 @@ func _resolve_avatar_attachment_source_path(source_path: String) -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(cache_dir))
 	var url_path := clean_path.split("?", false, 1)[0]
 	var extension := url_path.get_extension().to_lower()
-	if extension not in ["glb", "gltf", "obj"]:
+	if extension not in ["glb", "gltf", "fbx", "obj"]:
 		extension = "glb"
 	var file_name := "attachment_%s.%s" % [clean_path.md5_text(), extension]
 	var local_path := cache_dir.path_join(file_name)
@@ -2253,7 +2253,7 @@ func _remove_cached_avatar_attachment_source(source_path: String) -> void:
 		return
 	var url_path := clean_path.split("?", false, 1)[0]
 	var extension := url_path.get_extension().to_lower()
-	if extension not in ["glb", "gltf", "obj"]:
+	if extension not in ["glb", "gltf", "fbx", "obj"]:
 		extension = "glb"
 	var local_path := "user://cache/avatar_attachments/attachment_%s.%s" % [clean_path.md5_text(), extension]
 	for candidate in [local_path, local_path + ".part"]:

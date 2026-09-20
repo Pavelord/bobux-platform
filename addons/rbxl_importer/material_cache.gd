@@ -244,48 +244,7 @@ static func part_color_from_properties(props: Dictionary) -> Color:
 
 
 static func roblox_brick_color_to_color(brick_color_id: Variant) -> Color:
-	var id := int(brick_color_id) if brick_color_id != null else 194
-	var palette := {
-		1: Color8(242, 243, 243),
-		5: Color8(215, 197, 154),
-		9: Color8(232, 186, 200),
-		11: Color8(128, 187, 219),
-		18: Color8(204, 142, 105),
-		21: Color8(196, 40, 28),
-		23: Color8(13, 105, 172),
-		24: Color8(245, 205, 48),
-		26: Color8(27, 42, 53),
-		28: Color8(40, 127, 71),
-		29: Color8(161, 196, 140),
-		37: Color8(75, 151, 75),
-		38: Color8(160, 95, 53),
-		45: Color8(180, 210, 228),
-		1001: Color8(248, 248, 248),
-		1002: Color8(205, 205, 205),
-		1003: Color8(17, 17, 17),
-		1004: Color8(255, 0, 0),
-		1005: Color8(255, 176, 0),
-		1006: Color8(180, 128, 255),
-		1007: Color8(163, 75, 75),
-		1008: Color8(193, 190, 66),
-		1009: Color8(255, 255, 0),
-		1010: Color8(0, 0, 255),
-		1011: Color8(0, 32, 96),
-		1012: Color8(33, 84, 185),
-		1013: Color8(4, 175, 236),
-		1014: Color8(170, 85, 0),
-		1015: Color8(170, 0, 170),
-		1016: Color8(255, 102, 204),
-		1017: Color8(255, 175, 0),
-		1018: Color8(18, 238, 212),
-		1019: Color8(0, 255, 255),
-		1020: Color8(0, 255, 0),
-		1021: Color8(58, 125, 21),
-		1022: Color8(127, 142, 100),
-		1023: Color8(140, 91, 159),
-		1024: Color8(175, 221, 255),
-	}
-	return palette.get(id, Color(0.639, 0.635, 0.647))
+	return preload("res://addons/roblox_runtime/brick_color_palette.gd").resolve(brick_color_id)
 
 
 static func _color_from_array(arr: Variant) -> Color:

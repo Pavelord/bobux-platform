@@ -164,6 +164,10 @@ jobs:
           GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.BOBUX_ANDROID_KEYSTORE_ALIAS }}
           GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.BOBUX_ANDROID_KEYSTORE_PASSWORD }}
 
+      - name: Build Windows Setup and Linux download
+        shell: pwsh
+        run: ./tools/build_desktop_downloads.ps1 -Version $env:RELEASE_VERSION -Build ([int]$env:RELEASE_BUILD)
+
       - name: Install deployment client
         if: ${{ inputs.deploy_production }}
         shell: pwsh
@@ -218,6 +222,9 @@ jobs:
             "./dist/release/Bobux-Windows-$env:RELEASE_VERSION-build$env:RELEASE_BUILD.zip",
             "./dist/release/Bobux-Android-$env:MOBILE_VERSION-build$env:MOBILE_BUILD.apk",
             "./dist/BobuxLauncher-Windows.zip",
+            "./dist/release/BobuxSetup.exe",
+            "./dist/release/Bobux-x86_64.AppImage",
+            "./dist/release/desktop-latest.json",
             $launcherManifest,
             $mobileManifest
           )
@@ -250,6 +257,9 @@ jobs:
             dist/release/Bobux-Windows-*.zip
             dist/release/Bobux-Android-*.apk
             dist/BobuxLauncher-Windows.zip
+            dist/release/BobuxSetup.exe
+            dist/release/Bobux-x86_64.AppImage
+            dist/release/desktop-latest.json
             dist/release/*.log
             game/launcher/latest.json
             mobile/latest.json

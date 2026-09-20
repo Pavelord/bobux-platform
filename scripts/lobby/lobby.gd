@@ -2433,15 +2433,16 @@ func _show_avatar_item_creator_page() -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 14)
 	develop_view.add_child(root)
-	root.add_child(_create_develop_page_header("Create Avatar Item", "Attach one of your published models to a Bobux character slot.", true))
-	var content := HBoxContainer.new()
+	root.add_child(_create_develop_page_header("Создать предмет аватара", "1. Выберите модель или одежду   ·   2. Настройте вид   ·   3. Укажите цену и опубликуйте", true))
+	var compact_creator := get_viewport_rect().size.x < 1000
+	var content: BoxContainer = VBoxContainer.new() if compact_creator else HBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 18)
 	root.add_child(content)
 
 	var preview_panel := Panel.new()
-	preview_panel.custom_minimum_size = Vector2(560, 640)
+	preview_panel.custom_minimum_size = Vector2(300 if compact_creator else 390, 440 if compact_creator else 550)
 	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
 	content.add_child(preview_panel)
@@ -2456,7 +2457,7 @@ func _show_avatar_item_creator_page() -> void:
 	preview_box.add_theme_constant_override("separation", 10)
 	preview_margin.add_child(preview_box)
 	var preview_title := Label.new()
-	preview_title.text = "Avatar Preview"
+	preview_title.text = "Примерка"
 	preview_title.add_theme_font_size_override("font_size", 22)
 	preview_title.add_theme_color_override("font_color", Color(0.14, 0.14, 0.14))
 	preview_box.add_child(preview_title)
@@ -2464,7 +2465,7 @@ func _show_avatar_item_creator_page() -> void:
 	sub_frame.mouse_filter = Control.MOUSE_FILTER_STOP
 	sub_frame.mouse_force_pass_scroll_events = false
 	sub_frame.clip_contents = true
-	sub_frame.custom_minimum_size = Vector2(520, 500)
+	sub_frame.custom_minimum_size = Vector2(280 if compact_creator else 350, 340 if compact_creator else 430)
 	sub_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sub_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview_box.add_child(sub_frame)
@@ -2546,7 +2547,7 @@ func _show_avatar_item_creator_page() -> void:
 	var camera_state := {
 		"yaw": 0.0,
 		"pitch": 0.02,
-		"distance": 8.4,
+		"distance": 11.5,
 		"dragging": false
 	}
 	var creation_state := {
@@ -2690,7 +2691,7 @@ func _show_avatar_item_creator_page() -> void:
 	reset_orbit_btn.pressed.connect(func() -> void:
 		camera_state["yaw"] = 0.0
 		camera_state["pitch"] = 0.02
-		camera_state["distance"] = 8.4
+		camera_state["distance"] = 11.5
 		preview_orbit_root.rotation = Vector3.ZERO
 		update_preview_camera.call()
 	)
@@ -2710,7 +2711,20 @@ func _show_avatar_item_creator_page() -> void:
 	form_panel.add_child(form_margin)
 	var form := VBoxContainer.new()
 	form.add_theme_constant_override("separation", 12)
-	form_margin.add_child(form)
+	var form_scroll := ScrollContainer.new()
+	form_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	form_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	form_scroll.custom_minimum_size.y = 440 if compact_creator else 260
+	var form_shell := VBoxContainer.new()
+	form_shell.add_theme_constant_override("separation", 12)
+	form_margin.add_child(form_shell)
+	form_shell.add_child(form_scroll)
+	var publication_box := VBoxContainer.new()
+	publication_box.add_theme_constant_override("separation", 8)
+	form_shell.add_child(publication_box)
+	publication_box.add_child(HSeparator.new())
+	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form_scroll.add_child(form)
 	var models_response: Dictionary = await CloudAPI.fetch_marketplace_models(96, true, true)
 	var model_entries: Array = []
 	var seen_model_ids: Dictionary = {}
@@ -2731,7 +2745,10 @@ func _show_avatar_item_creator_page() -> void:
 		if not local_model_id.is_empty():
 			seen_model_ids[local_model_id] = true
 	var name_edit := LineEdit.new()
-	name_edit.placeholder_text = "Item name"
+	name_edit.placeholder_text = "Название предмета"
+	name_edit.max_length = 80
+	name_edit.custom_minimum_size.y = 40
+	form.add_child(_avatar_creator_label("Название"))
 	form.add_child(name_edit)
 	
 	var model_option := OptionButton.new()
@@ -2743,11 +2760,14 @@ func _show_avatar_item_creator_page() -> void:
 			model_option.add_item(str(entry.get("name", "Model")))
 			model_option.set_item_metadata(model_option.get_item_count() - 1, entry)
 	model_option.disabled = model_entries.is_empty()
+	form.add_child(_avatar_creator_label("Модель из ваших работ"))
+	model_option.custom_minimum_size.y = 38
+	model_option.clip_text = true
 	form.add_child(model_option)
 	var slot_option: OptionButton = null
 	
 	var add_model_btn := Button.new()
-	add_model_btn.text = "Add / Refresh Selected Model"
+	add_model_btn.text = "Добавить модель на персонажа"
 	add_model_btn.custom_minimum_size = Vector2(0, 36)
 	add_model_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_model_btn.disabled = model_option.disabled
@@ -2760,12 +2780,8 @@ func _show_avatar_item_creator_page() -> void:
 			attachment_root.remove_child(child)
 			child.queue_free()
 	var set_transform_rows_visible := func(is_visible: bool) -> void:
-		if pos_row != null:
-			pos_row.visible = is_visible
-		if rot_row != null:
-			rot_row.visible = is_visible
-		if scale_row != null:
-			scale_row.visible = is_visible
+		for row in creation_state.get("transform_rows", []):
+			if is_instance_valid(row): row.visible = is_visible
 	var lock_creator_to_single_kind := func(kind: String) -> void:
 		var clean_kind := kind.strip_edges().to_lower()
 		var clothing_selected := clean_kind in ["shirt", "pants"]
@@ -2813,6 +2829,8 @@ func _show_avatar_item_creator_page() -> void:
 	slot_option = OptionButton.new()
 	for slot_name in ["Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg", "Back"]:
 		slot_option.add_item(slot_name)
+	form.add_child(_avatar_creator_label("Крепление на персонаже"))
+	slot_option.custom_minimum_size.y = 38
 	form.add_child(slot_option)
 	slot_option.item_selected.connect(func(_index: int) -> void:
 		if sync_attachment_preview.is_valid():
@@ -2821,12 +2839,15 @@ func _show_avatar_item_creator_page() -> void:
 			attachment_root.position = _avatar_item_slot_position(slot_option.get_item_text(slot_option.selected))
 	)
 	var visibility := OptionButton.new()
-	visibility.add_item("Public")
-	visibility.add_item("Private")
+	visibility.add_item("В каталоге — доступно другим игрокам")
+	visibility.add_item("Черновик — видно только вам")
+	form.add_child(_avatar_creator_label("Где показывать"))
+	visibility.clip_text = true
+	visibility.custom_minimum_size.y = 38
 	form.add_child(visibility)
 
 	# Outfit creator upload row
-	var develop_upload_row := HBoxContainer.new()
+	var develop_upload_row := HFlowContainer.new()
 	develop_upload_row.add_theme_constant_override("separation", 8)
 	form.add_child(develop_upload_row)
 	var clothing_status := Label.new()
@@ -2850,14 +2871,14 @@ func _show_avatar_item_creator_page() -> void:
 			name_edit.text = "Classic %s" % imported_kind.capitalize()
 		clothing_status.text = "%s template ready. This page will publish only that clothing item." % imported_kind.capitalize()
 	dev_shirt_btn = Button.new()
-	dev_shirt_btn.text = "Upload Shirt"
+	dev_shirt_btn.text = "Загрузить футболку"
 	dev_shirt_btn.custom_minimum_size = Vector2(130, 36)
 	dev_shirt_btn.pressed.connect(func() -> void:
 		_open_avatar_template_picker_from_develop("shirt", player_preview, handle_clothing_imported)
 	)
 	develop_upload_row.add_child(dev_shirt_btn)
 	dev_pants_btn = Button.new()
-	dev_pants_btn.text = "Upload Pants"
+	dev_pants_btn.text = "Загрузить штаны"
 	dev_pants_btn.custom_minimum_size = Vector2(130, 36)
 	dev_pants_btn.pressed.connect(func() -> void:
 		_open_avatar_template_picker_from_develop("pants", player_preview, handle_clothing_imported)
@@ -2871,7 +2892,7 @@ func _show_avatar_item_creator_page() -> void:
 	)
 	develop_upload_row.add_child(dev_templates_btn)
 	reset_item_btn = Button.new()
-	reset_item_btn.text = "Reset Item"
+	reset_item_btn.text = "Начать заново"
 	reset_item_btn.custom_minimum_size = Vector2(120, 36)
 	reset_item_btn.disabled = true
 	reset_item_btn.pressed.connect(_show_avatar_item_creator_page)
@@ -2879,16 +2900,22 @@ func _show_avatar_item_creator_page() -> void:
 	form.add_child(clothing_status)
 
 	var transform_header := Label.new()
-	transform_header.text = "Attachment Transform"
+	transform_header.text = "Точная настройка положения"
 	transform_header.add_theme_font_size_override("font_size", 16)
 	transform_header.add_theme_color_override("font_color", Color(0.16, 0.16, 0.16))
 	form.add_child(transform_header)
+	var transform_expand := CheckButton.new()
+	transform_expand.text = "Показать координаты и масштаб"
+	form.add_child(transform_expand)
 	pos_row = _create_avatar_item_vector3_row("Position", Vector3.ZERO, Vector3(-4, -4, -4), Vector3(4, 6, 4), 0.05)
 	form.add_child(pos_row)
 	rot_row = _create_avatar_item_vector3_row("Rotation", Vector3.ZERO, Vector3(-180, -180, -180), Vector3(180, 180, 180), 1.0)
 	form.add_child(rot_row)
 	scale_row = _create_avatar_item_vector3_row("Scale", Vector3.ONE, Vector3(0.05, 0.05, 0.05), Vector3(8, 8, 8), 0.05)
 	form.add_child(scale_row)
+	creation_state["transform_rows"] = [pos_row, rot_row, scale_row]
+	set_transform_rows_visible.call(false)
+	transform_expand.toggled.connect(func(enabled: bool): set_transform_rows_visible.call(enabled and str(creation_state.get("mode", "model")) == "model"))
 	sync_attachment_preview = func(_value: float = 0.0) -> void:
 		var slot_pos := _avatar_item_slot_position(slot_option.get_item_text(slot_option.selected))
 		attachment_root.position = slot_pos + _read_avatar_item_vector3_row(pos_row, Vector3.ZERO)
@@ -2906,14 +2933,35 @@ func _show_avatar_item_creator_page() -> void:
 			lock_creator_to_single_kind.call("model")
 		clothing_status.text = "Model attachment selected. Publish will create a wearable model item."
 		await _rebuild_avatar_item_attachment_preview(attachment_root, model_entry)
+		set_transform_rows_visible.call(transform_expand.button_pressed)
 		if sync_attachment_preview.is_valid():
 			sync_attachment_preview.call(0.0)
 	)
 	_connect_vector3_row_changed(pos_row, sync_attachment_preview)
 	_connect_vector3_row_changed(rot_row, sync_attachment_preview)
 	_connect_vector3_row_changed(scale_row, sync_attachment_preview)
+	var price_title := Label.new()
+	price_title.text = "Цена в каталоге · Boblox"
+	price_title.add_theme_color_override("font_color", Color("202b35"))
+	publication_box.add_child(price_title)
+	var price_input := SpinBox.new()
+	price_input.name = "AvatarItemPrice"
+	price_input.min_value = 0
+	price_input.max_value = 1000000
+	price_input.step = 1
+	price_input.value = 20
+	price_input.suffix = "Boblox"
+	price_input.custom_minimum_size.y = 42
+	publication_box.add_child(price_input)
+	var price_help := Label.new()
+	price_help.text = "Одежда — от 5, модели — от 20 Boblox. Цена 0 использует лимит бесплатных товаров. Сбор за публикацию подтверждается отдельно."
+	price_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	price_help.add_theme_font_size_override("font_size", 13)
+	price_help.add_theme_color_override("font_color", Color("556575"))
+	publication_box.add_child(price_help)
 	var publish_btn := Button.new()
-	publish_btn.text = "Publish Avatar Item"
+	publish_btn.text = "Опубликовать предмет"
+	publish_btn.name = "PublishAvatarItem"
 	publish_btn.custom_minimum_size = Vector2(0, 44)
 	publish_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	publish_btn.add_theme_stylebox_override("normal", _make_primary_button_style(Color(0.16, 0.63, 0.28, 1.0)))
@@ -2923,6 +2971,15 @@ func _show_avatar_item_creator_page() -> void:
 		var model_entry: Dictionary = model_option.get_item_metadata(model_option.selected) if model_option.get_item_metadata(model_option.selected) is Dictionary else {}
 		var selected_mode := str(creation_state.get("mode", "model"))
 		var clothing_entry: Dictionary = creation_state.get("clothing", {}) if creation_state.get("clothing", {}) is Dictionary else {}
+		if name_edit.text.strip_edges().is_empty():
+			clothing_status.text = "Введите название предмета перед публикацией."
+			name_edit.grab_focus()
+			return
+		var minimum_price := 5 if selected_mode in ["shirt", "pants"] else 20
+		if visibility.selected == 0 and price_input.value > 0 and price_input.value < minimum_price:
+			clothing_status.text = "Минимальная цена: %d Boblox. Для бесплатного предмета укажите 0." % minimum_price
+			price_input.get_line_edit().grab_focus()
+			return
 		if selected_mode in ["shirt", "pants"] and not clothing_entry.is_empty():
 			publish_btn.disabled = true
 			publish_btn.text = "Publishing..."
@@ -2934,17 +2991,17 @@ func _show_avatar_item_creator_page() -> void:
 				name_edit.text.strip_edges(),
 				clothing_entry,
 				"private" if visibility.selected == 1 else "public",
-				clothing_thumbnail_path
+				clothing_thumbnail_path, int(price_input.value)
 			)
 			publish_btn.disabled = false
-			publish_btn.text = "Publish Avatar Item"
+			publish_btn.text = "Опубликовать предмет"
 			if not bool(clothing_result.get("ok", false)):
 				clothing_status.text = "Publish failed: %s" % _avatar_item_publish_error_text(clothing_result)
 			return
 		if model_option.disabled or model_entry.is_empty():
 			publish_btn.text = "Select a model first!"
 			await get_tree().create_timer(1.5).timeout
-			publish_btn.text = "Publish Avatar Item"
+			publish_btn.text = "Опубликовать предмет"
 			return
 		publish_btn.disabled = true
 		publish_btn.text = "Publishing..."
@@ -2963,14 +3020,15 @@ func _show_avatar_item_creator_page() -> void:
 			selected_slot_name,
 			"private" if visibility.selected == 1 else "public",
 			model_thumbnail_path,
-			transform_data
+			transform_data, int(price_input.value)
 		)
 		publish_btn.disabled = false
-		publish_btn.text = "Publish Avatar Item"
+		publish_btn.text = "Опубликовать предмет"
 		if not bool(model_result.get("ok", false)):
 			clothing_status.text = "Publish failed: %s" % _avatar_item_publish_error_text(model_result)
 	)
-	form.add_child(publish_btn)
+	publication_box.add_child(publish_btn)
+	_style_avatar_creator_controls(root)
 
 func _open_avatar_template_picker_from_develop(kind: String, preview_player: Node, imported_callback: Callable = Callable()) -> void:
 	var filters := PackedStringArray([
@@ -3063,7 +3121,7 @@ func _publish_avatar_item_from_dialog(dialog: ConfirmationDialog) -> void:
 	var thumbnail_path: String = thumbnail_edit.text.strip_edges() if thumbnail_edit != null else ""
 	await _publish_avatar_item_from_fields(item_name, model_entry, attachment_slot, visibility_name, thumbnail_path)
 
-func _publish_avatar_item_from_fields(item_name: String, model_entry: Dictionary, attachment_slot: String, visibility_name: String, thumbnail_path: String, transform_data: Dictionary = {}) -> Dictionary:
+func _publish_avatar_item_from_fields(item_name: String, model_entry: Dictionary, attachment_slot: String, visibility_name: String, thumbnail_path: String, transform_data: Dictionary = {}, price_boblox: int = 20) -> Dictionary:
 	var clean_name := item_name.strip_edges()
 	if clean_name.is_empty():
 		clean_name = "Avatar Item"
@@ -3095,6 +3153,7 @@ func _publish_avatar_item_from_fields(item_name: String, model_entry: Dictionary
 		"model_id": str(model_entry.get("id", model_entry.get("cloud_model_id", model_entry.get("draft_id", "")))),
 		"attachment_slot": attachment_slot,
 		"visibility": visibility_name,
+		"price_robux": maxi(0, price_boblox),
 		"attachment_transform": attachment_transform,
 		"data": model_data_with_attachment,
 		"model_data": model_data_with_attachment,
@@ -3159,7 +3218,7 @@ func _publish_avatar_item_from_fields(item_name: String, model_entry: Dictionary
 		push_warning("[Lobby] Avatar item publish failed: %s" % str(result.get("error", "Unknown error")))
 		return _avatar_item_publish_error_result("Could not publish avatar model item.", result)
 
-func _publish_avatar_clothing_item_from_fields(item_name: String, clothing_entry: Dictionary, visibility_name: String, thumbnail_path: String = "") -> Dictionary:
+func _publish_avatar_clothing_item_from_fields(item_name: String, clothing_entry: Dictionary, visibility_name: String, thumbnail_path: String = "", price_boblox: int = 5) -> Dictionary:
 	var kind := str(clothing_entry.get("kind", "")).strip_edges().to_lower()
 	if not (kind in ["shirt", "pants"]):
 		var invalid_kind_message := "Cannot publish avatar clothing with invalid kind: %s" % kind
@@ -3210,6 +3269,7 @@ func _publish_avatar_clothing_item_from_fields(item_name: String, clothing_entry
 		"asset_type": "avatar_item",
 		"item_kind": kind,
 		"visibility": visibility_name,
+		"price_robux": maxi(0, price_boblox),
 		"thumbnail": thumbnail_url,
 		"template_url": template_url,
 		"source_url": template_url,
@@ -3684,7 +3744,7 @@ func _load_mesh_or_scene_from_path(path: String) -> Node:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(cache_dir))
 		var url_path := path.split("?", false, 1)[0]
 		var extension_hint := url_path.get_extension().to_lower()
-		if extension_hint not in ["glb", "gltf", "obj"]:
+		if extension_hint not in ["glb", "gltf", "fbx", "obj"]:
 			extension_hint = "glb"
 		local_path = cache_dir.path_join("%s.%s" % [path.md5_text(), extension_hint])
 		var cache_valid := false
@@ -3725,9 +3785,9 @@ func _load_mesh_or_scene_from_path(path: String) -> Node:
 			return null
 	
 	var extension := local_path.get_extension().to_lower()
-	if extension == "glb" or extension == "gltf":
-		var gltf_document := GLTFDocument.new()
-		var gltf_state := GLTFState.new()
+	if extension in ["glb", "gltf", "fbx"]:
+		var gltf_document: GLTFDocument = FBXDocument.new() if local_path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
+		var gltf_state: GLTFState = FBXState.new() if local_path.get_extension().to_lower() == "fbx" else GLTFState.new()
 		var error := gltf_document.append_from_file(local_path, gltf_state)
 		if error == OK:
 			var scene := gltf_document.generate_scene(gltf_state)
@@ -11018,3 +11078,50 @@ static func _compact_count(value: int) -> String:
 	if value >= 1000000: return "%.1fM" % (float(value) / 1000000)
 	if value >= 1000: return "%.1fK" % (float(value) / 1000)
 	return str(value)
+
+func _avatar_creator_label(value: String) -> Label:
+	var label := Label.new()
+	label.text = value
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color("334555"))
+	return label
+
+func _style_avatar_creator_controls(node: Node) -> void:
+	if node is Label: node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if node is Button and get_viewport_rect().size.x < 1000:
+		node.clip_text = true
+		node.custom_minimum_size.y = maxf(node.custom_minimum_size.y, 38)
+	if node is SpinBox: _style_avatar_creator_controls(node.get_line_edit())
+	if node is LineEdit:
+		var input_style := StyleBoxFlat.new()
+		input_style.bg_color = Color("f8fafc")
+		input_style.border_color = Color("c7d2dc")
+		input_style.set_border_width_all(1)
+		input_style.set_corner_radius_all(4)
+		input_style.content_margin_left = 10
+		input_style.content_margin_right = 10
+		input_style.content_margin_top = 8
+		input_style.content_margin_bottom = 8
+		node.add_theme_stylebox_override("normal", input_style)
+		node.add_theme_color_override("font_color", Color("243544"))
+		node.add_theme_color_override("font_placeholder_color", Color("6b7e8e"))
+	if node is Button and not node.text in ["Опубликовать предмет"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color.WHITE
+		style.border_color = Color("ccd6de")
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(4)
+		style.content_margin_left = 10
+		style.content_margin_right = 10
+		style.content_margin_top = 7
+		style.content_margin_bottom = 7
+		node.add_theme_stylebox_override("normal", style)
+		var hover := style.duplicate()
+		hover.bg_color = Color("eef7fc")
+		hover.border_color = Color("009cdb")
+		node.add_theme_stylebox_override("hover", hover)
+		node.add_theme_stylebox_override("pressed", hover)
+		node.add_theme_color_override("font_color", Color("263a49"))
+		node.add_theme_color_override("font_hover_color", Color("0079b8"))
+		node.add_theme_color_override("font_pressed_color", Color("0079b8"))
+	for child in node.get_children(): _style_avatar_creator_controls(child)

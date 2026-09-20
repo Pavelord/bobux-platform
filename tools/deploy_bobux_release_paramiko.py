@@ -175,12 +175,22 @@ echo "{hashes['windows']}  /tmp/$VERSIONED_WINDOWS" | sha256sum -c -
 echo "{hashes['launcher']}  /tmp/BobuxLauncher-Windows.zip" | sha256sum -c -
 echo "{hashes['mobile']}  /tmp/$VERSIONED_MOBILE" | sha256sum -c -
 
+echo "{hashes['setup']}  /tmp/BobuxSetup.exe" | sha256sum -c -
+echo "{hashes['linux']}  /tmp/Bobux-Linux-x86_64.tar.gz" | sha256sum -c -
+echo "{hashes['desktop']}  /tmp/desktop-latest.json" | sha256sum -c -
+# Run the actual exported Linux binary before touching the running services.
+LINUX_SMOKE=$(mktemp -d /tmp/bobux-linux-smoke.XXXXXX)
+trap 'rm -rf -- "$LINUX_SMOKE"' EXIT
+tar -xzf /tmp/Bobux-Linux-x86_64.tar.gz -C "$LINUX_SMOKE"
+(cd "$LINUX_SMOKE/Bobux" && timeout 90 ./Bobux.x86_64 --headless -- --verify-lua-runtime) > "$LINUX_SMOKE/smoke.log" 2>&1 || {{ tail -n 30 "$LINUX_SMOKE/smoke.log"; exit 1; }}
+grep -q BOBUX_LUA_SMOKE_OK "$LINUX_SMOKE/smoke.log"
+echo 'Linux exported Lua smoke passed'
+python3 "$LINUX_SMOKE/build_appimage.py" "$LINUX_SMOKE" /tmp
+
 mkdir -p "$REMOTE_ROOT" "$WEB_ROOT/launcher" "$WEB_ROOT/downloads" "$WEB_ROOT/mobile" /var/log/bobux
 tar -xzf /tmp/bobux-hotfix.tar.gz -C "$REMOTE_ROOT"
 
-if [ -f "$REMOTE_ROOT/ops/vps/index.html" ]; then
-  install -m 0644 "$REMOTE_ROOT/ops/vps/index.html" "$WEB_ROOT/index.html"
-fi
+
 if [ -f "$REMOTE_ROOT/ops/vps/admin.html" ]; then
   install -m 0644 "$REMOTE_ROOT/ops/vps/admin.html" "$WEB_ROOT/admin.html"
 fi
@@ -249,6 +259,16 @@ mv -f "$WEB_ROOT/downloads/$VERSIONED_WINDOWS.new" "$WEB_ROOT/downloads/$VERSION
 mv -f "$WEB_ROOT/downloads/BobuxLauncher-Windows.zip.new" "$WEB_ROOT/downloads/BobuxLauncher-Windows.zip"
 mv -f "$WEB_ROOT/mobile/Bobux-Android.apk.new" "$WEB_ROOT/mobile/Bobux-Android.apk"
 mv -f "$WEB_ROOT/mobile/$VERSIONED_MOBILE.new" "$WEB_ROOT/mobile/$VERSIONED_MOBILE"
+
+for artifact in BobuxSetup.exe Bobux-x86_64.AppImage desktop-latest.json; do
+  install -m 0644 "/tmp/$artifact" "$WEB_ROOT/downloads/$artifact.new"
+  cmp "/tmp/$artifact" "$WEB_ROOT/downloads/$artifact.new"
+  mv -f "$WEB_ROOT/downloads/$artifact.new" "$WEB_ROOT/downloads/$artifact"
+done
+mkdir -p "$WEB_ROOT/assets"
+cp -a "$REMOTE_ROOT/ops/vps/assets/." "$WEB_ROOT/assets/"
+install -m 0644 "$REMOTE_ROOT/ops/vps/index.html" "$WEB_ROOT/index.html.new"
+mv -f "$WEB_ROOT/index.html.new" "$WEB_ROOT/index.html"
 
 install -m 0644 /tmp/latest.json "$WEB_ROOT/launcher/latest.json.new"
 install -m 0644 /tmp/latest.json "$WEB_ROOT/downloads/latest.json.new"
@@ -325,6 +345,8 @@ def main() -> int:
         / "release"
         / f"Bobux-Android-{args.mobile_version}-build{args.mobile_build}.apk",
     }
+    for name in ("BobuxSetup.exe", "Bobux-Linux-x86_64.tar.gz", "desktop-latest.json"):
+        files["/tmp/" + name] = project_root / "dist" / "release" / name
     for remote_path, local_path in files.items():
         minimum = 256 if local_path.suffix == ".json" else 1024 * 1024
         require_file(local_path, minimum)
@@ -343,6 +365,14 @@ def main() -> int:
             ]
         ),
     }
+    for key, name in (("setup", "BobuxSetup.exe"), ("linux", "Bobux-Linux-x86_64.tar.gz"), ("desktop", "desktop-latest.json")):
+        hashes[key] = sha256_file(files["/tmp/" + name])
+    desktop = json.loads(files["/tmp/desktop-latest.json"].read_text("utf-8"))
+    if desktop["version"] != args.version or desktop["build"] != args.build:
+        raise RuntimeError("Desktop manifest version mismatch")
+    for platform, key in (("windows", "setup"), ("linux", "linux")):
+        if desktop["platforms"][platform]["sha256"].upper() != hashes[key]:
+            raise RuntimeError("Desktop package hash mismatch")
     if hashes["windows"] != str(launcher_manifest["sha256"]).upper():
         raise RuntimeError("Windows manifest SHA256 does not match the release ZIP.")
     if hashes["launcher"] != str(launcher_manifest["launcher"]["sha256"]).upper():
@@ -402,6 +432,8 @@ def main() -> int:
         run_remote(client, "bash /tmp/bobux-release-deploy.sh", timeout=1200)
         sftp = client.open_sftp()
         try:
+            for name in ("Bobux-x86_64.AppImage", "desktop-latest.json"):
+                sftp.get("/tmp/" + name, str(Path("dist/release") / name))
             ai_environment_updated = sync_remote_ai_environment(sftp)
         finally:
             sftp.close()

@@ -60,6 +60,9 @@ jobs:
         run: |
           $tests = @(
             "res://tools/validate_runtime_load.gd",
+            "res://tools/validate_brick_color_palette.gd",
+            "res://tools/validate_mode_tool_input.gd",
+            "res://tools/validate_saved_outfits.gd",
             "res://tools/validate_workspace_network_boundary.gd",
             "res://tools/validate_room_load_coalescing.gd",
             "res://tools/validate_experience_loading.gd",

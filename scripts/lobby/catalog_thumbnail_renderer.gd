@@ -114,6 +114,31 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 		subject.set("left_leg_color", Color("#0b743b"))
 		subject.set("right_leg_color", Color("#0b743b"))
 		subject.set("chest_badge_texture_path", "res://assets/currency/boblox.png")
+	elif kind in ["face", "chest_badge"]:
+		var source := str(item.get("texture_path", data.get("texture_path", "")))
+		var local_path := await _texture_source(source)
+		if local_path.is_empty(): return _fail(item, "Texture unavailable")
+		if kind == "face":
+			subject = Node3D.new()
+			var head := MeshInstance3D.new()
+			head.mesh = BoxMesh.new()
+			head.mesh.size = Vector3.ONE
+			var material := StandardMaterial3D.new()
+			material.albedo_color = Color("d5d5d5")
+			head.material_override = material
+			subject.add_child(head)
+			var face := MeshInstance3D.new()
+			face.mesh = QuadMesh.new()
+			face.mesh.size = Vector2(0.86, 0.86)
+			face.position.z = 0.502
+			var face_material := StandardMaterial3D.new()
+			face_material.albedo_texture = ImageTexture.create_from_image(Image.load_from_file(local_path))
+			face_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			face.material_override = face_material
+			subject.add_child(face)
+		else:
+			subject = _mannequin()
+			subject.set("chest_badge_texture_path", local_path)
 	elif kind in ["shirt", "shirts", "pants", "tshirt", "t-shirt"]:
 		var source := ""
 		for candidate in [item, data]:
@@ -126,7 +151,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 		subject.set("pants_texture_path" if kind == "pants" else "shirt_texture_path", local_path)
 	else:
 		var source: String = _helper.call("_avatar_attachment_source_path", item, data)
-		if not source.is_empty() and source.get_slice("?", 0).get_extension().to_lower() in ["glb", "gltf", "obj", "tscn", "res", "tres"]:
+		if not source.is_empty() and source.get_slice("?", 0).get_extension().to_lower() in ["glb", "gltf", "fbx", "obj", "tscn", "res", "tres"]:
 			var loaded: Variant = await _helper.call("_instantiate_avatar_attachment_source", source)
 			if loaded is Node3D: subject = loaded
 			elif loaded is Node: loaded.queue_free()

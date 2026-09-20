@@ -649,7 +649,7 @@ func _open_model_file_dialog() -> void:
 	_model_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_model_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	_model_file_dialog.filters = PackedStringArray([
-		"*.glb, *.gltf ; glTF models",
+		"*.glb, *.gltf, *.fbx ; glTF / FBX models",
 		"*.obj ; Wavefront OBJ",
 		"*.fbx ; FBX model",
 		"*.dae ; Collada model",
@@ -689,7 +689,7 @@ func _show_system_model_file_dialog() -> bool:
 		false,
 		DisplayServer.FILE_DIALOG_MODE_OPEN_FILE,
 		PackedStringArray([
-			"*.glb, *.gltf ; glTF models",
+			"*.glb, *.gltf, *.fbx ; glTF / FBX models",
 			"*.obj ; Wavefront OBJ",
 			"*.fbx ; FBX model",
 			"*.dae ; Collada model",

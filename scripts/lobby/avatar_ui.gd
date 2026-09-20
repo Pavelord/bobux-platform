@@ -40,7 +40,6 @@ const BODY_PALETTE := [
 var lobby: Control
 var current_category := "Recent"
 var wardrobe_container: GridContainer
-var wearing_container: GridContainer
 var template_status_label: Label
 var body_select_status_label: Label
 
@@ -195,6 +194,7 @@ func _normalize_avatar_data() -> void:
 
 
 func _prepare_avatar_surface(avatar_view: Control) -> void:
+	avatar_view.add_theme_stylebox_override("panel", _make_panel_style(Color.WHITE, Color.WHITE, 0, 0))
 	var content := _get_avatar_content(avatar_view)
 	if content == null:
 		var margin := MarginContainer.new()
@@ -282,9 +282,7 @@ func _install_preview_background(avatar_view: Control) -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	var room_texture := _load_texture_from_any_path(AVATAR_ROOM_BG_PATH)
-	if room_texture != null:
-		bg.texture = room_texture
+	bg.texture = _load_texture_from_any_path(AVATAR_ROOM_BG_PATH)
 	preview_panel.clip_contents = true
 	preview_panel.add_child(bg)
 	preview_panel.move_child(bg, 0)
@@ -321,15 +319,15 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 	preview_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	sub_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	var camera_state := {
-		"yaw": 0.0,
+		"yaw": -0.25,
 		"pitch": 0.04,
-		"distance": 4.6,
+		"distance": 5.2,
 		"dragging": false
 	}
 	var update_preview_camera := func() -> void:
 		if camera == null or not is_instance_valid(camera):
 			return
-		var target := Vector3(0.0, 3.0, 0.0)
+		var target := Vector3(0.0, 2.5, 0.0)
 		var yaw := float(camera_state["yaw"])
 		var pitch := float(camera_state["pitch"])
 		var distance := float(camera_state["distance"])
@@ -553,29 +551,38 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.08, 0.08, 0.08))
 	outer.add_child(title)
-	var top_row := HBoxContainer.new()
+	var top_row := HFlowContainer.new()
 	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	outer.add_child(top_row)
 	var hint := Label.new()
-	hint.text = "Explore the Catalog to find more clothes!"
+	hint.text = "Одежда и аксессуары вашего персонажа"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size.x = 180
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35))
 	top_row.add_child(hint)
 	var get_more := Button.new()
-	get_more.text = "Get More"
+	get_more.text = "Каталог"
+	get_more.custom_minimum_size.y = 34
 	get_more.pressed.connect(func(): lobby.call("_switch_tab", 11))
 	top_row.add_child(get_more)
+	var save_look := Button.new()
+	save_look.text = "Сохранить образ"
+	save_look.custom_minimum_size.y = 34
+	save_look.pressed.connect(_show_save_outfit)
+	top_row.add_child(save_look)
 	var tabs := HFlowContainer.new()
 	tabs.add_theme_constant_override("separation", 8)
 	outer.add_child(tabs)
 	_category_buttons.clear()
 	var tab_specs := [
-		{"label": "Recent", "category": "Recent"},
-		{"label": "Characters", "category": "Body"},
-		{"label": "Clothing", "category": "Clothes"},
-		{"label": "Accessories", "category": "Accessories"},
-		{"label": "Head & Body", "category": "Face"},
-		{"label": "Animations", "category": "Animations"},
+		{"label": "Все вещи", "category": "Recent"},
+		{"label": "Надето", "category": "Wearing"},
+		{"label": "Мои образы", "category": "Outfits"},
+		{"label": "Одежда", "category": "Clothes"},
+		{"label": "Аксессуары", "category": "Accessories"},
+		{"label": "Лицо и тело", "category": "Face"},
+		{"label": "Анимации", "category": "Animations"},
 	]
 	for tab_spec in tab_specs:
 		var category_name := str(tab_spec["category"])
@@ -588,7 +595,7 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 		_category_buttons[category_name] = button
 	var breadcrumb := Label.new()
 	breadcrumb.name = "AvatarBreadcrumb"
-	breadcrumb.text = "Recent > Recently Added"
+	breadcrumb.text = "Гардероб / Все вещи"
 	breadcrumb.add_theme_color_override("font_color", Color(0.27, 0.27, 0.27))
 	outer.add_child(breadcrumb)
 
@@ -605,17 +612,6 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	wardrobe_container.add_theme_constant_override("v_separation", 12)
 	wardrobe_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(wardrobe_container)
-	var wearing_title := Label.new()
-	wearing_title.text = "Currently Wearing"
-	wearing_title.add_theme_font_size_override("font_size", 18)
-	wearing_title.add_theme_color_override("font_color", Color(0.12, 0.12, 0.12))
-	outer.add_child(wearing_title)
-	wearing_container = GridContainer.new()
-	wearing_container.columns = 1
-	wearing_container.add_theme_constant_override("h_separation", 6)
-	wearing_container.add_theme_constant_override("v_separation", 6)
-	wearing_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_child(wearing_container)
 	_ensure_file_dialog(avatar_view)
 
 
@@ -751,7 +747,11 @@ func _refresh_ui() -> void:
 		button.button_pressed = category_name == current_category
 	if wardrobe_container != null:
 		_clear_children(wardrobe_container)
-		var items: Array = _categorized_items.get(current_category, [])
+		if current_category == "Outfits":
+			_render_saved_outfits()
+			_style_wardrobe_buttons()
+			return
+		var items: Array = _get_wearing_items() if current_category == "Wearing" else _categorized_items.get(current_category, [])
 		if items.is_empty():
 			var empty := Label.new()
 			empty.text = "No items yet."
@@ -759,10 +759,7 @@ func _refresh_ui() -> void:
 			wardrobe_container.add_child(empty)
 		else:
 			_render_wardrobe_items_async(items.duplicate(true), render_generation)
-	if wearing_container != null:
-		_clear_children(wearing_container)
-		for item in _get_wearing_items():
-			wearing_container.add_child(_create_wearing_chip(item))
+	_style_wardrobe_buttons()
 	_refresh_body_controls()
 
 
@@ -772,7 +769,9 @@ func _render_wardrobe_items_async(items: Array, render_generation: int) -> void:
 		if render_generation != _wardrobe_render_generation or wardrobe_container == null or not is_instance_valid(wardrobe_container):
 			return
 		if raw_item is Dictionary:
-			wardrobe_container.add_child(_create_item_card(raw_item as Dictionary))
+			var card := _create_item_card(raw_item as Dictionary)
+			wardrobe_container.add_child(card)
+			_style_button_tree(card)
 			rendered_in_frame += 1
 		if rendered_in_frame >= 8:
 			rendered_in_frame = 0
@@ -823,7 +822,7 @@ func _create_item_card(item: Dictionary) -> Control:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(AVATAR_ITEM_CARD_WIDTH, AVATAR_ITEM_CARD_HEIGHT)
 	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	card.add_theme_stylebox_override("panel", _make_panel_style(Color(1, 1, 1, 1), Color(0.08, 0.08, 0.08), 1, 4))
+	card.add_theme_stylebox_override("panel", _make_panel_style(Color(1, 1, 1, 1), Color(0.85, 0.88, 0.90), 1, 4))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
 	card.add_child(box)
@@ -831,58 +830,51 @@ func _create_item_card(item: Dictionary) -> Control:
 	preview.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, AVATAR_ITEM_PREVIEW_HEIGHT)
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	if not _local_visual_item_payloads.has(item_id):
-		var renderer := lobby.get_node_or_null("WardrobeThumbnailRenderer")
-		if renderer == null:
-			renderer = preload("res://scripts/lobby/catalog_thumbnail_renderer.gd").new()
-			renderer.name = "WardrobeThumbnailRenderer"
-			lobby.add_child(renderer)
-		renderer.request_preview(item, preview)
-	else:
-		preview.texture = _load_texture_for_item(item)
-	box.add_child(preview)
+	var renderer := lobby.get_node_or_null("WardrobeThumbnailRenderer")
+	if renderer == null:
+		renderer = preload("res://scripts/lobby/catalog_thumbnail_renderer.gd").new()
+		renderer.name = "WardrobeThumbnailRenderer"
+		lobby.add_child(renderer)
+	var preview_item := item.duplicate(true)
+	if _local_visual_item_payloads.has(item_id):
+		preview_item["item_kind"] = {"face_texture_path": "face", "chest_badge_texture_path": "chest_badge", "shirt_texture_path": "shirt", "pants_texture_path": "pants"}.get(str(item.get("avatar_key", "")), "model")
+	renderer.request_preview(preview_item, preview)
+	var image_panel := PanelContainer.new()
+	image_panel.add_theme_stylebox_override("panel", _make_panel_style(Color("f2f4f6"), Color("e2e6ea"), 0, 3))
+	image_panel.add_child(preview)
+	box.add_child(image_panel)
+	var image_button := Button.new()
+	image_button.flat = true
+	image_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	image_button.tooltip_text = "Снять" if _is_item_wearing(item) else "Надеть"
+	image_button.pressed.connect(_toggle_item.bind(item_id))
+	preview.add_child(image_button)
+	if _is_item_wearing(item):
+		var check := Label.new()
+		check.text = "✓"
+		check.add_theme_color_override("font_color", Color("008acc"))
+		check.add_theme_font_size_override("font_size", 25)
+		check.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		check.position.x -= 28
+		check.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		preview.add_child(check)
 	var title := Label.new()
 	title.text = str(item.get("name", item.get("title", item_id)))
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, 34)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.max_lines_visible = 2
 	title.add_theme_font_size_override("font_size", 14)
 	title.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
 	box.add_child(title)
 	var action := Button.new()
-	action.text = "Unequip" if _is_item_wearing(item) else "Wear"
+	action.text = "✓ Надето" if _is_item_wearing(item) else "Надеть"
 	action.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, 32)
 	action.pressed.connect(_toggle_item.bind(item_id))
 	box.add_child(action)
 	return card
-
-
-func _create_wearing_chip(item: Dictionary) -> Control:
-	var item_id := str(item.get("id", item.get("item_id", "")))
-	var chip := PanelContainer.new()
-	chip.custom_minimum_size = Vector2(0, 30)
-	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	chip.add_theme_stylebox_override("panel", _make_panel_style(Color(0.08, 0.48, 0.82, 1), Color(0.08, 0.48, 0.82, 1), 0, 12))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	chip.add_child(row)
-	var title := Label.new()
-	title.text = str(item.get("name", item.get("title", item.get("id", "Item"))))
-	title.clip_text = true
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", Color.WHITE)
-	row.add_child(title)
-	var remove_button := Button.new()
-	remove_button.text = "x"
-	remove_button.custom_minimum_size = Vector2(24, 22)
-	remove_button.focus_mode = Control.FOCUS_NONE
-	if not item_id.is_empty():
-		remove_button.pressed.connect(_toggle_item.bind(item_id))
-	row.add_child(remove_button)
-	return chip
 
 
 func _is_item_wearing(item: Dictionary) -> bool:
@@ -947,7 +939,7 @@ func _on_category_pressed(category_name: String) -> void:
 	var avatar_view := lobby.get_node_or_null("%MainTabs/AvatarView")
 	var breadcrumb := _find_child_recursive(avatar_view, "AvatarBreadcrumb") as Label if avatar_view != null else null
 	if breadcrumb != null:
-		breadcrumb.text = "%s > Recently Added" % category_name
+		breadcrumb.text = "Гардероб / " + str({"Recent": "Все вещи", "Wearing": "Надето", "Outfits": "Мои образы", "Clothes": "Одежда", "Accessories": "Аксессуары", "Face": "Лицо и тело", "Animations": "Анимации"}.get(category_name, category_name))
 	_refresh_ui()
 
 
@@ -1663,3 +1655,151 @@ func _find_child_recursive(root: Node, target_name: String) -> Node:
 		if found != null:
 			return found
 	return null
+
+
+# Per-account, local wardrobe: snapshots contain appearance only, never ownership.
+func _outfit_directory() -> String:
+	var account := str(UserSession.user_id).sha256_text().substr(0, 24)
+	return "user://saved_outfits/" + account
+
+func _load_saved_outfits() -> Dictionary:
+	var config := ConfigFile.new()
+	if config.load(_outfit_directory().path_join("looks.cfg")) != OK:
+		return {}
+	var value: Variant = config.get_value("wardrobe", "looks", {})
+	return value if value is Dictionary else {}
+
+func _write_saved_outfits(looks: Dictionary) -> Error:
+	DirAccess.make_dir_recursive_absolute(_outfit_directory())
+	var config := ConfigFile.new()
+	config.set_value("wardrobe", "looks", looks)
+	return config.save(_outfit_directory().path_join("looks.cfg"))
+
+func _appearance_snapshot() -> Dictionary:
+	var snapshot := {}
+	for part in BODY_PARTS:
+		snapshot[part.key] = _user_avatar_data.get(part.key, _get_default_body_color(part.key))
+	for key in ["equipped", "face_texture_path", "chest_badge_texture_path", "shirt_texture_path", "pants_texture_path"]:
+		snapshot[key] = _user_avatar_data.get(key, [] if key == "equipped" else "")
+	return snapshot.duplicate(true)
+
+func _show_save_outfit() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Сохранить образ"
+	dialog.ok_button_text = "Сохранить"
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	var entry := LineEdit.new()
+	entry.placeholder_text = "Название образа"
+	entry.max_length = 40
+	entry.custom_minimum_size = Vector2(300, 42)
+	box.add_child(entry)
+	var note := Label.new()
+	note.text = "До 50 образов на этом устройстве.
+Вы сможете снова надеть их одним нажатием."
+	box.add_child(note)
+	dialog.add_child(box)
+	lobby.add_child(dialog)
+	dialog.get_ok_button().disabled = true
+	entry.text_changed.connect(func(value: String): dialog.get_ok_button().disabled = value.strip_edges().is_empty())
+	dialog.confirmed.connect(func():
+		var looks := _load_saved_outfits()
+		if looks.size() >= 50:
+			dialog.dialog_text = "Удалите ненужный образ: достигнут лимит 50."
+			dialog.popup_centered()
+			return
+		var id := Crypto.new().generate_random_bytes(12).hex_encode()
+		DirAccess.make_dir_recursive_absolute(_outfit_directory())
+		var thumbnail := _outfit_directory().path_join(id + ".png")
+		if is_instance_valid(_preview_player):
+			var image := _preview_player.get_viewport().get_texture().get_image()
+			if image != null and not image.is_empty():
+				var ratio := 256.0 / maxf(image.get_width(), image.get_height())
+				image.resize(maxi(1, roundi(image.get_width() * ratio)), maxi(1, roundi(image.get_height() * ratio)), Image.INTERPOLATE_LANCZOS)
+				var square := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+				square.fill(Color("f4f6f8"))
+				image.convert(Image.FORMAT_RGBA8)
+				square.blend_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), (Vector2i(256, 256) - image.get_size()) / 2)
+				square.save_png(thumbnail)
+		looks[id] = {"name": entry.text.strip_edges(), "appearance": _appearance_snapshot(), "preview": thumbnail}
+		if _write_saved_outfits(looks) != OK:
+			note.text = "Не удалось сохранить образ. Проверьте свободное место."
+			dialog.popup_centered()
+			return
+		current_category = "Outfits"
+		_refresh_ui()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered(Vector2i(380, 170))
+	entry.grab_focus()
+
+func _render_saved_outfits() -> void:
+	var looks := _load_saved_outfits()
+	if looks.is_empty():
+		var label := Label.new()
+		label.text = "Наденьте любимые вещи и нажмите «Сохранить образ»."
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size.x = 240
+		wardrobe_container.add_child(label)
+	for id in looks:
+		var look: Dictionary = looks[id]
+		var card := VBoxContainer.new()
+		card.custom_minimum_size.x = AVATAR_ITEM_CARD_WIDTH
+		var preview := TextureRect.new()
+		preview.custom_minimum_size = Vector2(132, 148)
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		preview.texture = _load_texture_from_any_path(str(look.get("preview", "")))
+		card.add_child(preview)
+		var title := Label.new()
+		title.text = str(look.get("name", "Образ"))
+		title.clip_text = true
+		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		card.add_child(title)
+		var wear := Button.new()
+		wear.text = "Надеть образ"
+		wear.pressed.connect(_apply_saved_outfit.bind(look))
+		card.add_child(wear)
+		var remove := Button.new()
+		remove.text = "Удалить"
+		remove.flat = true
+		remove.pressed.connect(func():
+			var current := _load_saved_outfits()
+			current.erase(id)
+			if _write_saved_outfits(current) == OK:
+				var owned_thumbnail := _outfit_directory().path_join(str(id) + ".png")
+				if FileAccess.file_exists(owned_thumbnail): DirAccess.remove_absolute(owned_thumbnail)
+				_refresh_ui()
+		)
+		card.add_child(remove)
+		wardrobe_container.add_child(card)
+
+func _apply_saved_outfit(look: Dictionary) -> void:
+	var appearance: Dictionary = look.get("appearance", {})
+	for key in _appearance_snapshot():
+		if appearance.has(key): _user_avatar_data[key] = appearance[key]
+	# Re-check current ownership; a saved outfit must never grant catalog items.
+	_user_avatar_data["equipped"] = _get_owned_equipped_item_ids(true)
+	_normalize_avatar_data()
+	_queue_avatar_sync()
+	_group_catalog()
+	_refresh_ui()
+	_apply_visuals_to_preview_player()
+
+func _style_wardrobe_buttons() -> void:
+	if not is_instance_valid(lobby): return
+	var view := lobby.get_node_or_null("%MainTabs/AvatarView")
+	if view == null: return
+	var block := view.find_child("BobuxWardrobeBlock", true, false)
+	if block != null: _style_button_tree(block)
+
+func _style_button_tree(node: Node) -> void:
+	if node is Button and not node.flat:
+		node.add_theme_stylebox_override("normal", _make_panel_style(Color.WHITE, Color("cbd5df"), 1, 4))
+		node.add_theme_stylebox_override("hover", _make_panel_style(Color("eef8ff"), Color("008bce"), 1, 4))
+		node.add_theme_stylebox_override("pressed", _make_panel_style(Color("e0f3ff"), Color("008bce"), 2, 4))
+		node.add_theme_color_override("font_color", Color("263746"))
+		node.add_theme_color_override("font_hover_color", Color("0079b8"))
+		node.add_theme_color_override("font_pressed_color", Color("0079b8"))
+	for child in node.get_children(): _style_button_tree(child)

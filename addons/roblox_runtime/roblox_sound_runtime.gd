@@ -35,7 +35,7 @@ static func configure(sound: Node) -> Node:
 			if stream is AudioStreamWAV: stream.loop_mode = AudioStreamWAV.LOOP_FORWARD if looped else AudioStreamWAV.LOOP_DISABLED
 			elif stream is AudioStreamOggVorbis or stream is AudioStreamMP3: stream.loop = looped
 			streams[key] = stream
-	if streams.has(key): player.stream = streams[key]
+	player.stream = streams.get(key, null)
 	player.volume_db = linear_to_db(maxf(float(sound.get_meta("Volume", props.get("Volume", 0.5))), 0.0001))
 	player.pitch_scale = clampf(float(sound.get_meta("PlaybackSpeed", sound.get_meta("Pitch", props.get("PlaybackSpeed", props.get("Pitch", 1.0))))), 0.01, 8.0)
 	if player is AudioStreamPlayer3D:

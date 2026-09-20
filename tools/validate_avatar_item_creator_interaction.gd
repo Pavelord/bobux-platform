@@ -62,12 +62,21 @@ func _initialize() -> void:
 		return
 	var publish_button: Button = null
 	for _wait_i in range(120):
-		publish_button = _find_button_by_text(lobby, "Publish Avatar Item")
+		publish_button = _find_child_recursive(lobby, "PublishAvatarItem") as Button
 		if publish_button != null:
 			break
 		await process_frame
 	if publish_button == null:
 		push_error("[validate_avatar_item_creator_interaction] Publish button is missing")
+		quit(1)
+		return
+	var price := _find_child_recursive(lobby, "AvatarItemPrice") as SpinBox
+	if price == null or price.min_value != 0 or price.step != 1:
+		push_error("Avatar item price field is missing or invalid")
+		quit(1)
+		return
+	price.value = 75
+	if int(price.value) != 75:
 		quit(1)
 		return
 	var manual_thumbnail_input := _find_line_edit_by_placeholder(lobby, "Thumbnail image path")

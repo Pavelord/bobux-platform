@@ -10,7 +10,7 @@ const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd"
 const CANONICAL_MODEL_EXPORT_DIR := "user://studio_drafts/model_sources"
 const MODEL_IMPORT_STAGING_DIR := "user://studio_drafts/model_imports"
 const MAX_MODEL_IMPORT_BYTES: int = 256 * 1024 * 1024
-const MODEL_FILE_FILTER := "*.glb,*.gltf,*.obj;3D model files;model/gltf-binary,model/gltf+json,text/plain"
+const MODEL_FILE_FILTER := "*.glb,*.gltf,*.fbx,*.obj;3D model files;model/gltf-binary,model/gltf+json,text/plain"
 
 enum ToolMode {
 	SELECT,
@@ -830,7 +830,7 @@ func _load_source_model(source_path: String) -> void:
 	_canonical_source_model_path = ""
 	var loaded_resource: Resource = null
 	var extension := clean_path.get_extension().to_lower()
-	if extension == "glb" or extension == "gltf":
+	if extension in ["glb", "gltf", "fbx"]:
 		var scene_from_gltf := _load_gltf_scene(clean_path)
 		if scene_from_gltf != null:
 			var wrapper := Node3D.new()
@@ -925,7 +925,7 @@ func _stage_android_model_uri(source_uri: String) -> String:
 func _detect_selected_model_extension(source_path: String, source_bytes: PackedByteArray) -> String:
 	var clean_path := source_path.split("?", false)[0]
 	var extension := clean_path.get_extension().to_lower()
-	if extension in ["glb", "gltf", "obj"]:
+	if extension in ["glb", "gltf", "fbx", "obj"]:
 		return extension
 	if source_bytes.size() >= 4 \
 		and source_bytes[0] == 0x67 \
@@ -935,6 +935,8 @@ func _detect_selected_model_extension(source_path: String, source_bytes: PackedB
 		return "glb"
 	var sample_size := mini(source_bytes.size(), 8192)
 	var text_sample := source_bytes.slice(0, sample_size).get_string_from_utf8().strip_edges()
+	if text_sample.begins_with("Kaydara FBX Binary") or text_sample.contains("FBXHeaderExtension:"):
+		return "fbx"
 	if text_sample.begins_with("{") and text_sample.contains("\"asset\"") and text_sample.contains("\"version\""):
 		return "gltf"
 	if text_sample.begins_with("#") \
@@ -972,8 +974,8 @@ func _add_imported_mesh_part(source_path: String, mesh: Mesh) -> void:
 func _load_gltf_scene(source_path: String) -> Node3D:
 	if not FileAccess.file_exists(source_path):
 		return null
-	var gltf_document := GLTFDocument.new()
-	var gltf_state := GLTFState.new()
+	var gltf_document: GLTFDocument = FBXDocument.new() if source_path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
+	var gltf_state: GLTFState = FBXState.new() if source_path.get_extension().to_lower() == "fbx" else GLTFState.new()
 	var error := gltf_document.append_from_file(source_path, gltf_state)
 	if error != OK:
 		_set_status("Could not preview glTF file (%s): error %s" % [source_path.get_file(), str(error)])

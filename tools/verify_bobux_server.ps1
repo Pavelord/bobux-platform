@@ -104,3 +104,14 @@ if (@(200, 400, 401, 422, 429) -notcontains [int]$auth.status) {
 Write-Host "[OK] Auth route reachable -> HTTP $($auth.status)" -ForegroundColor Green
 
 Write-Host "Bobux VPS routing looks good." -ForegroundColor Green
+
+$desktop = (Assert-Status "Desktop downloads" "http://$ServerIp/downloads/desktop-latest.json" @(200)).content | ConvertFrom-Json
+foreach ($platform in @('windows', 'linux')) {
+    $artifact = $desktop.platforms.$platform
+    if (-not $artifact.url -or $artifact.size -lt 1MB) { throw "Invalid $platform download manifest" }
+    $head = Invoke-WebRequest -UseBasicParsing -Method Head -Uri "http://$ServerIp$($artifact.url)" -TimeoutSec 20
+    if ([long]$head.Headers['Content-Length'] -ne [long]$artifact.size) { throw "$platform download size mismatch" }
+    Write-Host "[OK] $platform download: $($artifact.url)"
+}
+if ($desktop.platforms.linux.url -notlike '*.AppImage') { throw 'Linux AppImage not published' }
+if ($desktop.platforms.windows.url -notlike '*Setup.exe') { throw 'Windows Setup not published' }

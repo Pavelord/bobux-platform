@@ -3049,7 +3049,7 @@ func _is_map_visual_asset_name(file_name: String) -> bool:
 		or (lower.get_extension() == "json" and (lower.contains("mesh") or lower.begins_with("rbxl_")))
 	return is_mesh_json or lower.get_extension() in [
 		"png", "jpg", "jpeg", "webp", "bmp", "tga",
-		"res", "tres", "mesh", "obj", "glb", "gltf", "bin"
+		"res", "tres", "mesh", "obj", "glb", "gltf", "fbx", "bin"
 	]
 
 

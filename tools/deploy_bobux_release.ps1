@@ -256,7 +256,7 @@ if (Test-Path $exportPresets) {
 	$exportContent = Get-Content $exportPresets -Raw
 	$exportContent = $exportContent -replace 'application/file_version="[^"]*"', "application/file_version=`"$windowsFileVersion`""
 	$exportContent = $exportContent -replace 'application/product_version="[^"]*"', "application/product_version=`"$windowsFileVersion`""
-	$exportContent = $exportContent -replace 'binary_format/architecture="[^"]*"', "binary_format/architecture=`"$WindowsArchitecture`""
+	$exportContent = ([regex]'binary_format/architecture="[^"]*"').Replace($exportContent, "binary_format/architecture=`"$WindowsArchitecture`"", 1)
 	$exportContent = [regex]::Replace($exportContent, '(?s)(name="Windows Desktop".*?binary_format/embed_pck=)false', '${1}true', 1)
 	$exportContent = $exportContent -replace 'version/code=\d+', "version/code=$MobileBuild"
 	$exportContent = $exportContent -replace 'version/name="[^"]*"', "version/name=`"$MobileVersion`""

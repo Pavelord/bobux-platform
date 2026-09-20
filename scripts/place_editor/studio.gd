@@ -5164,7 +5164,7 @@ func _get_toolbox_entries(category: String) -> Array[Dictionary]:
 						"description": "Insert saved model draft",
 					})
 		"Meshes":
-			for path in _scan_studio_asset_files(["res://assets", "res://models", "user://rbxl_assets"], [".glb", ".gltf", ".obj", ".mesh.json"], 192):
+			for path in _scan_studio_asset_files(["res://assets", "res://models", "user://rbxl_assets"], [".glb", ".gltf", ".fbx", ".obj", ".mesh.json"], 192):
 				entries.append(_toolbox_file_entry(path, "mesh_file", "Part"))
 		"Visual Effects":
 			for spec in [["PointLight", "PointLight"], ["SpotLight", "SpotLight"], ["ParticleEmitter", "ParticleEmitter"], ["Fire", "Fire"], ["Smoke", "Smoke"], ["Sparkles", "Sparkles"]]:
@@ -9335,7 +9335,7 @@ func _resolve_model_source_path(entry: Dictionary, source_entry: Dictionary) -> 
 	var extension := source_file_name.get_extension().to_lower()
 	if extension.is_empty():
 		extension = source_url.split("?", false, 1)[0].get_extension().to_lower()
-	if extension not in ["glb", "gltf", "obj"]:
+	if extension not in ["glb", "gltf", "fbx", "obj"]:
 		return ""
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(STUDIO_MODEL_CACHE_FOLDER))
 	var cache_name := "%s.%s" % [source_url.md5_text(), extension]
@@ -9432,9 +9432,9 @@ func _insert_exact_model_source(entry: Dictionary, source_entry: Dictionary, sou
 
 func _load_external_model_scene(source_path: String) -> Node3D:
 	var extension := source_path.get_extension().to_lower()
-	if extension in ["glb", "gltf"] and FileAccess.file_exists(source_path):
-		var document := GLTFDocument.new()
-		var state := GLTFState.new()
+	if extension in ["glb", "gltf", "fbx"] and FileAccess.file_exists(source_path):
+		var document: GLTFDocument = FBXDocument.new() if source_path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
+		var state: GLTFState = FBXState.new() if source_path.get_extension().to_lower() == "fbx" else GLTFState.new()
 		if document.append_from_file(source_path, state) == OK:
 			var scene := document.generate_scene(state) as Node3D
 			RbxlMaterialCache.enable_embedded_vertex_colors(scene)
@@ -11872,7 +11872,7 @@ func _is_publishable_map_asset_file(relative_path: String) -> bool:
 	return relative_path.get_extension().to_lower() in [
 		"png", "jpg", "jpeg", "webp", "bmp", "tga", "svg", "dds", "ktx",
 		"ogg", "mp3", "wav",
-		"json", "mesh", "res", "tres", "glb", "gltf", "obj",
+		"json", "mesh", "res", "tres", "glb", "gltf", "fbx", "obj",
 		"lua", "luau"
 	]
 

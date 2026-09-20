@@ -887,6 +887,13 @@ class BobuxInstance extends RefCounted:
 		if not (node is MeshInstance3D) or not mutator.is_valid():
 			return
 		var mesh_node := node as MeshInstance3D
+		# material_override takes precedence over every surface override in Godot.
+		# Mutating only the latter made imported parts ignore Lua Color/Transparency.
+		if mesh_node.material_override is StandardMaterial3D:
+			var override := mesh_node.material_override.duplicate(true) as StandardMaterial3D
+			mutator.call(override)
+			mesh_node.material_override = override
+			return
 		var surface_count := mesh_node.get_surface_override_material_count()
 		if mesh_node.mesh != null:
 			surface_count = maxi(surface_count, mesh_node.mesh.get_surface_count())
@@ -1434,9 +1441,7 @@ class BobuxInstance extends RefCounted:
 				_notify_property_changed("Transparency")
 				return true
 			"BrickColor":
-				var col: Color = Color.WHITE
-				if value is Color:
-					col = value
+				var col: Color = preload("res://addons/roblox_runtime/brick_color_palette.gd").resolve(value)
 				_mutate_mesh_materials(func(material: StandardMaterial3D):
 					var alpha := material.albedo_color.a
 					material.albedo_color = Color(col.r, col.g, col.b, alpha)
@@ -2262,8 +2267,11 @@ class BobuxInstance extends RefCounted:
 				body.call("move_to", godot_destination)
 			return
 		if body != null:
-			body.global_position = godot_destination
-			body.velocity = Vector3.ZERO
+			if body.has_method("set_lua_position"):
+				body.set_lua_position(godot_destination)
+			else:
+				body.global_position = godot_destination
+				body.velocity = Vector3.ZERO
 			return
 		if node is Node3D:
 			(node as Node3D).global_position = godot_destination
@@ -6299,24 +6307,7 @@ func _create_cframe_look_at(
 
 
 func _brick_color_from_variant(value: Variant) -> Color:
-	if value is Color:
-		return value
-	var text := str(value).strip_edges().to_lower()
-	match text:
-		"really red", "bright red", "red":
-			return Color(1.0, 0.0, 0.0)
-		"bright blue", "blue":
-			return Color(0.0, 0.25, 1.0)
-		"bright green", "green":
-			return Color(0.0, 0.8, 0.15)
-		"black":
-			return Color.BLACK
-		"white":
-			return Color.WHITE
-		"medium stone grey", "grey", "gray":
-			return Color(0.55, 0.56, 0.58)
-		_:
-			return Color.WHITE
+	return preload("res://addons/roblox_runtime/brick_color_palette.gd").resolve(value)
 
 
 func _build_brick_color_library() -> Dictionary:

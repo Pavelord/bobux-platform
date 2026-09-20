@@ -84,6 +84,7 @@ if (-not $SkipTemplates) {
 	$templateRoot = Join-Path $InstallRoot "editor_data\export_templates\$Version.$Status"
 	$requiredTemplates = @(
 		"windows_release_x86_32.exe",
+		"linux_release.x86_64",
 		"windows_release_x86_32_console.exe",
 		"android_release.apk",
 		"android_debug.apk",

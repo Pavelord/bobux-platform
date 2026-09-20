@@ -28,6 +28,8 @@ func _initialize() -> void:
 		push_error("[validate_avatar_editor_layout] Incomplete row=%s preview=%s grid=%s breadcrumb=%s room=%s avatar_ui=%s" % [main_row, preview, grid, breadcrumb, room_background, lobby.get("avatar_ui")])
 		quit(1)
 		return
+	await process_frame
+	await RenderingServer.frame_post_draw
 	var image := root.get_texture().get_image()
 	if image == null or image.is_empty() or image.save_png(CAPTURE_PATH) != OK:
 		push_error("[validate_avatar_editor_layout] Could not save capture")
