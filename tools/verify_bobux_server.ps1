@@ -110,7 +110,8 @@ foreach ($platform in @('windows', 'linux')) {
     $artifact = $desktop.platforms.$platform
     if (-not $artifact.url -or $artifact.size -lt 1MB) { throw "Invalid $platform download manifest" }
     $head = Invoke-WebRequest -UseBasicParsing -Method Head -Uri "http://$ServerIp$($artifact.url)" -TimeoutSec 20
-    if ([long]$head.Headers['Content-Length'] -ne [long]$artifact.size) { throw "$platform download size mismatch" }
+    $contentLength = @($head.Headers['Content-Length'])[0]
+    if ([long]$contentLength -ne [long]$artifact.size) { throw "$platform download size mismatch" }
     Write-Host "[OK] $platform download: $($artifact.url)"
 }
 if ($desktop.platforms.linux.url -notlike '*.AppImage') { throw 'Linux AppImage not published' }
