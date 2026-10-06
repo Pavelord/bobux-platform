@@ -42,10 +42,10 @@ function Invoke-BobuxRequest {
 	} catch {
 		$status = 0
 		$content = ""
-		$headers = @{}
+		$responseHeaders = @{}
 		if ($_.Exception.Response) {
 			$status = [int]$_.Exception.Response.StatusCode
-			$headers = $_.Exception.Response.Headers
+			$responseHeaders = $_.Exception.Response.Headers
 			try {
 				$reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
 				$content = $reader.ReadToEnd()
@@ -57,7 +57,7 @@ function Invoke-BobuxRequest {
 			ok      = $false
 			status  = $status
 			content = $content
-			headers = $headers
+			headers = $responseHeaders
 			error   = $_.Exception.Message
 		}
 	}
