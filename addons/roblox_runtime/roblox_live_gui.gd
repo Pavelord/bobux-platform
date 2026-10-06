@@ -70,7 +70,7 @@ func sync_now() -> void:
 				Gui._apply_udim2_layout(view, props)
 				Gui._apply_visual_style(view, class_name_, props)
 				if class_name_ in ["ImageLabel", "ImageButton"]:
-					Gui.sync_image(view, props, child)
+					preload("res://addons/roblox_runtime/roblox_live_image.gd").sync_image(view, props)
 				_styles[ref] = style_hash
 			engine._sync_bound_gui_control(view, child)
 			view.mouse_filter = Control.MOUSE_FILTER_STOP if view is BaseButton or view is LineEdit else Control.MOUSE_FILTER_PASS
