@@ -12,7 +12,7 @@ stage = Path(sys.argv[1]).resolve()
 out = Path(sys.argv[2]).resolve()
 assert stage.name.startswith('bobux-linux-smoke.') and stage.parent == Path('/tmp')
 runtime = stage / 'appimage-runtime-x86_64'
-assert hashlib.sha256(runtime.read_bytes()).hexdigest() == '1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf'
+assert hashlib.sha256(runtime.read_bytes()).hexdigest() == '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d'
 assert shutil.which('mksquashfs'), 'Install squashfs-tools on the Linux builder first'
 subprocess.run(['mksquashfs', str(stage / 'Bobux'), str(stage / 'app.squashfs'), '-noappend', '-comp', 'gzip', '-processors', '1', '-no-progress'], check=True)
 artifact = out / 'Bobux-x86_64.AppImage'
