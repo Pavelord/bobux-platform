@@ -39,7 +39,7 @@ static func build_wedge(size: Vector3) -> ArrayMesh:
 		verts.append_array([a, b, c])
 		normals.append_array([n, n, n])
 		uvs.append_array([Vector2(0, 1), Vector2(1, 1), Vector2(0, 0)])
-		indices.append_array([base, base + 1, base + 2])
+		indices.append_array([base, base + 2, base + 1])
 
 	# Bottom
 	_add_triangle.call(v0, v3, v2)
@@ -82,7 +82,7 @@ static func build_corner_wedge(size: Vector3) -> ArrayMesh:
 		verts.append_array([a, b, c])
 		normals.append_array([n, n, n])
 		uvs.append_array([Vector2(0, 1), Vector2(1, 1), Vector2(0, 0)])
-		indices.append_array([base, base + 1, base + 2])
+		indices.append_array([base, base + 2, base + 1])
 
 	# Bottom
 	_add_triangle.call(v0, v3, v2)
@@ -120,7 +120,7 @@ static func build_pyramid(size: Vector3) -> ArrayMesh:
 		verts.append_array([a, b, c])
 		normals.append_array([n, n, n])
 		uvs.append_array([Vector2(0, 1), Vector2(1, 1), Vector2(0.5, 0)])
-		indices.append_array([base, base + 1, base + 2])
+		indices.append_array([base, base + 2, base + 1])
 
 	_add_triangle.call(v0, v3, v2)
 	_add_triangle.call(v0, v2, v1)
@@ -132,21 +132,19 @@ static func build_pyramid(size: Vector3) -> ArrayMesh:
 	return _build_mesh(verts, normals, uvs, indices)
 
 
-static func build_truss(size: Vector3) -> ArrayMesh:
-	# TrussPart is approximated as a thin rung ladder of cross-bars merged into
-	# a single ArrayMesh. Real trusses have side rails + rungs; this emits a
-	# decorative lattice adequate for visual parity.
+static func build_truss(size: Vector3, normalize_to_unit: bool = false) -> ArrayMesh:
+	# Roblox TrussPart is a square-section climbing frame. Build its four corner
+	# posts, horizontal ties, and repeating X braces as one mesh so imported and
+	# Studio-created trusses share the same recognizable silhouette.
 	var mesh := ArrayMesh.new()
-	var count_x := maxi(1, int(round(size.x / 1.0)))
 	var count_y := maxi(1, int(round(size.y / 2.0)))
-	var count_z := maxi(1, int(round(size.z / 1.0)))
 
 	var combined_verts := PackedVector3Array()
 	var combined_normals := PackedVector3Array()
 	var combined_uvs := PackedVector2Array()
 	var combined_indices := PackedInt32Array()
 
-	var add_box := func(center: Vector3, half: Vector3) -> void:
+	var add_box := func(center: Vector3, half: Vector3, basis: Basis) -> void:
 		var base := combined_verts.size()
 		var hv := [
 			Vector3(-1, -1,  1), Vector3( 1, -1,  1),
@@ -155,8 +153,8 @@ static func build_truss(size: Vector3) -> ArrayMesh:
 			Vector3( 1,  1, -1), Vector3(-1,  1, -1),
 		]
 		for v in hv:
-			combined_verts.append(center + Vector3(v.x * half.x, v.y * half.y, v.z * half.z))
-			combined_normals.append(Vector3(v.x, v.y, v.z).normalized())
+			combined_verts.append(center + basis * Vector3(v.x * half.x, v.y * half.y, v.z * half.z))
+			combined_normals.append((basis * Vector3(v.x, v.y, v.z)).normalized())
 			combined_uvs.append(Vector2(float(v.x > 0), float(v.y > 0)))
 		var tris := [
 			0, 1, 2, 0, 2, 3,   # +Z
@@ -166,25 +164,58 @@ static func build_truss(size: Vector3) -> ArrayMesh:
 			3, 2, 6, 3, 6, 7,   # +Y
 			4, 5, 1, 4, 1, 0,   # -Y
 		]
-		for t in tris:
-			combined_indices.append(base + t)
+		for t in range(0, tris.size(), 3):
+			combined_indices.append_array([base + tris[t], base + tris[t + 2], base + tris[t + 1]])
 
 	var hx := size.x * 0.5
 	var hy := size.y * 0.5
 	var hz := size.z * 0.5
-	# Side rails
-	for side in [-1, 1]:
-		for j in range(count_y):
-			var y := -hy + (j + 0.5) * (size.y / float(count_y))
-			add_box.call(Vector3(side * (hx - 0.15), y, 0.0), Vector3(0.1, 0.4, hz))
-	# Rungs
+	var frame := Basis.IDENTITY
+	var post_half := Vector3(minf(0.12, hx * 0.22), hy, minf(0.12, hz * 0.22))
+	for side_x in [-1.0, 1.0]:
+		for side_z in [-1.0, 1.0]:
+			add_box.call(Vector3(side_x * (hx - post_half.x), 0.0, side_z * (hz - post_half.z)), post_half, frame)
+
+	var width_half := maxf(0.06, minf(0.12, hy * 0.12))
+	var bay_height := size.y / float(count_y)
+	for j in range(count_y + 1):
+		var y := -hy + j * bay_height
+		# Cross ties are the visible rungs on the front and back faces.
+		add_box.call(Vector3(0.0, y, hz - width_half), Vector3(hx, width_half, width_half), frame)
+		add_box.call(Vector3(0.0, y, -hz + width_half), Vector3(hx, width_half, width_half), frame)
+		add_box.call(Vector3(hx - width_half, y, 0.0), Vector3(width_half, width_half, hz), frame)
+		add_box.call(Vector3(-hx + width_half, y, 0.0), Vector3(width_half, width_half, hz), frame)
+
+	var add_brace := func(start: Vector3, finish: Vector3, face_normal: Vector3) -> void:
+		var axis_y := (finish - start).normalized()
+		var axis_x := axis_y.cross(face_normal).normalized()
+		if axis_x.length_squared() < 0.5:
+			axis_x = Vector3.RIGHT
+		var axis_z := axis_x.cross(axis_y).normalized()
+		var brace_basis := Basis(axis_x, axis_y, axis_z)
+		var brace_length := start.distance_to(finish)
+		var brace_half := minf(width_half * 0.7, minf(hx, hz) * 0.18)
+		add_box.call((start + finish) * 0.5, Vector3(brace_half, brace_length * 0.5, brace_half), brace_basis)
+
 	for j in range(count_y):
-		var y := -hy + (j + 0.5) * (size.y / float(count_y))
-		add_box.call(Vector3(0.0, y, 0.0), Vector3(hx - 0.2, 0.1, hz))
-	# Vertical bars (for Z thickness)
-	for k in range(count_z):
-		var z := -hz + (k + 0.5) * (size.z / float(count_z))
-		add_box.call(Vector3(0.0, 0.0, z), Vector3(hx - 0.2, hy, 0.1))
+		var y0 := -hy + j * bay_height + width_half
+		var y1 := -hy + (j + 1) * bay_height - width_half
+		for side_z in [-1.0, 1.0]:
+			var z: float = side_z * (hz - width_half)
+			add_brace.call(Vector3(-hx + width_half, y0, z), Vector3(hx - width_half, y1, z), Vector3(0.0, 0.0, side_z))
+			add_brace.call(Vector3(hx - width_half, y0, z), Vector3(-hx + width_half, y1, z), Vector3(0.0, 0.0, side_z))
+		for side_x in [-1.0, 1.0]:
+			var x: float = side_x * (hx - width_half)
+			add_brace.call(Vector3(x, y0, -hz + width_half), Vector3(x, y1, hz - width_half), Vector3(side_x, 0.0, 0.0))
+			add_brace.call(Vector3(x, y0, hz - width_half), Vector3(x, y1, -hz + width_half), Vector3(side_x, 0.0, 0.0))
+
+	if normalize_to_unit:
+		var divisor := Vector3(maxf(absf(size.x), 0.001), maxf(absf(size.y), 0.001), maxf(absf(size.z), 0.001))
+		for i in range(combined_verts.size()):
+			var vertex := combined_verts[i]
+			combined_verts[i] = Vector3(vertex.x / divisor.x, vertex.y / divisor.y, vertex.z / divisor.z)
+			var normal := combined_normals[i]
+			combined_normals[i] = Vector3(normal.x * divisor.x, normal.y * divisor.y, normal.z * divisor.z).normalized()
 
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)

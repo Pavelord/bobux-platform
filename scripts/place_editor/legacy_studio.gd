@@ -936,7 +936,12 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 		"Sphere":
 			return SphereMesh.new()
 		"Cylinder":
-			return CylinderMesh.new()
+			var cylinder := CylinderMesh.new()
+			cylinder.top_radius = 0.5
+			cylinder.bottom_radius = 0.5
+			cylinder.height = 1.0
+			cylinder.radial_segments = 32
+			return cylinder
 		"Wedge":
 			var wedge := PrismMesh.new()
 			wedge.size = Vector3(1, 1, 1)
@@ -3086,19 +3091,25 @@ func _resolve_existing_file_path(path: String) -> String:
 func _store_runtime_object_asset_files(objects: Array[Dictionary], folder: String) -> void:
 	var stored_by_source: Dictionary = {}
 	var sound_index: int = 1
+	var texture_index: int = 1
 	for data in objects:
-		if str(data.get("class", "")) != "Sound":
+		var object_class := str(data.get("class", ""))
+		if object_class not in ["Sound", "Decal", "Texture"]:
 			continue
-		var source_path := _runtime_object_sound_source_path(data, folder)
+		var source_path := _runtime_object_sound_source_path(data, folder) if object_class == "Sound" else _runtime_object_texture_source_path(data, folder)
 		if source_path.is_empty():
 			continue
 		var stored_file := str(stored_by_source.get(source_path, "")).strip_edges()
 		if stored_file.is_empty():
-			stored_file = _store_mode_asset_file(source_path, folder, "rbxl_sound_%02d" % sound_index)
+			var basename := "rbxl_sound_%02d" % sound_index if object_class == "Sound" else "rbxl_texture_%02d" % texture_index
+			stored_file = _store_mode_asset_file(source_path, folder, basename)
 			if stored_file.is_empty():
 				continue
 			stored_by_source[source_path] = stored_file
-			sound_index += 1
+			if object_class == "Sound":
+				sound_index += 1
+			else:
+				texture_index += 1
 		data["file"] = stored_file
 		data["resolved_path"] = stored_file
 		data["path"] = stored_file
@@ -3113,19 +3124,34 @@ func _runtime_object_sound_source_path(data: Dictionary, folder: String) -> Stri
 			return resolved_path
 	return ""
 
+func _runtime_object_texture_source_path(data: Dictionary, folder: String) -> String:
+	for key in ["file", "resolved_path", "path"]:
+		var candidate := str(data.get(key, "")).strip_edges()
+		if candidate.is_empty():
+			continue
+		var resolved_path := _resolve_existing_file_path_for_folder(candidate, folder)
+		if not resolved_path.is_empty():
+			return resolved_path
+	var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+	return str(importer._resolve_texture_content_to_local_path(data.get("texture", "")))
+
 func _collect_runtime_objects_for_save() -> Array[Dictionary]:
 	var objects: Array[Dictionary] = []
 	var parent: Node = placement_parent if placement_parent else self
-	for child in parent.get_children():
-		if child.is_in_group(RBXL_RUNTIME_OBJECT_GROUP):
-			objects.append(_runtime_object_data_from_node(child))
+	var pending: Array[Node] = parent.get_children()
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		if node.is_in_group(RBXL_RUNTIME_OBJECT_GROUP):
+			objects.append(_runtime_object_data_from_node(node))
+		for child in node.get_children():
+			pending.append(child)
 	return objects
 
 func _runtime_object_data_from_node(node: Node) -> Dictionary:
 	var data: Dictionary = {}
 	if node.has_meta("runtime_object_data") and node.get_meta("runtime_object_data") is Dictionary:
 		data = (node.get_meta("runtime_object_data") as Dictionary).duplicate(true)
-	if node is Node3D:
+	if node is Node3D and not bool(node.get_meta("roblox_face_decal", false)):
 		var node3d := node as Node3D
 		data["px"] = snappedf(node3d.position.x, 0.001)
 		data["py"] = snappedf(node3d.position.y, 0.001)
@@ -3142,10 +3168,25 @@ func _load_runtime_objects_from_map(raw_objects: Variant) -> void:
 	if not (raw_objects is Array):
 		return
 	var parent: Node = placement_parent if placement_parent else self
+	var parts_by_ref: Dictionary = {}
+	for part in _get_editor_parts():
+		var ref := str(part.get_meta("roblox_ref", "")).strip_edges()
+		if not ref.is_empty():
+			parts_by_ref[ref] = part
+	var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
 	for object_variant in raw_objects:
 		if not (object_variant is Dictionary):
 			continue
-		var runtime_node := _create_runtime_object_node_from_data(object_variant as Dictionary)
+		var data: Dictionary = (object_variant as Dictionary).duplicate(true)
+		if str(data.get("class", "")) in ["Decal", "Texture"]:
+			var parent_part: Variant = parts_by_ref.get(str(data.get("parent_ref", "")), null)
+			if parent_part is Node3D:
+				var texture_path := _runtime_object_texture_source_path(data, current_map_folder)
+				if not texture_path.is_empty():
+					data["resolved_path"] = texture_path
+					if importer._apply_decal_runtime_to_parent(parent_part, data):
+						continue
+		var runtime_node := _create_runtime_object_node_from_data(data)
 		if runtime_node == null:
 			continue
 		parent.add_child(runtime_node)
@@ -3337,6 +3378,13 @@ func _publish_map(folder: String, map_name: String, description: String, custom_
 
 	# Save map_data.json
 	_save_map(folder)
+	var saved_payload := _read_json_dictionary(folder + "/map_data.json")
+	var missing_visual_assets := _find_unbundled_runtime_visual_assets(saved_payload, folder)
+	if not missing_visual_assets.is_empty():
+		var missing_summary := ", ".join(missing_visual_assets.slice(0, 5))
+		var error_text := "Could not package imported image(s): %s. Download or re-import these images, then publish again." % missing_summary
+		_finish_publish_progress(false, error_text)
+		return {"ok": false, "error": error_text, "missing_assets": missing_visual_assets}
 	print("[Studio] Publishing '%s' to Bobux Cloud..." % map_name)
 	_show_publish_progress("Publishing Map", "Uploading %s to Bobux Cloud..." % map_name, 0.24)
 	var cloud_result: Dictionary = await _upload_published_map_to_cloud(folder, map_name)
@@ -3493,11 +3541,36 @@ func _collect_publish_asset_file_names(payload: Dictionary, playlist: Array) -> 
 		if not (object_variant is Dictionary):
 			continue
 		var data: Dictionary = object_variant
-		if str(data.get("class", "")) != "Sound":
+		if str(data.get("class", "")) not in ["Sound", "Decal", "Texture"]:
 			continue
 		for key in ["file", "resolved_path", "path"]:
 			_append_publish_asset_file_name(result, str(data.get(key, "")).strip_edges())
 	return result
+
+func _find_unbundled_runtime_visual_assets(payload: Dictionary, folder: String) -> Array[String]:
+	var missing: Array[String] = []
+	var runtime_objects: Array = payload.get("runtime_objects", []) if payload.get("runtime_objects", []) is Array else []
+	for object_variant in runtime_objects:
+		if not (object_variant is Dictionary):
+			continue
+		var data: Dictionary = object_variant
+		if str(data.get("class", "")) not in ["Decal", "Texture"]:
+			continue
+		var texture := str(data.get("texture", "")).strip_edges()
+		if texture.is_empty():
+			continue
+		var bundled := false
+		for key in ["file", "resolved_path", "path"]:
+			var value := str(data.get(key, "")).strip_edges()
+			if value.is_empty() or preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").is_asset_reference(value):
+				continue
+			var local_name := value.get_file() if value.contains(":") or value.is_absolute_path() else value
+			if FileAccess.file_exists(folder.path_join(local_name)):
+				bundled = true
+				break
+		if not bundled:
+			missing.append("%s (ref %s)" % [str(data.get("name", data.get("class", "image"))), str(data.get("roblox_ref", "?"))])
+	return missing
 
 func _append_publish_asset_file_name(result: Array[String], value: String) -> void:
 	if value.is_empty():
@@ -3666,6 +3739,35 @@ func _extract_cloud_map_version(payload: Variant, fallback: String = "") -> Stri
 		return _extract_cloud_map_version(payload[0], fallback)
 	return fallback.strip_edges()
 
+func _collect_imported_block_metadata(block: Node) -> Dictionary:
+	var saved: Dictionary = {}
+	for key in [
+		"roblox_ref", "roblox_class", "roblox_material_id", "roblox_material_name",
+		"roblox_mesh_id", "roblox_texture_id", "roblox_mesh_exact_asset",
+		"roblox_mesh_json_asset", "roblox_texture_asset_file", "roblox_proxy_geometry",
+		"roblox_mesh_deferred", "anchored", "climbable", "Disabled"
+	]:
+		if block.has_meta(key):
+			saved[key] = block.get_meta(key)
+	for key in ["roblox_properties", "roblox_special_mesh"]:
+		var value: Variant = block.get_meta(key, null)
+		if value is Dictionary:
+			saved[key] = (value as Dictionary).duplicate(true)
+	return saved
+
+func _restore_imported_block_metadata(block: Node, block_data: Dictionary) -> void:
+	for key in [
+		"roblox_ref", "roblox_class", "roblox_material_id", "roblox_material_name",
+		"roblox_mesh_id", "roblox_texture_id", "roblox_mesh_exact_asset",
+		"roblox_mesh_json_asset", "roblox_texture_asset_file", "roblox_proxy_geometry",
+		"roblox_mesh_deferred", "anchored", "climbable", "Disabled"
+	]:
+		if block_data.has(key):
+			block.set_meta(key, block_data[key])
+	for key in ["roblox_properties", "roblox_special_mesh"]:
+		if block_data.get(key, null) is Dictionary:
+			block.set_meta(key, (block_data[key] as Dictionary).duplicate(true))
+
 func _save_map(folder: String) -> void:
 	# Ensure directory
 	UserSession.ensure_current_storage()
@@ -3687,7 +3789,7 @@ func _save_map(folder: String) -> void:
 				var mat = (child as MeshInstance3D).get_active_material(0) as StandardMaterial3D
 				if mat:
 					col = mat.albedo_color
-			blocks_data.append({
+			var block_data := {
 				"name": child.get_meta("block_name", child.name),
 				"px": snappedf(child.position.x, 0.01),
 				"py": snappedf(child.position.y, 0.01),
@@ -3709,7 +3811,9 @@ func _save_map(folder: String) -> void:
 				"deals_damage": child.get_meta("deals_damage", false),
 				"damage_amount": child.get_meta("damage_amount", DEFAULT_BLOCK_DAMAGE),
 				"is_spawn": child.get_meta("is_spawn", false)
-			})
+			}
+			block_data.merge(_collect_imported_block_metadata(child), true)
+			blocks_data.append(block_data)
 
 	var time_val = time_slider.value if time_slider else 12.0
 	var runtime_objects := _collect_runtime_objects_for_save()
@@ -3828,6 +3932,7 @@ func _load_map_from_folder(folder: String) -> void:
 		mesh_inst.set_meta("is_spawn", shape == "Spawn")
 		mesh_inst.set_meta("deals_damage", deals_damage)
 		mesh_inst.set_meta("damage_amount", damage_amount)
+		_restore_imported_block_metadata(mesh_inst, block_data)
 		_update_block_collision(mesh_inst)
 		target_parent.add_child(mesh_inst)
 

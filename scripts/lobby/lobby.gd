@@ -86,6 +86,8 @@ var _next_home_friends_refresh_allowed_msec: int = 0
 var _home_friends_cache: Array = []
 var _home_friends_active_lookup_cache: Dictionary = {}
 var _home_friends_cache_loaded: bool = false
+var _home_friends_cache_expires_msec: int = 0
+var _discover_result_stale: bool = false
 var _friends_view_last_refresh_msec: int = -100000
 var _friends_view_refresh_in_flight: bool = false
 var _home_friend_status_refresh_in_flight: bool = false
@@ -416,9 +418,22 @@ func _add_mobile_beta_home_banner() -> void:
 	home_content.move_child(banner, 1)
 
 func _process(delta: float) -> void:
+	_poll_home_network_retries()
 	_poll_lobby_presence_heartbeat_if_needed()
 	_poll_lobby_friend_requests_if_needed()
 	_sweep_smart_play_hover_cards(delta)
+
+func _poll_home_network_retries() -> void:
+	if _scene_change_in_progress or _lobby_bootstrap_active or _lobby_exiting:
+		return
+	var now := Time.get_ticks_msec()
+	if not _home_friends_refresh_in_flight and _next_home_friends_refresh_allowed_msec > 0 and now >= _next_home_friends_refresh_allowed_msec:
+		_next_home_friends_refresh_allowed_msec = 0
+		_home_friends_cache_expires_msec = 0
+		_refresh_home_friends_section()
+	if not _discover_refresh_in_flight and _next_discover_refresh_allowed_msec > 0 and now >= _next_discover_refresh_allowed_msec:
+		_next_discover_refresh_allowed_msec = 0
+		_refresh_discover_section()
 
 
 func _sweep_smart_play_hover_cards(delta: float) -> void:
@@ -688,6 +703,7 @@ func _install_boblox_shop() -> void:
 func _open_boblox_shop(section: int) -> void:
 	_switch_tab(_boblox_shop.get_index())
 	_boblox_shop.call("select_section", section)
+	_boblox_shop.call("show_purchase_unavailable_notice")
 
 func _on_boblox_account_updated(account: Dictionary) -> void:
 	ACCOUNT_BADGES.attach(sidebar_username, account)
@@ -5150,6 +5166,9 @@ func _render_cached_startup_games(cached_entries: Array, refresh_token: int) -> 
 		return
 	await _render_home_game_sections(cached_entries, refresh_token)
 
+func _fetch_home_friends_list() -> Dictionary:
+	return await CloudAPI.get_friends_list()
+
 func _refresh_home_friends_section() -> void:
 	if home_friends_container == null:
 		return
@@ -5160,7 +5179,7 @@ func _refresh_home_friends_section() -> void:
 	if now_msec < _next_home_friends_refresh_allowed_msec:
 		_home_friends_refresh_pending = false
 		return
-	if _home_friends_cache_loaded:
+	if _home_friends_cache_loaded and now_msec < _home_friends_cache_expires_msec:
 		if home_friends_container.get_child_count() == 0:
 			_render_home_friend_cards_from_cache()
 		elif home_friends_status:
@@ -5172,8 +5191,7 @@ func _refresh_home_friends_section() -> void:
 		_home_friends_refresh_pending = true
 		return
 	_home_friends_refresh_in_flight = true
-	_clear_children_immediate(home_friends_container)
-	if home_friends_status:
+	if home_friends_status and not _home_friends_cache_loaded:
 		home_friends_status.text = "Loading friends..."
 	if not CloudAPI.is_configured():
 		if home_friends_status:
@@ -5183,19 +5201,16 @@ func _refresh_home_friends_section() -> void:
 		_next_home_friends_refresh_allowed_msec = Time.get_ticks_msec() + HOME_FRIENDS_FAILURE_RETRY_MS
 		return
 		
-	var server_map_by_user: Dictionary = {}
-	if CloudAPI != null and CloudAPI.has_method("fetch_active_servers"):
-		var active_servers_result: Dictionary = await CloudAPI.fetch_active_servers("", 64, 2.5, 1)
-		if bool(active_servers_result.get("ok", false)):
-			server_map_by_user = _build_server_lookup_by_user(CloudAPI._extract_array_payload(active_servers_result.get("data", [])))
+	# Optional room presence must not hold up the actual friend list.
+	var server_map_by_user: Dictionary = _home_friends_active_lookup_cache.duplicate(true)
 
-	var friends_result: Dictionary = await CloudAPI.get_friends_list()
+	var friends_result: Dictionary = await _fetch_home_friends_list()
 	if not is_instance_valid(self) or not is_inside_tree():
 		_home_friends_refresh_in_flight = false
 		return
 	if not bool(friends_result.get("ok", false)):
 		if home_friends_status:
-			home_friends_status.text = "Could not load friends."
+			home_friends_status.text = "Reconnecting…" if not _home_friends_cache_loaded else "%d friends · reconnecting…" % _home_friends_cache.size()
 		_home_friends_refresh_in_flight = false
 		_home_friends_refresh_pending = false
 		_next_home_friends_refresh_allowed_msec = Time.get_ticks_msec() + HOME_FRIENDS_FAILURE_RETRY_MS
@@ -5212,6 +5227,9 @@ func _refresh_home_friends_section() -> void:
 	_home_friends_cache = friends.duplicate(true)
 	_home_friends_active_lookup_cache = server_map_by_user.duplicate(true)
 	_home_friends_cache_loaded = true
+	_home_friends_cache_expires_msec = Time.get_ticks_msec() + 60000
+	_next_home_friends_refresh_allowed_msec = Time.get_ticks_msec() + HOME_FRIENDS_FAILURE_RETRY_MS if bool(friends_result.get("stale", false)) else 0
+	call_deferred("_refresh_home_friend_active_statuses_async")
 	# Clear again right before populating to remove any stale children
 	_clear_children_immediate(home_friends_container)
 	if home_friends_status:
@@ -5265,7 +5283,7 @@ func _refresh_home_friends_section() -> void:
 	_queue_home_friends_clip_layout()
 	_home_friends_refresh_in_flight = false
 	_home_friends_refresh_pending = false
-	_next_home_friends_refresh_allowed_msec = 0
+	# A stale successful response still needs a retry once the API recovers.
 
 func _is_mouse_wheel_button(button_index: int) -> bool:
 	return button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]
@@ -7108,7 +7126,7 @@ func _refresh_discover_section() -> void:
 	await _render_home_game_sections(discover_entries, refresh_token)
 	_discover_refresh_in_flight = false
 	_discover_refresh_pending = false
-	_next_discover_refresh_allowed_msec = 0
+	_next_discover_refresh_allowed_msec = Time.get_ticks_msec() + DISCOVER_FAILURE_RETRY_MS if _discover_result_stale else 0
 
 func _clear_home_game_sections() -> void:
 	for container in [recommended_cards_grid, new_cards_grid, all_cards_grid, bobux_creator_cards_grid]:
@@ -7588,6 +7606,7 @@ func _is_published_cloud_game_id(map_id: String, game_name: String = "") -> bool
 	return not name_key.is_empty() and _published_map_names_cache.has(name_key)
 
 func _build_discover_entries() -> Array:
+	_discover_result_stale = false
 	var discover_entries: Array = []
 	var active_servers: Array = []
 	var active_counts_by_map_id: Dictionary = {}
@@ -7617,6 +7636,7 @@ func _build_discover_entries() -> Array:
 					if not sample_server_by_name.has(map_name_key):
 						sample_server_by_name[map_name_key] = server
 		var maps_result: Dictionary = await CloudAPI.fetch_published_maps(DISCOVER_PUBLISHED_MAP_LIMIT)
+		_discover_result_stale = not bool(maps_result.get("ok", false))
 		var published_maps: Array = []
 		if bool(maps_result.get("ok", false)):
 			published_maps = _stabilize_published_map_stats(
@@ -8355,11 +8375,15 @@ func _normalize_map_name_key(map_name: String) -> String:
 func _resolve_display_game_name(map_name: String, map_id: String = "", fallback_name: String = "Untitled Experience") -> String:
 	var clean_map_name: String = map_name.strip_edges()
 	var clean_map_id: String = map_id.strip_edges()
+	if not clean_map_name.is_empty() and GameState != null and GameState.has_method("canonicalize_experience_name"):
+		clean_map_name = str(GameState.call("canonicalize_experience_name", clean_map_name)).strip_edges()
 	if clean_map_name.to_lower() == "classic" or clean_map_id.to_lower() == "classic":
 		return "Classic"
 	if not clean_map_name.is_empty() and not _looks_like_generated_game_name(clean_map_name):
 		return clean_map_name
 	var clean_fallback_name: String = fallback_name.strip_edges()
+	if not clean_fallback_name.is_empty() and GameState != null and GameState.has_method("canonicalize_experience_name"):
+		clean_fallback_name = str(GameState.call("canonicalize_experience_name", clean_fallback_name)).strip_edges()
 	if not clean_fallback_name.is_empty() and not _looks_like_generated_game_name(clean_fallback_name):
 		return clean_fallback_name
 	return "Untitled Experience"
@@ -8516,7 +8540,9 @@ func _hide_loading_overlay() -> void:
 
 func _update_loading_overlay(title: String, subtitle: String, progress_ratio: float) -> void:
 	_ensure_loading_overlay()
-	_loading_title_label.text = title
+	var general_operation := title in ["Signing in", "Loading profile", "Loading lobby"] or title.to_lower().contains("publish") or title.to_lower().contains("upload")
+	_loading_title_label.text = title if general_operation else "Joining experience..."
+	_loading_subtitle_label.visible = general_operation
 	_loading_subtitle_label.text = subtitle
 	_update_loading_transport_badge(subtitle)
 	_loading_progress_bar.value = clampf(progress_ratio, 0.0, 1.0) * 100.0
@@ -8531,8 +8557,10 @@ func _update_loading_transport_badge(text: String) -> void:
 		_loading_transport_badge_label.text = ""
 
 func _show_loading_error(title: String, subtitle: String) -> void:
-	push_error("[Lobby] %s: %s" % [title, subtitle])
+	push_warning("[Lobby] %s: %s" % [title, subtitle])
 	_show_loading_overlay(title, subtitle, 1.0)
+	_loading_title_label.text = title
+	_loading_subtitle_label.visible = true
 	await get_tree().create_timer(1.6).timeout
 	if _loading_overlay:
 		_loading_overlay.visible = false
@@ -9957,115 +9985,14 @@ func _write_json_dictionary(path: String, data: Dictionary) -> bool:
 	return true
 
 func _embed_mode_assets_for_cloud(map_payload: Dictionary, folder: String, cloud_map_id: String) -> Dictionary:
-	var enriched_payload: Dictionary = map_payload.duplicate(true)
-	var mode_settings: Dictionary = enriched_payload.get("mode_settings", {}) if enriched_payload.get("mode_settings", {}) is Dictionary else {}
-	var asset_files: Array = mode_settings.get("asset_files", []) if mode_settings.get("asset_files", []) is Array else []
-	var playlist_files: Array = mode_settings.get("music_playlist", []) if mode_settings.get("music_playlist", []) is Array else []
-	var asset_blobs: Dictionary = {}
-	var asset_urls: Dictionary = {}
-	var seen_files: Dictionary = {}
-	var embedded_bytes: int = 0
-	var skipped_assets: int = 0
-	var publish_files: Array[String] = []
-	for asset_variant in asset_files:
-		var asset_name: String = str(asset_variant).strip_edges()
-		if asset_name.is_empty() or seen_files.has(asset_name):
-			continue
-		seen_files[asset_name] = true
-		publish_files.append(asset_name)
-	for index in range(playlist_files.size()):
-		if index >= CLOUD_INLINE_ASSET_MAX_TRACKS:
-			skipped_assets += 1
-			continue
-		var track_name: String = str(playlist_files[index]).strip_edges()
-		if track_name.is_empty() or seen_files.has(track_name):
-			continue
-		seen_files[track_name] = true
-		publish_files.append(track_name)
-	var total_files: int = publish_files.size()
-	for index in range(publish_files.size()):
-		var relative_file_name: String = publish_files[index]
-		var absolute_path: String = folder.path_join(relative_file_name)
-		if not FileAccess.file_exists(absolute_path):
-			skipped_assets += 1
-			continue
-		var file_size: int = _get_file_size_bytes(absolute_path)
-		if file_size <= 0:
-			skipped_assets += 1
-			push_warning("[Lobby] Skipping empty cloud asset '%s' during publish." % relative_file_name)
-			continue
-		if file_size > 50 * 1024 * 1024:
-			skipped_assets += 1
-			push_warning("[Lobby] Skipping cloud asset '%s' because it is %.2f MB (Storage safety limit 50 MB)." % [
-				relative_file_name,
-				float(file_size) / 1048576.0
-			])
-			continue
-		_update_loading_overlay(
-			"Preparing world...",
-			"Uploading map audio %d/%d: %s" % [index + 1, maxi(total_files, 1), relative_file_name.get_file()],
-			0.22 + 0.24 * float(index + 1) / float(maxi(total_files, 1))
-		)
-		await get_tree().process_frame
-		var is_audio_asset: bool = _is_audio_asset_file_name(relative_file_name)
-		var storage_result: Dictionary = await CloudAPI.upload_map_asset_file(
-			cloud_map_id,
-			relative_file_name,
-			absolute_path,
-			"",
-			CloudAPI.HTTP_MEDIA_UPLOAD_TIMEOUT_SECONDS if is_audio_asset else CloudAPI.HTTP_UPLOAD_TIMEOUT_SECONDS,
-			1 if is_audio_asset else 2
-		)
-		if bool(storage_result.get("ok", false)):
-			var asset_data: Dictionary = storage_result.get("asset", {}) if storage_result.get("asset", {}) is Dictionary else {}
-			var public_url: String = str(asset_data.get("public_url", "")).strip_edges()
-			if not public_url.is_empty():
-				asset_urls[relative_file_name] = public_url
-				embedded_bytes += file_size
-				continue
-		push_warning("[Lobby] Storage upload failed for asset '%s': %s" % [
-			relative_file_name,
-			str(storage_result.get("error", "unknown storage error"))
-		])
-		if is_audio_asset:
-			skipped_assets += 1
-			continue
-		if file_size <= 2 * 1024 * 1024 and embedded_bytes + file_size <= 8 * 1024 * 1024:
-			var asset_base64: String = _encode_file_to_base64(absolute_path, 2 * 1024 * 1024)
-			if not asset_base64.is_empty():
-				asset_blobs[relative_file_name] = asset_base64
-				embedded_bytes += file_size
-			else:
-				skipped_assets += 1
-		else:
-			skipped_assets += 1
-	if not asset_blobs.is_empty():
-		enriched_payload["mode_asset_blobs"] = asset_blobs
-	if not asset_urls.is_empty():
-		enriched_payload["mode_asset_urls"] = asset_urls
-	var uploaded_count: int = asset_urls.size() + asset_blobs.size()
-	if uploaded_count > 0:
-		_update_loading_overlay(
-			"Preparing world...",
-			"Uploaded %d map asset(s)." % uploaded_count,
-			0.48
-		)
-		await get_tree().process_frame
-	var skybox_file: String = str(mode_settings.get("skybox_file", "")).strip_edges()
-	if not skybox_file.is_empty():
-		var skybox_path: String = folder.path_join(skybox_file)
-		if FileAccess.file_exists(skybox_path):
-			await get_tree().process_frame
-			var skybox_base64: String = _encode_file_to_base64(skybox_path, CLOUD_INLINE_ASSET_MAX_BYTES)
-			if not skybox_base64.is_empty():
-				asset_blobs[skybox_file] = skybox_base64
-	if not asset_blobs.is_empty():
-		enriched_payload["mode_asset_blobs"] = asset_blobs
-	if not asset_urls.is_empty():
-		enriched_payload["mode_asset_urls"] = asset_urls
-	if skipped_assets > 0:
-		enriched_payload["mode_asset_warning"] = "%d asset(s) were too large or exceeded the publish budget." % skipped_assets
-	return enriched_payload
+	# Use the same complete manifest packaging as Studio, including decals and
+	# meshes stored in Lighting. The old Lobby path uploaded music only.
+	var packager = load("res://scripts/place_editor/studio.gd").new()
+	packager.current_map_folder = folder
+	var result: Dictionary = await packager._embed_mode_assets_for_cloud(map_payload, folder, cloud_map_id)
+	packager.free()
+	return result
+
 
 func _get_file_size_bytes(path: String) -> int:
 	if not FileAccess.file_exists(path):
@@ -10201,6 +10128,8 @@ func _ensure_cloud_map_reference_for_game(game_info: Dictionary) -> Dictionary:
 	if resolved_cloud_map_id.is_empty():
 		return {"ok": false, "error": "Could not resolve cloud map id before uploading map assets."}
 	map_payload = await _embed_mode_assets_for_cloud(map_payload, folder, resolved_cloud_map_id)
+	if not map_payload.get("__bobux_publish_asset_failures", []).is_empty():
+		return {"ok":false,"error":"Не удалось загрузить файлы карты. Публикация сохранена без изменений."}
 	var thumbnail_payload: String = str(meta.get("thumbnail", "")).strip_edges()
 	var icon_file_path: String = folder.path_join("icon.png")
 	if FileAccess.file_exists(icon_file_path):

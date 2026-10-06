@@ -1,5 +1,5 @@
 @tool
-class_name RbxlRuntimeImporter
+class_name RbxlRuntimeImporterV2
 extends RefCounted
 
 ## Runtime bridge used by Bobux Studio. It imports .rbxl/.rbxlx directly into
@@ -7,7 +7,7 @@ extends RefCounted
 ## parts become studio_parts, SpawnLocation becomes a Spawn block, and important
 ## non-part instances become serializable runtime_objects.
 
-const _Converter := preload("res://addons/rbxl_importer/rbxl_converter_bridge.gd")
+const _Converter := preload("res://addons/rbxl_importer_v2/rbxl_converter_bridge_v2.gd")
 const _Materials := preload("res://addons/rbxl_importer/material_cache.gd")
 const _WedgeBuilder := preload("res://addons/rbxl_importer/wedge_mesh_builder.gd")
 const _RobloxSky := preload("res://addons/rbxl_importer/roblox_sky_material.gd")
@@ -23,6 +23,8 @@ const MAX_IMPORT_POSITION_ABS := 1000000.0
 const MAX_IMPORT_BASIS_ABS := 8.0
 const MAX_IMPORT_SCALE_ABS := 10000.0
 const MAX_EAGER_STORAGE_PARTS := 4096
+const MAX_PREPARED_JSON_BYTES := 384 * 1024 * 1024
+const NON_FINITE_MARKER_KEY := "__roblox_non_finite_number"
 
 signal import_started()
 signal import_progress(done: int, total: int, message: String)
@@ -56,9 +58,8 @@ var _standard_mesh_nodes_applied: int = 0
 var _csg_fallback_nodes_preserved: int = 0
 var _terrain_nodes_created: int = 0
 var _mesh_asset_cache: Dictionary = {}
-var _runtime_nodes_by_ref: Dictionary = {}
-var _skeletons_by_mesh_ref: Dictionary = {}
-var _bone_indices_by_mesh_ref: Dictionary = {}
+var _unknown_class_counts: Dictionary = {}
+var _non_finite_marker_count: int = 0
 
 
 func import_file(path: String, studio: Node) -> Dictionary:
@@ -98,52 +99,184 @@ func import_file(path: String, studio: Node) -> Dictionary:
 
 
 func import_file_async(path: String, studio: Node) -> Dictionary:
-	if not is_instance_valid(studio):
-		return _fail("studio node is not valid")
-
-	var placement_parent: Node3D = null
-	if is_instance_valid(target_parent_override) and target_parent_override is Node3D:
-		placement_parent = target_parent_override as Node3D
-	elif studio.get("placement_parent") is Node3D:
-		placement_parent = studio.get("placement_parent") as Node3D
-	if placement_parent == null:
-		placement_parent = studio as Node3D
+	var prepared := await prepare_file_async(path, studio)
+	if not bool(prepared.get("ok", false)):
+		return _fail(str(prepared.get("error", "V2 preflight failed")))
+	var placement_parent := _resolve_placement_parent(studio)
 	if placement_parent == null:
 		return _fail("placement parent is not available")
+	return await import_json_async(prepared.get("json", {}), placement_parent, studio)
 
-	import_started.emit()
-	var cache_dir := ProjectSettings.globalize_path("user://rbxl_import_cache")
+
+## Parse and validate without changing the current Studio scene. The editor calls
+## this before clearing the user's map so a parse/size failure is non-destructive.
+func prepare_file_async(path: String, studio: Node) -> Dictionary:
+	if path.strip_edges().is_empty():
+		return {"ok": false, "error": "input path is empty"}
+	if is_instance_valid(studio):
+		import_started.emit()
+	var cache_dir := ProjectSettings.globalize_path("user://rbxl_import_cache_v2")
 	DirAccess.make_dir_recursive_absolute(cache_dir)
 	var json_path := _unique_intermediate_json_path(cache_dir, path)
-
-	import_progress.emit(0, 1, "Converting RBXL")
+	import_progress.emit(0, 1, "V2: converting Roblox place")
 	var convert_result_variant: Variant = await _run_threaded(
 		Callable(self, "_thread_convert_file").bind(path, json_path),
 		studio,
-		"Converting RBXL"
+		"V2: converting Roblox place"
 	)
 	if not (convert_result_variant is Dictionary):
-		return _fail("RBXL converter thread returned an invalid result")
+		return {"ok": false, "error": "V2 converter thread returned an invalid result"}
 	var convert_result: Dictionary = convert_result_variant
 	var conv_err := int(convert_result.get("error", ERR_BUG))
 	if conv_err != OK:
-		return _fail("RBXL converter failed: %s" % str(convert_result.get("last_error", "")), {"converter_error": conv_err})
-
-	import_progress.emit(0, 1, "Reading converted JSON")
+		return {"ok": false, "error": "V2 converter failed: %s" % str(convert_result.get("last_error", "")), "converter_error": conv_err}
+	var file := FileAccess.open(json_path, FileAccess.READ)
+	if file == null:
+		return {"ok": false, "error": "cannot inspect V2 intermediate JSON"}
+	var output_bytes := file.get_length()
+	file.close()
+	if output_bytes > MAX_PREPARED_JSON_BYTES:
+		DirAccess.remove_absolute(json_path)
+		return {
+			"ok": false,
+			"error": "V2 safety limit: intermediate data is %.1f MiB (limit %.0f MiB); current Studio scene was preserved." % [float(output_bytes) / 1048576.0, float(MAX_PREPARED_JSON_BYTES) / 1048576.0],
+			"intermediate_bytes": output_bytes,
+		}
+	import_progress.emit(0, 1, "V2: loading typed place data")
 	var load_result_variant: Variant = await _run_threaded(
 		Callable(self, "_thread_load_json").bind(json_path),
 		studio,
-		"Reading converted JSON"
+		"V2: loading typed place data"
 	)
 	if not (load_result_variant is Dictionary):
-		return _fail("intermediate JSON loader returned an invalid result")
+		return {"ok": false, "error": "V2 intermediate loader returned an invalid result"}
 	var load_result: Dictionary = load_result_variant
 	if not bool(load_result.get("ok", false)):
-		return _fail(str(load_result.get("error", "intermediate JSON is malformed")))
+		return {"ok": false, "error": str(load_result.get("error", "V2 intermediate JSON is malformed"))}
 	var parsed: Variant = load_result.get("json", {})
 	if typeof(parsed) != TYPE_DICTIONARY:
-		return _fail("intermediate JSON is malformed")
-	return await import_json_async(parsed as Dictionary, placement_parent, studio)
+		return {"ok": false, "error": "V2 intermediate JSON is malformed"}
+	var validation_error := validate_place_data(parsed as Dictionary)
+	if not validation_error.is_empty():
+		return {"ok": false, "error": "V2 preflight: %s" % validation_error}
+	return {"ok": true, "json": parsed, "intermediate_bytes": output_bytes}
+
+
+func _resolve_placement_parent(studio: Node) -> Node3D:
+	if is_instance_valid(target_parent_override) and target_parent_override is Node3D:
+		return target_parent_override as Node3D
+	if is_instance_valid(studio) and studio.get("placement_parent") is Node3D:
+		return studio.get("placement_parent") as Node3D
+	return studio as Node3D if is_instance_valid(studio) and studio is Node3D else null
+
+
+func validate_place_data(json: Dictionary) -> String:
+	var instances_variant: Variant = json.get("instances", null)
+	if not (instances_variant is Dictionary):
+		return "the place has no instance dictionary"
+	var instances: Dictionary = instances_variant
+	if instances.is_empty():
+		return "the place contains no instances"
+	var hierarchy_variant: Variant = json.get("hierarchy", null)
+	if not (hierarchy_variant is Array):
+		return "the place has no hierarchy array"
+	for ref_id_variant in instances.keys():
+		var instance_variant: Variant = instances[ref_id_variant]
+		if not (instance_variant is Dictionary):
+			return "instance %s is not an object" % str(ref_id_variant)
+		var instance_data: Dictionary = instance_variant
+		var properties_variant: Variant = instance_data.get("properties", {})
+		if not (properties_variant is Dictionary):
+			return "instance %s has invalid properties" % str(ref_id_variant)
+	var seen_children: Dictionary = {}
+	for edge_variant in hierarchy_variant:
+		if not (edge_variant is Dictionary):
+			return "the hierarchy contains a malformed edge"
+		var edge: Dictionary = edge_variant
+		var child_ref := _normalize_ref_id(edge.get("child", ""))
+		var parent_ref := _normalize_ref_id(edge.get("parent", "-1"))
+		if child_ref.is_empty() or not instances.has(child_ref):
+			return "the hierarchy refers to a missing child instance"
+		if parent_ref.is_empty():
+			parent_ref = "-1"
+		if parent_ref != "-1" and not instances.has(parent_ref):
+			return "instance %s has a missing parent %s" % [child_ref, parent_ref]
+		if seen_children.has(child_ref):
+			return "instance %s has multiple hierarchy parents" % child_ref
+		seen_children[child_ref] = true
+	return ""
+
+
+
+func _count_non_finite_instance_properties(instances: Dictionary) -> int:
+	var count := 0
+	for ref_id_variant in instances.keys():
+		var instance_variant: Variant = instances[ref_id_variant]
+		if not (instance_variant is Dictionary):
+			continue
+		var instance_data: Dictionary = instance_variant
+		var props_variant: Variant = instance_data.get("properties", {})
+		if props_variant is Dictionary:
+			count += _count_non_finite_markers(props_variant)
+	return count
+
+
+static func _count_non_finite_markers(value: Variant) -> int:
+	var count := 0
+	if value is Dictionary:
+		var dictionary_value: Dictionary = value
+		if dictionary_value.has(NON_FINITE_MARKER_KEY):
+			return 1
+		for key in dictionary_value:
+			count += _count_non_finite_markers(dictionary_value[key])
+	elif value is Array:
+		for child in value:
+			count += _count_non_finite_markers(child)
+	return count
+
+
+static func _runtime_safe_import_value(value: Variant) -> Variant:
+	if not _has_non_finite_marker(value):
+		return value
+	return _replace_non_finite_markers(value.duplicate(true))
+
+
+static func _has_non_finite_marker(value: Variant) -> bool:
+	if value is Dictionary:
+		var dictionary_value: Dictionary = value
+		if dictionary_value.has(NON_FINITE_MARKER_KEY):
+			return true
+		for child in dictionary_value.values():
+			if _has_non_finite_marker(child):
+				return true
+	if value is Array:
+		for child in value:
+			if _has_non_finite_marker(child):
+				return true
+	return false
+
+
+static func _replace_non_finite_markers(value: Variant) -> Variant:
+	if value is Dictionary:
+		var dictionary_value: Dictionary = value
+		if dictionary_value.has(NON_FINITE_MARKER_KEY):
+			return 0.0
+		for key in dictionary_value.keys():
+			dictionary_value[key] = _replace_non_finite_markers(dictionary_value[key])
+		return dictionary_value
+	if value is Array:
+		var array_value: Array = value
+		for index in range(array_value.size()):
+			array_value[index] = _replace_non_finite_markers(array_value[index])
+		return array_value
+	return value
+
+
+func _sum_dictionary_values(values: Dictionary) -> int:
+	var total := 0
+	for key in values:
+		total += int(values[key])
+	return total
 
 
 func _thread_convert_file(source_path: String, output_path: String) -> Dictionary:
@@ -211,15 +344,15 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 	_csg_fallback_nodes_preserved = 0
 	_terrain_nodes_created = 0
 	_mesh_asset_cache.clear()
-	_runtime_nodes_by_ref.clear()
-	_skeletons_by_mesh_ref.clear()
-	_bone_indices_by_mesh_ref.clear()
+	_unknown_class_counts.clear()
+	_non_finite_marker_count = 0
 
 	var instances: Dictionary = json.get("instances", {})
 	var hierarchy: Array = json.get("hierarchy", [])
 	var parent_map := _build_parent_map(hierarchy)
 	var import_scope := _build_import_scope(instances, hierarchy, parent_map)
 	var roblox_manifest := _build_roblox_place_manifest(json, instances, hierarchy, parent_map)
+	_non_finite_marker_count = _count_non_finite_instance_properties(instances)
 	if is_instance_valid(placement_parent):
 		placement_parent.set_meta("roblox_stud_scale", scale_factor)
 	if is_instance_valid(studio):
@@ -254,6 +387,8 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 	var meta_count := 0
 	var skipped := 0
 	var skipped_classes: Dictionary = {}
+	var part_fallbacks_handled := 0
+	var part_fallbacks_skipped := 0
 	for ref_id in instances:
 		if block_map.has(str(ref_id)):
 			continue
@@ -262,11 +397,16 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 		if _is_part_class(roblox_class) and not _should_import_world_ref(str(ref_id), import_scope):
 			continue
 		var props: Dictionary = inst.get("properties", {})
-		if _spawn_meta_instance(str(ref_id), roblox_class, props, placement_parent, studio, parent_map, block_map, instances, import_scope):
+		var meta_handled := _spawn_meta_instance(str(ref_id), roblox_class, props, placement_parent, studio, parent_map, block_map, instances, import_scope)
+		if meta_handled:
 			meta_count += 1
+			if _is_part_class(roblox_class):
+				part_fallbacks_handled += 1
 		elif not _is_structural_class(roblox_class):
 			skipped += 1
 			skipped_classes[roblox_class] = int(skipped_classes.get(roblox_class, 0)) + 1
+			if _is_part_class(roblox_class):
+				part_fallbacks_skipped += 1
 
 	if not defer_studio_explorer_refresh and studio.has_method("_refresh_explorer"):
 		studio._refresh_explorer()
@@ -281,6 +421,10 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 	var json_warnings: Variant = json.get("warnings", [])
 	if json_warnings is Array:
 		warnings = (json_warnings as Array).duplicate()
+	if errors > 0:
+		warnings.append("%d Roblox part(s) could not be created as world nodes; inspect the import report." % errors)
+	if skipped > 0:
+		warnings.append("%d instance(s) could not be represented; per-class counts are in skipped_classes." % skipped)
 	for warning in _runtime_warnings:
 		warnings.append(warning)
 	if _runtime_preview_nodes_skipped > 0:
@@ -295,6 +439,19 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 		warnings.append("%d Roblox CSG operation(s) kept exact AssetId metadata and received editable fallback bodies." % _csg_fallback_nodes_preserved)
 	if _terrain_nodes_created > 0:
 		warnings.append("%d Roblox Terrain node(s) were imported as voxel GridMap previews." % _terrain_nodes_created)
+	if _non_finite_marker_count > 0:
+		warnings.append("%d non-finite numeric value(s) remain in source metadata and are read as 0 in runtime previews." % _non_finite_marker_count)
+	var unknown_class_instance_count := _sum_dictionary_values(_unknown_class_counts)
+	if unknown_class_instance_count > 0:
+		warnings.append("%d instance(s) across %d unimplemented Roblox class(es) were kept as metadata-only objects." % [unknown_class_instance_count, _unknown_class_counts.size()])
+	var import_coverage := _build_import_coverage_report(instances, import_scope, part_refs, part_count, errors, meta_count, skipped, part_fallbacks_handled, part_fallbacks_skipped)
+	if not bool(import_coverage.get("complete", false)):
+		warnings.append("Import coverage accounting mismatch: %d source instance(s), %d classified; part balance %d, non-part balance %d." % [
+			int(import_coverage.get("source_instances", 0)),
+			int(import_coverage.get("classified_instances", 0)),
+			int(import_coverage.get("part_outcome_balance", 0)),
+			int(import_coverage.get("non_part_balance", 0)),
+		])
 
 	var report := {
 		"ok": true,
@@ -304,8 +461,14 @@ func import_json(json: Dictionary, placement_parent: Node3D, studio: Node) -> Di
 		"nodes": part_count + meta_count,
 		"skipped": skipped,
 		"skipped_classes": skipped_classes,
+		"importer_backend": "experimental_v2",
+		"unknown_classes": _unknown_class_counts.duplicate(true),
+		"unknown_class_instances": unknown_class_instance_count,
+		"non_finite_values": _non_finite_marker_count,
 		"errors": errors,
 		"total_instances": instances.size(),
+		"coverage_complete": bool(import_coverage.get("complete", false)),
+		"import_coverage": import_coverage,
 		"hidden_parts": int(import_scope.get("hidden_part_count", 0)),
 		"workspace_parts": int(import_scope.get("world_part_count", part_count)),
 		"workspace_filter": bool(import_scope.get("use_workspace_filter", false)),
@@ -341,15 +504,15 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 	_csg_fallback_nodes_preserved = 0
 	_terrain_nodes_created = 0
 	_mesh_asset_cache.clear()
-	_runtime_nodes_by_ref.clear()
-	_skeletons_by_mesh_ref.clear()
-	_bone_indices_by_mesh_ref.clear()
+	_unknown_class_counts.clear()
+	_non_finite_marker_count = 0
 
 	var instances: Dictionary = json.get("instances", {})
 	var hierarchy: Array = json.get("hierarchy", [])
 	var parent_map := _build_parent_map(hierarchy)
 	var import_scope := _build_import_scope(instances, hierarchy, parent_map)
 	var roblox_manifest := _build_roblox_place_manifest(json, instances, hierarchy, parent_map)
+	_non_finite_marker_count = _count_non_finite_instance_properties(instances)
 	if is_instance_valid(placement_parent):
 		placement_parent.set_meta("roblox_stud_scale", scale_factor)
 	if is_instance_valid(studio):
@@ -386,6 +549,8 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 	var meta_count := 0
 	var skipped := 0
 	var skipped_classes: Dictionary = {}
+	var part_fallbacks_handled := 0
+	var part_fallbacks_skipped := 0
 	var meta_done := 0
 	var meta_batch_size: int = maxi(meta_per_frame, 1)
 	for ref_id in instances:
@@ -396,11 +561,16 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 		if _is_part_class(roblox_class) and not _should_import_world_ref(str(ref_id), import_scope):
 			continue
 		var props: Dictionary = inst.get("properties", {})
-		if _spawn_meta_instance(str(ref_id), roblox_class, props, placement_parent, studio, parent_map, block_map, instances, import_scope):
+		var meta_handled := _spawn_meta_instance(str(ref_id), roblox_class, props, placement_parent, studio, parent_map, block_map, instances, import_scope)
+		if meta_handled:
 			meta_count += 1
+			if _is_part_class(roblox_class):
+				part_fallbacks_handled += 1
 		elif not _is_structural_class(roblox_class):
 			skipped += 1
 			skipped_classes[roblox_class] = int(skipped_classes.get(roblox_class, 0)) + 1
+			if _is_part_class(roblox_class):
+				part_fallbacks_skipped += 1
 		meta_done += 1
 		if meta_done % meta_batch_size == 0:
 			import_progress.emit(part_refs.size(), part_refs.size(), "Importing metadata")
@@ -419,6 +589,10 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 	var json_warnings: Variant = json.get("warnings", [])
 	if json_warnings is Array:
 		warnings = (json_warnings as Array).duplicate()
+	if errors > 0:
+		warnings.append("%d Roblox part(s) could not be created as world nodes; inspect the import report." % errors)
+	if skipped > 0:
+		warnings.append("%d instance(s) could not be represented; per-class counts are in skipped_classes." % skipped)
 	for warning in _runtime_warnings:
 		warnings.append(warning)
 	if _runtime_preview_nodes_skipped > 0:
@@ -433,6 +607,19 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 		warnings.append("%d Roblox CSG operation(s) kept exact AssetId metadata and received editable fallback bodies." % _csg_fallback_nodes_preserved)
 	if _terrain_nodes_created > 0:
 		warnings.append("%d Roblox Terrain node(s) were imported as voxel GridMap previews." % _terrain_nodes_created)
+	if _non_finite_marker_count > 0:
+		warnings.append("%d non-finite numeric value(s) remain in source metadata and are read as 0 in runtime previews." % _non_finite_marker_count)
+	var unknown_class_instance_count := _sum_dictionary_values(_unknown_class_counts)
+	if unknown_class_instance_count > 0:
+		warnings.append("%d instance(s) across %d unimplemented Roblox class(es) were kept as metadata-only objects." % [unknown_class_instance_count, _unknown_class_counts.size()])
+	var import_coverage := _build_import_coverage_report(instances, import_scope, part_refs, part_count, errors, meta_count, skipped, part_fallbacks_handled, part_fallbacks_skipped)
+	if not bool(import_coverage.get("complete", false)):
+		warnings.append("Import coverage accounting mismatch: %d source instance(s), %d classified; part balance %d, non-part balance %d." % [
+			int(import_coverage.get("source_instances", 0)),
+			int(import_coverage.get("classified_instances", 0)),
+			int(import_coverage.get("part_outcome_balance", 0)),
+			int(import_coverage.get("non_part_balance", 0)),
+		])
 
 	var report := {
 		"ok": true,
@@ -442,8 +629,14 @@ func import_json_async(json: Dictionary, placement_parent: Node3D, studio: Node)
 		"nodes": part_count + meta_count,
 		"skipped": skipped,
 		"skipped_classes": skipped_classes,
+		"importer_backend": "experimental_v2",
+		"unknown_classes": _unknown_class_counts.duplicate(true),
+		"unknown_class_instances": unknown_class_instance_count,
+		"non_finite_values": _non_finite_marker_count,
 		"errors": errors,
 		"total_instances": instances.size(),
+		"coverage_complete": bool(import_coverage.get("complete", false)),
+		"import_coverage": import_coverage,
 		"hidden_parts": int(import_scope.get("hidden_part_count", 0)),
 		"workspace_parts": int(import_scope.get("world_part_count", part_count)),
 		"workspace_filter": bool(import_scope.get("use_workspace_filter", false)),
@@ -472,6 +665,41 @@ func _fail(reason: String, extra: Dictionary = {}) -> Dictionary:
 	for key in extra:
 		report[key] = extra[key]
 	return report
+
+
+func _build_import_coverage_report(instances: Dictionary, import_scope: Dictionary, part_refs: Array[String],
+		parts_created: int, part_errors: int, metadata_handled: int, metadata_skipped: int,
+		part_fallbacks_handled: int, part_fallbacks_skipped: int) -> Dictionary:
+	var source_instances := instances.size()
+	var part_candidates := part_refs.size()
+	var total_part_instances := int(import_scope.get("total_part_count", part_candidates))
+	var workspace_filtered_parts := maxi(total_part_instances - part_candidates, 0)
+	var non_part_instances := maxi(source_instances - total_part_instances, 0)
+	var non_parts_classified := metadata_handled + metadata_skipped - part_fallbacks_handled - part_fallbacks_skipped
+	var classified_instances := part_candidates + workspace_filtered_parts + non_parts_classified
+	var balance := source_instances - classified_instances
+	var part_outcome_balance := part_candidates - parts_created - part_errors
+	var non_part_balance := non_part_instances - non_parts_classified
+	var coverage_complete := balance == 0 and part_outcome_balance == 0 and non_part_balance == 0
+	return {
+		"complete": coverage_complete,
+		"source_instances": source_instances,
+		"classified_instances": classified_instances,
+		"unclassified_instances": maxi(balance, 0),
+		"overclassified_instances": maxi(-balance, 0),
+		"balance": balance,
+		"part_candidates": part_candidates,
+		"parts_created": parts_created,
+		"part_errors": part_errors,
+		"part_outcome_balance": part_outcome_balance,
+		"part_fallbacks_handled": part_fallbacks_handled,
+		"part_fallbacks_skipped": part_fallbacks_skipped,
+		"workspace_filtered_parts": workspace_filtered_parts,
+		"non_part_instances": non_part_instances,
+		"metadata_handled": metadata_handled,
+		"metadata_skipped": metadata_skipped,
+		"non_part_balance": non_part_balance,
+	}
 
 
 func _clear_existing_editor_content(placement_parent: Node3D, studio: Node) -> void:
@@ -857,7 +1085,7 @@ func materialize_template_part(part: MeshInstance3D) -> void:
 	part.set_meta("shape_type", shape)
 	var exact := _apply_exact_import_mesh_if_needed(part, roblox_class, props)
 	if not exact and _is_csg_operation_class(roblox_class): exact = _apply_embedded_csg_hull_if_needed(part, props)
-	_apply_material_to_mesh_surfaces(part, _material_cache.get_part_material(props))
+	_apply_material_to_mesh_surfaces(part, _material_cache.get_part_material(_runtime_safe_import_value(props)))
 	_apply_mesh_texture_to_parent(part, _content_to_string(_prop(props, "TextureID", _prop(props, "TextureId", ""))), exact)
 	for child in part.get_children():
 		var child_class := str(child.get_meta("roblox_class", ""))
@@ -868,9 +1096,6 @@ func materialize_template_part(part: MeshInstance3D) -> void:
 			_build_mesh_runtime_object(ref, child_class, child_props, {ref: parent_ref}, {parent_ref: part}, {}, null)
 		elif child_class in ["Decal", "Texture"]:
 			_build_decal_runtime_object(ref, child_class, child_props, {ref: parent_ref}, {parent_ref: part}, {})
-		elif child_class == "SurfaceAppearance":
-			_apply_surface_appearance_material(part, child_props)
-			part.set_meta("roblox_surface_appearance", child_props.duplicate(true))
 	part.set_meta("bobux_deferred_geometry", false)
 
 
@@ -891,9 +1116,6 @@ func restore_part_children(part: MeshInstance3D) -> void:
 			_build_mesh_runtime_object(ref, kind, props, {ref: parent_ref}, {parent_ref: part}, {}, null)
 		elif kind in ["Decal", "Texture"]:
 			_build_decal_runtime_object(ref, kind, props, {ref: parent_ref}, {parent_ref: part}, {})
-		elif kind == "SurfaceAppearance":
-			_apply_surface_appearance_material(part, props)
-			part.set_meta("roblox_surface_appearance", props.duplicate(true))
 
 
 func _collect_manifest_assets(ref_id: String, roblox_class: String, name: String, props: Dictionary,
@@ -1032,7 +1254,7 @@ func _manifest_asset_properties_for_class(roblox_class: String) -> Array[String]
 		"Sound":
 			return ["SoundId"]
 		"Decal", "Texture":
-			return ["Texture", "NormalMap", "MetalnessMap", "RoughnessMap", "TexturePack"]
+			return ["Texture", "TextureContent", "NormalMap", "NormalMapContent", "MetalnessMap", "MetalnessMapContent", "RoughnessMap", "RoughnessMapContent", "TexturePack"]
 		"SpecialMesh", "MeshPart", "FileMesh":
 			return ["MeshId", "TextureId", "TextureID"]
 		"Animation":
@@ -1044,15 +1266,13 @@ func _manifest_asset_properties_for_class(roblox_class: String) -> Array[String]
 		"Pants":
 			return ["PantsTemplate"]
 		"ShirtGraphic":
-			return ["Graphic"]
+			return ["Graphic", "GraphicContent", "TextureContent"]
 		"ImageLabel", "ImageButton":
 			return ["Image", "HoverImage", "PressedImage"]
 		"Tool", "HopperBin":
 			return ["TextureId"]
 		"ParticleEmitter", "Trail", "Beam":
 			return ["Texture"]
-		"SurfaceAppearance":
-			return ["ColorMap", "NormalMap", "RoughnessMap", "MetalnessMap"]
 		_:
 			return []
 
@@ -1113,7 +1333,7 @@ func _spawn_part_block(ref_id: String, roblox_class: String, props: Dictionary, 
 		return null
 
 	var shape := _roblox_class_to_shape(roblox_class, props)
-	var color := _Materials.part_color_from_properties(props)
+	var color := _Materials.part_color_from_properties(_runtime_safe_import_value(props))
 	var material_id: Variant = _prop(props, "Material", 256)
 	var material_type := _Materials.roblox_material_to_bobux(material_id)
 	var transparency := clampf(float(_prop(props, "Transparency", 0.0)), 0.0, 1.0)
@@ -1182,7 +1402,7 @@ func _spawn_part_block(ref_id: String, roblox_class: String, props: Dictionary, 
 			exact_mesh_applied = _apply_embedded_csg_hull_if_needed(mesh_block, props)
 		var material_props := props.duplicate(false)
 		material_props["BobuxStudScale"] = scale_factor
-		var part_material := _material_cache.get_part_material(material_props)
+		var part_material := _material_cache.get_part_material(_runtime_safe_import_value(material_props))
 		if exact_mesh_applied:
 			part_material = part_material.duplicate(true) as StandardMaterial3D
 			part_material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -1245,14 +1465,6 @@ func _spawn_meta_instance(ref_id: String, roblox_class: String, props: Dictionar
 				_build_particle_runtime_object(ref_id, roblox_class, props, parent_map, block_map, instances),
 				placement_parent
 			)
-		"Attachment":
-			return _register_attachment_instance(ref_id, props, placement_parent, parent_map, block_map, instances)
-		"Bone":
-			return _register_bone_instance(ref_id, props, placement_parent, parent_map, block_map, instances)
-		"SurfaceAppearance":
-			return _register_surface_appearance_instance(ref_id, props, placement_parent, parent_map, block_map, instances)
-		"Beam", "Trail":
-			return _register_ribbon_instance(ref_id, roblox_class, props, placement_parent, parent_map, block_map, instances)
 		"Camera":
 			return _register_runtime_object(
 				_build_camera_runtime_object(ref_id, props, parent_map, block_map, instances),
@@ -1274,288 +1486,18 @@ func _spawn_meta_instance(ref_id: String, roblox_class: String, props: Dictionar
 				placement_parent
 			)
 		_:
-			return _is_structural_class(roblox_class)
-
-
-func _register_attachment_instance(ref_id: String, props: Dictionary, placement_parent: Node3D,
-		parent_map: Dictionary, block_map: Dictionary, instances: Dictionary) -> bool:
-	if _runtime_nodes_by_ref.has(ref_id) and is_instance_valid(_runtime_nodes_by_ref[ref_id]):
-		return true
-	var parent_node := _nearest_runtime_parent_node(ref_id, placement_parent, parent_map, block_map)
-	var attachment := Node3D.new()
-	attachment.name = _safe_name(_prop(props, "Name", "Attachment"))
-	attachment.set_meta("roblox_ref", ref_id)
-	attachment.set_meta("roblox_class", "Attachment")
-	attachment.set_meta("roblox_properties", props.duplicate(true))
-	attachment.add_to_group(RUNTIME_OBJECT_GROUP)
-	parent_node.add_child(attachment, false)
-	var local_transform := _instance_local_transform(props)
-	if block_map.has(str(parent_map.get(ref_id, ""))) and parent_node is Node3D:
-		var parent_3d := parent_node as Node3D
-		var unscaled_parent := Transform3D(parent_3d.global_basis.orthonormalized(), parent_3d.global_position)
-		attachment.global_transform = unscaled_parent * local_transform
-	else:
-		attachment.transform = local_transform
-	_runtime_nodes_by_ref[ref_id] = attachment
-	_runtime_objects.append(_base_runtime_object(ref_id, "Attachment", props, parent_map, block_map, instances))
-	return true
-
-
-func _register_bone_instance(ref_id: String, props: Dictionary, placement_parent: Node3D,
-		parent_map: Dictionary, block_map: Dictionary, instances: Dictionary) -> bool:
-	return _ensure_bone_scene_node(ref_id, placement_parent, parent_map, block_map, instances, {}) != null
-
-
-func _ensure_bone_scene_node(ref_id: String, placement_parent: Node3D, parent_map: Dictionary,
-		block_map: Dictionary, instances: Dictionary, visiting: Dictionary) -> BoneAttachment3D:
-	if _runtime_nodes_by_ref.has(ref_id):
-		var existing := _runtime_nodes_by_ref[ref_id] as BoneAttachment3D
-		if is_instance_valid(existing):
-			return existing
-	if visiting.has(ref_id) or not instances.has(ref_id):
-		return null
-	visiting[ref_id] = true
-	var inst: Dictionary = instances[ref_id]
-	var props: Dictionary = inst.get("properties", {})
-	var parent_ref := str(parent_map.get(ref_id, ""))
-	var mesh_ref := _nearest_mesh_ancestor_ref(ref_id, parent_map, block_map)
-	var skeleton_owner: Node3D = null
-	var skeleton_key := mesh_ref
-	if not mesh_ref.is_empty() and block_map.has(mesh_ref) and block_map[mesh_ref] is MeshInstance3D:
-		skeleton_owner = block_map[mesh_ref] as MeshInstance3D
-	else:
-		skeleton_owner = _nearest_runtime_parent_node(ref_id, placement_parent, parent_map, block_map)
-		skeleton_key = "orphan:%s" % skeleton_owner.get_instance_id()
-	if skeleton_owner == null:
-		skeleton_owner = placement_parent
-		skeleton_key = "orphan:%s" % skeleton_owner.get_instance_id()
-	var skeleton: Skeleton3D = _skeletons_by_mesh_ref.get(skeleton_key) as Skeleton3D
-	if not is_instance_valid(skeleton):
-		skeleton = Skeleton3D.new()
-		skeleton.name = "RobloxSkeleton" if mesh_ref.is_empty() else "RobloxSkeleton_%s" % _safe_name(_prop(instances.get(mesh_ref, {}).get("properties", {}), "Name", "Mesh"))
-		skeleton.set_meta("roblox_class", "Skeleton3D")
-		skeleton.set_meta("bobux_runtime_generated", true)
-		skeleton_owner.add_child(skeleton, false)
-		_skeletons_by_mesh_ref[skeleton_key] = skeleton
-		_bone_indices_by_mesh_ref[skeleton_key] = {}
-		if skeleton_owner is MeshInstance3D:
-			(skeleton_owner as MeshInstance3D).skeleton = skeleton_owner.get_path_to(skeleton)
-	var bone_maps: Dictionary = _bone_indices_by_mesh_ref.get(skeleton_key, {})
-	var bone_name := _safe_name(_prop(props, "Name", "Bone"))
-	if skeleton.find_bone(bone_name) >= 0:
-		bone_name = "%s_%s" % [bone_name, ref_id.validate_filename()]
-	var parent_index := -1
-	if _class_of_ref(parent_ref, instances) == "Bone":
-		var parent_bone := _ensure_bone_scene_node(parent_ref, placement_parent, parent_map, block_map, instances, visiting)
-		if parent_bone != null:
-			var parent_attachment := parent_bone.get_parent() as Skeleton3D
-			if parent_attachment == skeleton:
-				parent_index = skeleton.find_bone(parent_bone.bone_name)
-	var bone_index := skeleton.get_bone_count()
-	skeleton.add_bone(bone_name)
-	skeleton.set_bone_parent(bone_index, parent_index)
-	skeleton.set_bone_rest(bone_index, _instance_local_transform(props))
-	var bone_attachment := BoneAttachment3D.new()
-	bone_attachment.name = bone_name
-	bone_attachment.bone_name = bone_name
-	bone_attachment.set_meta("roblox_ref", ref_id)
-	bone_attachment.set_meta("roblox_class", "Bone")
-	bone_attachment.set_meta("roblox_properties", props.duplicate(true))
-	bone_attachment.add_to_group(RUNTIME_OBJECT_GROUP)
-	skeleton.add_child(bone_attachment, false)
-	_runtime_nodes_by_ref[ref_id] = bone_attachment
-	bone_maps[ref_id] = bone_index
-	_bone_indices_by_mesh_ref[skeleton_key] = bone_maps
-	_runtime_objects.append(_base_runtime_object(ref_id, "Bone", props, parent_map, block_map, instances))
-	visiting.erase(ref_id)
-	return bone_attachment
-
-
-func _register_surface_appearance_instance(ref_id: String, props: Dictionary, placement_parent: Node3D,
-		parent_map: Dictionary, block_map: Dictionary, instances: Dictionary) -> bool:
-	var parent_ref := str(parent_map.get(ref_id, ""))
-	var parent_node := _nearest_mesh_ancestor_node(ref_id, placement_parent, parent_map, block_map)
-	var appearance := Node3D.new()
-	appearance.name = _safe_name(_prop(props, "Name", "SurfaceAppearance"))
-	appearance.set_meta("roblox_ref", ref_id)
-	appearance.set_meta("roblox_class", "SurfaceAppearance")
-	appearance.set_meta("roblox_properties", props.duplicate(true))
-	var deferred_texture_refs: Array[String] = []
-	for texture_property in ["ColorMap", "NormalMap", "RoughnessMap", "MetalnessMap"]:
-		var texture_ref := _content_to_string(_prop(props, texture_property, "")).strip_edges()
-		if not texture_ref.is_empty() and not (texture_ref.begins_with("res://") or texture_ref.begins_with("user://")):
-			deferred_texture_refs.append(texture_ref)
-	appearance.set_meta("bobux_surface_appearance_deferred_texture_refs", deferred_texture_refs)
-	appearance.add_to_group(RUNTIME_OBJECT_GROUP)
-	parent_node.add_child(appearance, false)
-	if parent_node is MeshInstance3D:
-		_apply_surface_appearance_material(parent_node as MeshInstance3D, props)
-		parent_node.set_meta("roblox_surface_appearance", props.duplicate(true))
-	_runtime_nodes_by_ref[ref_id] = appearance
-	_runtime_objects.append(_base_runtime_object(ref_id, "SurfaceAppearance", props, parent_map, block_map, instances))
-	if parent_ref.is_empty():
-		appearance.set_meta("bobux_surface_appearance_orphaned", true)
-	return true
-
-
-func _apply_surface_appearance_material(mesh_node: MeshInstance3D, props: Dictionary) -> void:
-	if mesh_node == null or not is_instance_valid(mesh_node):
-		return
-	var color_map := _load_local_surface_texture(_prop(props, "ColorMap", null))
-	var normal_map := _load_local_surface_texture(_prop(props, "NormalMap", null))
-	var roughness_map := _load_local_surface_texture(_prop(props, "RoughnessMap", null))
-	var metalness_map := _load_local_surface_texture(_prop(props, "MetalnessMap", null))
-	if color_map == null and normal_map == null and roughness_map == null and metalness_map == null:
-		return
-	var surface_count := mesh_node.mesh.get_surface_count() if mesh_node.mesh != null else 0
-	if surface_count == 0:
-		var fallback := StandardMaterial3D.new()
-		_apply_surface_textures_to_material(fallback, color_map, normal_map, roughness_map, metalness_map)
-		mesh_node.material_override = fallback
-		return
-	for surface_index in range(surface_count):
-		var source_material := mesh_node.get_active_material(surface_index)
-		var target_material := source_material.duplicate(true) as StandardMaterial3D if source_material is StandardMaterial3D else StandardMaterial3D.new()
-		_apply_surface_textures_to_material(target_material, color_map, normal_map, roughness_map, metalness_map)
-		mesh_node.set_surface_override_material(surface_index, target_material)
-
-
-func _apply_surface_textures_to_material(material: StandardMaterial3D, color_map: Texture2D,
-		normal_map: Texture2D, roughness_map: Texture2D, metalness_map: Texture2D) -> void:
-	if color_map != null:
-		material.albedo_texture = color_map
-	if normal_map != null:
-		material.normal_enabled = true
-		material.normal_texture = normal_map
-	if roughness_map != null:
-		material.roughness_texture = roughness_map
-	if metalness_map != null:
-		material.metallic = 1.0
-		material.metallic_texture = metalness_map
-
-
-func _load_local_surface_texture(value: Variant) -> Texture2D:
-	var path := _content_to_string(value).strip_edges()
-	if not (path.begins_with("res://") or path.begins_with("user://")) or not ResourceLoader.exists(path):
-		return null
-	return load(path) as Texture2D
-
-
-func _register_ribbon_instance(ref_id: String, roblox_class: String, props: Dictionary,
-		placement_parent: Node3D, parent_map: Dictionary, block_map: Dictionary, instances: Dictionary) -> bool:
-	var attachment0_ref := _instance_ref_from_value(_prop(props, "Attachment0", null))
-	var attachment1_ref := _instance_ref_from_value(_prop(props, "Attachment1", null))
-	var attachment0 := _ensure_attachment_scene_node(attachment0_ref, placement_parent, parent_map, block_map, instances) if instances.has(attachment0_ref) else null
-	var attachment1 := _ensure_attachment_scene_node(attachment1_ref, placement_parent, parent_map, block_map, instances) if instances.has(attachment1_ref) else null
-	var data := _base_runtime_object(ref_id, roblox_class, props, parent_map, block_map, instances)
-	data["properties"] = props.duplicate(true)
-	data["attachment0_ref"] = attachment0_ref
-	data["attachment1_ref"] = attachment1_ref
-	_runtime_objects.append(data.duplicate(true))
-	var visual_script := load("res://addons/roblox_runtime/roblox_ribbon_visual.gd") as Script
-	var ribbon: MeshInstance3D = visual_script.new() as MeshInstance3D if visual_script != null else MeshInstance3D.new()
-	ribbon.name = _safe_name(_prop(props, "Name", roblox_class))
-	ribbon.add_to_group(RUNTIME_OBJECT_GROUP)
-	ribbon.set_meta("roblox_ref", ref_id)
-	ribbon.set_meta("roblox_class", roblox_class)
-	ribbon.set_meta("roblox_properties", props.duplicate(true))
-	ribbon.set_meta("runtime_object_data", data.duplicate(true))
-	placement_parent.add_child(ribbon, false)
-	if ribbon.has_method("configure_ribbon"):
-		ribbon.call("configure_ribbon", roblox_class, attachment0, attachment1, props, scale_factor)
-	_runtime_nodes_by_ref[ref_id] = ribbon
-	_runtime_preview_nodes_created += 1
-	return true
-
-
-func _ensure_attachment_scene_node(ref_id: String, placement_parent: Node3D, parent_map: Dictionary,
-		block_map: Dictionary, instances: Dictionary) -> Node3D:
-	if ref_id.is_empty() or not instances.has(ref_id):
-		return null
-	if _runtime_nodes_by_ref.has(ref_id):
-		var cached := _runtime_nodes_by_ref[ref_id] as Node3D
-		if is_instance_valid(cached):
-			return cached
-	var inst: Dictionary = instances[ref_id]
-	if str(inst.get("class", "")) != "Attachment":
-		return null
-	var props: Dictionary = inst.get("properties", {})
-	var parent_node := _nearest_runtime_parent_node(ref_id, placement_parent, parent_map, block_map)
-	var attachment := Node3D.new()
-	attachment.name = _safe_name(_prop(props, "Name", "Attachment"))
-	attachment.set_meta("roblox_ref", ref_id)
-	attachment.set_meta("roblox_class", "Attachment")
-	attachment.set_meta("roblox_properties", props.duplicate(true))
-	attachment.add_to_group(RUNTIME_OBJECT_GROUP)
-	parent_node.add_child(attachment, false)
-	var local_transform := _instance_local_transform(props)
-	if block_map.has(str(parent_map.get(ref_id, ""))) and parent_node is Node3D:
-		var parent_3d := parent_node as Node3D
-		attachment.global_transform = Transform3D(parent_3d.global_basis.orthonormalized(), parent_3d.global_position) * local_transform
-	else:
-		attachment.transform = local_transform
-	_runtime_nodes_by_ref[ref_id] = attachment
-	_runtime_objects.append(_base_runtime_object(ref_id, "Attachment", props, parent_map, block_map, instances))
-	return attachment
-
-
-func _nearest_runtime_parent_node(ref_id: String, placement_parent: Node3D, parent_map: Dictionary,
-		block_map: Dictionary) -> Node3D:
-	var cursor := str(parent_map.get(ref_id, ""))
-	var guard := 0
-	while not cursor.is_empty() and cursor != "-1" and guard < 256:
-		if _runtime_nodes_by_ref.has(cursor):
-			var runtime_parent := _runtime_nodes_by_ref[cursor] as Node3D
-			if is_instance_valid(runtime_parent):
-				return runtime_parent
-		if block_map.has(cursor):
-			var part_parent := block_map[cursor] as Node3D
-			if is_instance_valid(part_parent):
-				return part_parent
-		cursor = str(parent_map.get(cursor, ""))
-		guard += 1
-	return placement_parent
-
-
-func _nearest_mesh_ancestor_ref(ref_id: String, parent_map: Dictionary, block_map: Dictionary) -> String:
-	var cursor := str(parent_map.get(ref_id, ""))
-	var guard := 0
-	while not cursor.is_empty() and cursor != "-1" and guard < 256:
-		if block_map.has(cursor) and block_map[cursor] is MeshInstance3D:
-			return cursor
-		cursor = str(parent_map.get(cursor, ""))
-		guard += 1
-	return ""
-
-
-func _nearest_mesh_ancestor_node(ref_id: String, placement_parent: Node3D, parent_map: Dictionary,
-		block_map: Dictionary) -> Node3D:
-	var mesh_ref := _nearest_mesh_ancestor_ref(ref_id, parent_map, block_map)
-	return block_map[mesh_ref] as MeshInstance3D if not mesh_ref.is_empty() and block_map.has(mesh_ref) else _nearest_runtime_parent_node(ref_id, placement_parent, parent_map, block_map)
-
-
-func _instance_local_transform(props: Dictionary) -> Transform3D:
-	var frame: Variant = _prop(props, "CFrame", _prop(props, "Transform", null))
-	if frame != null:
-		return _cframe_to_transform(frame, scale_factor)
-	var position := _get_vector3(props, "Position", Vector3.ZERO) * scale_factor
-	var orientation := _get_vector3(props, "Orientation", Vector3.ZERO)
-	return Transform3D(Basis.from_euler(Vector3(deg_to_rad(orientation.x), deg_to_rad(orientation.y), deg_to_rad(orientation.z))), position)
-
-
-func _instance_ref_from_value(value: Variant) -> String:
-	if value is Dictionary:
-		var reference: Dictionary = value
-		for key in ["__rbxdom_ref_target_id", "ref", "referent", "target_id", "id", "value"]:
-			if reference.has(key):
-				return _normalize_ref_id(reference[key])
-		if reference.has("InstanceRef"):
-			return _normalize_ref_id(reference["InstanceRef"])
-		return ""
-	if value is Array:
-		var refs: Array = value
-		return _instance_ref_from_value(refs[0]) if not refs.is_empty() else ""
-	return _normalize_ref_id(value)
+			if _is_structural_class(roblox_class):
+				return true
+			_unknown_class_counts[roblox_class] = int(_unknown_class_counts.get(roblox_class, 0)) + 1
+			var unknown_data := {
+				"ref": ref_id,
+				"class": roblox_class if not roblox_class.is_empty() else "UnknownInstance",
+				"name": _safe_name(_prop(props, "Name", roblox_class)),
+				"parent_ref": str(parent_map.get(ref_id, "")),
+				"status": "metadata_only",
+				"properties": props,
+			}
+			return _register_unknown_runtime_object(unknown_data, placement_parent)
 
 
 func _should_register_runtime_scene_object(ref_id: String, roblox_class: String, parent_map: Dictionary,
@@ -1571,7 +1513,7 @@ func _should_register_runtime_scene_object(ref_id: String, roblox_class: String,
 	if roblox_class in [
 		"PointLight", "SpotLight", "SurfaceLight",
 		"ParticleEmitter", "Fire", "Smoke", "Sparkles",
-		"Camera", "Decal", "Texture", "Attachment", "Bone", "SurfaceAppearance", "Beam", "Trail",
+		"Camera", "Decal", "Texture",
 		"SpecialMesh", "BlockMesh", "CylinderMesh"
 	]:
 		return _should_import_world_ref(ref_id, import_scope)
@@ -1593,6 +1535,22 @@ func _register_runtime_object(data: Dictionary, placement_parent: Node3D) -> boo
 	return true
 
 
+func _register_unknown_runtime_object(data: Dictionary, placement_parent: Node3D) -> bool:
+	# Keep a shallow record for every unimplemented Roblox class, but only make
+	# scene nodes for the configured preview budget. Property trees remain shared
+	# with the parsed place data instead of being copied once per importer record.
+	_runtime_objects.append(data.duplicate(false))
+	if _runtime_preview_nodes_created >= maxi(max_runtime_preview_nodes, 0):
+		_runtime_preview_nodes_skipped += 1
+		return true
+	var runtime_node := _create_runtime_object_preview_node(data)
+	if runtime_node == null:
+		return true
+	placement_parent.add_child(runtime_node, false)
+	_runtime_preview_nodes_created += 1
+	return true
+
+
 func _register_terrain_runtime_object(ref_id: String, props: Dictionary, placement_parent: Node3D) -> bool:
 	var terrain_node := Node3D.new()
 	terrain_node.name = str(_prop(props, "Name", "Terrain"))
@@ -1602,7 +1560,7 @@ func _register_terrain_runtime_object(ref_id: String, props: Dictionary, placeme
 	terrain_node.set_meta("roblox_class", "Terrain")
 	terrain_node.set_meta("roblox_properties", props.duplicate(true))
 	var builder := _TerrainBuilder.new()
-	builder.build_into(terrain_node, props, scale_factor)
+	builder.build_into(terrain_node, _runtime_safe_import_value(props), scale_factor)
 	placement_parent.add_child(terrain_node, false)
 	_runtime_objects.append({
 		"ref": ref_id,
@@ -1677,7 +1635,11 @@ func _build_camera_runtime_object(ref_id: String, props: Dictionary, parent_map:
 func _build_decal_runtime_object(ref_id: String, roblox_class: String, props: Dictionary, parent_map: Dictionary,
 		block_map: Dictionary, instances: Dictionary) -> Dictionary:
 	var data := _base_runtime_object(ref_id, roblox_class, props, parent_map, block_map, instances)
-	data["texture"] = _content_to_string(_prop(props, "Texture", ""))
+	var texture_value: Variant = _prop(props, "TextureContent", null)
+	var texture := _content_to_string(texture_value)
+	if texture.is_empty():
+		texture = _content_to_string(_prop(props, "Texture", ""))
+	data["texture"] = texture
 	data["resolved_path"] = _resolve_texture_content_to_local_path(data["texture"])
 	data["face"] = int(_prop(props, "Face", 5))
 	data["transparency"] = clampf(float(_prop(props, "Transparency", 0.0)), 0.0, 1.0)
@@ -2258,12 +2220,21 @@ func _create_runtime_object_preview_node(data: Dictionary) -> Node3D:
 	runtime_node.position = Vector3(float(data.get("px", 0.0)), float(data.get("py", 0.0)), float(data.get("pz", 0.0)))
 	runtime_node.rotation_degrees = Vector3(float(data.get("rx", 0.0)), float(data.get("ry", 0.0)), float(data.get("rz", 0.0)))
 	runtime_node.add_to_group(RUNTIME_OBJECT_GROUP)
-	runtime_node.set_meta("runtime_object_data", data.duplicate(true))
+	var is_metadata_only := str(data.get("status", "")) == "metadata_only"
+	runtime_node.set_meta("runtime_object_data", data.duplicate(not is_metadata_only))
+	if is_metadata_only:
+		var properties_variant: Variant = data.get("properties", {})
+		if properties_variant is Dictionary:
+			runtime_node.set_meta("roblox_properties", properties_variant)
 	if runtime_node is GPUParticles3D:
 		runtime_node.set_meta("roblox_class", roblox_class)
 		runtime_node.set_meta("roblox_properties", data.get("properties", {"Enabled": data.get("enabled", true), "Rate": data.get("rate", 16)}))
 		preload("res://addons/roblox_runtime/roblox_particles.gd").configure(runtime_node)
 	runtime_node.set_meta("roblox_class", roblox_class)
+	if data.has("ref"):
+		runtime_node.set_meta("roblox_ref", str(data.get("ref", "")))
+	if data.has("parent_ref"):
+		runtime_node.set_meta("roblox_parent_ref", str(data.get("parent_ref", "")))
 	return runtime_node
 
 
@@ -2834,13 +2805,13 @@ func _prop(props: Dictionary, key: String, fallback: Variant = null) -> Variant:
 
 static func _prop_static(props: Dictionary, key: String, fallback: Variant = null) -> Variant:
 	if props.has(key):
-		return props[key]
+		return _runtime_safe_import_value(props[key])
 	var lower := key.to_lower()
 	if props.has(lower):
-		return props[lower]
+		return _runtime_safe_import_value(props[lower])
 	for candidate in props.keys():
 		if str(candidate).to_lower().trim_suffix("_xml") == lower:
-			return props[candidate]
+			return _runtime_safe_import_value(props[candidate])
 	return fallback
 
 

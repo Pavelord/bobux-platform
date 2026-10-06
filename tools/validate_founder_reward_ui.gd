@@ -16,6 +16,21 @@ func _run() -> void:
 		var card: PanelContainer = reward.get("_card")
 		var button: Button = reward.get("_button")
 		if card.size.x > root.get_visible_rect().size.x: failures.append("card overflows %s" % dimensions)
+		var rect := button.get_global_rect()
+		if not root.get_visible_rect().encloses(rect): failures.append("claim button off screen %s" % dimensions)
+		button.pressed.disconnect(reward._claim)
+		var clicks := [0]
+		button.pressed.connect(func(): clicks[0] += 1)
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.position = rect.get_center()
+		event.pressed = true
+		root.push_input(event)
+		event = event.duplicate()
+		event.pressed = false
+		root.push_input(event)
+		await process_frame
+		if clicks[0] != 1: failures.append("claim button blocked %s" % dimensions)
 		if button.text != "Получить": failures.append("claim button missing")
 		if DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw

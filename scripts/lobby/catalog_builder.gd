@@ -453,6 +453,14 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 				get_btn.text = "Owned"
 				if UserSession.inventory_items is Array and not UserSession.inventory_items.has(owned_id):
 					UserSession.inventory_items.append(owned_id)
+				if owned_type != "model":
+					var payloads: Array = UserSession.avatar_data.get("owned_avatar_item_payloads", []).duplicate(true)
+					var acquired := item.duplicate(true)
+					acquired["id"] = owned_id
+					acquired["owned"] = true
+					payloads = payloads.filter(func(value): return not value is Dictionary or str(value.get("id", "")) != owned_id)
+					payloads.push_front(acquired)
+					UserSession.avatar_data["owned_avatar_item_payloads"] = payloads
 				var avatar_ui_variant: Variant = lobby.get("avatar_ui") if lobby != null else null
 				if avatar_ui_variant != null and avatar_ui_variant.has_method("reload_cloud_inventory"):
 					avatar_ui_variant.call_deferred("reload_cloud_inventory")

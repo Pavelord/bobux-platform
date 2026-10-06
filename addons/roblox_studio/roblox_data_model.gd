@@ -234,10 +234,14 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 			var primitive := BoxMesh.new()
 			primitive.size = Vector3.ONE
 			mesh_instance.mesh = primitive
+			if class_name_ == "WedgePart": mesh_instance.mesh = preload("res://addons/rbxl_importer/wedge_mesh_builder.gd").build_wedge(Vector3.ONE)
+			elif class_name_ == "CornerWedgePart": mesh_instance.mesh = preload("res://addons/rbxl_importer/wedge_mesh_builder.gd").build_corner_wedge(Vector3.ONE)
 			var material := StandardMaterial3D.new()
 			material.albedo_color = Color(0.64, 0.64, 0.64, 1.0)
 			mesh_instance.material_override = material
 			node = mesh_instance
+			node.set_meta("anchored", false)
+			node.set_meta("can_collide", true)
 			node.set_meta("shape_type", "Box")
 			node.add_to_group("studio_parts")
 		"Model", "Folder", "Configuration", "Tool", "Accoutrement", "Accessory", "Terrain", "Explosion":
@@ -254,29 +258,7 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 		"Sound":
 			node = AudioStreamPlayer3D.new()
 		"ParticleEmitter", "Fire", "Smoke", "Sparkles":
-			var particles := GPUParticles3D.new()
-			particles.amount = 32 if class_name_ == "Fire" else 20
-			particles.lifetime = 0.8 if class_name_ == "Fire" else 1.5
-			particles.emitting = true
-			particles.visibility_aabb = AABB(Vector3(-3, -3, -3), Vector3(6, 8, 6))
-			var process := ParticleProcessMaterial.new()
-			process.gravity = Vector3(0, 2.4, 0) if class_name_ == "Fire" else Vector3.ZERO
-			process.initial_velocity_min = 0.5 if class_name_ == "Fire" else 0.0
-			process.initial_velocity_max = 1.5 if class_name_ == "Fire" else 0.2
-			process.color = Color(1.0, 0.47, 0.08, 0.9) if class_name_ == "Fire" else Color.WHITE
-			particles.process_material = process
-			var quad := QuadMesh.new()
-			quad.size = Vector2(0.55, 0.8) if class_name_ == "Fire" else Vector2(0.35, 0.35)
-			var draw_material := StandardMaterial3D.new()
-			draw_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			draw_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			draw_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-			# The process material owns the Roblox effect color. A white billboard
-			# prevents Color3 values from being multiplied by the default tint.
-			draw_material.albedo_color = Color.WHITE
-			quad.material = draw_material
-			particles.draw_pass_1 = quad
-			node = particles
+			node = GPUParticles3D.new()
 		"Attachment":
 			node = Node3D.new()
 		"Camera":
@@ -310,6 +292,8 @@ static func create_instance(class_name_: String, name_: String = "") -> Node:
 		_:
 			node = Node.new()
 	node.set_meta(ROBLOX_CLASS_META, class_name_)
+	if node is GPUParticles3D:
+		preload("res://addons/roblox_runtime/roblox_particles.gd").configure(node)
 	node.name = name_ if not name_.is_empty() else class_name_
 	if class_name_ == "ProximityPrompt": node.add_to_group("roblox_proximity_prompts")
 	if class_name_ == "ClickDetector": node.add_to_group("roblox_click_detectors")
@@ -388,6 +372,9 @@ func find_all_of_class(class_name_: String) -> Array:
 func build_manifest(existing_manifest: Dictionary = {}) -> Dictionary:
 	_initialize()
 	var manifest := existing_manifest.duplicate(true)
+	var workspace := get_workspace()
+	if workspace != null:
+		manifest["stud_scale"] = float(workspace.get_meta("roblox_stud_scale", existing_manifest.get("stud_scale", 1.0)))
 	var services: Array[Dictionary] = []
 	var scripts: Array[Dictionary] = []
 	var gui: Array[Dictionary] = []
@@ -489,6 +476,8 @@ func _serialize_manifest_entry(node: Node, roblox_class: String, ref: String, pa
 		var source := str(node.get_meta("code", node.get_meta("lua_source", "")))
 		entry["source"] = source
 		entry["source_length"] = source.length()
+		for key in ["original_source", "compatibility_upgrade", "compatibility_source_sha256"]:
+			if node.has_meta(key): entry[key] = node.get_meta(key)
 		entry["disabled"] = bool(node.get_meta("disabled", false))
 	return entry
 
@@ -499,23 +488,30 @@ func _serialize_node_properties(node: Node, roblox_class: String) -> Dictionary:
 		properties = (node.get_meta("roblox_properties", {}) as Dictionary).duplicate(true)
 	properties["Name"] = str(node.get_meta("block_name", node.name))
 	if node is MeshInstance3D:
-		properties["Anchored"] = bool(node.get_meta("anchored", true))
-		properties["CanCollide"] = bool(node.get_meta("can_collide", true))
-		properties["Transparency"] = float(node.get_meta("transparency", 0))
-		var color: Color = node.get_meta("bobux_color", Color.WHITE)
-		properties["Color"] = [color.r, color.g, color.b]
+		properties["Anchored"] = bool(node.get_meta("anchored", properties.get("Anchored", true)))
+		properties["CanCollide"] = bool(node.get_meta("can_collide", properties.get("CanCollide", true)))
+		properties["Transparency"] = float(node.get_meta("transparency", properties.get("Transparency", 0)))
+		var material := node.get_active_material(0) as StandardMaterial3D if node.mesh != null else null
+		if node.has_meta("bobux_color") or material != null:
+			var color: Color = node.get_meta("bobux_color", material.albedo_color if material != null else Color.WHITE)
+			properties["Color"] = [color.r, color.g, color.b]
 		if node.has_meta("bobux_mesh_resource_asset"): properties["BobuxMeshResource"] = str(node.get_meta("bobux_mesh_resource_asset"))
 	if node is Node3D:
 		var node_3d := node as Node3D
-		properties["Position"] = [node_3d.position.x, node_3d.position.y, node_3d.position.z]
-		properties["Rotation"] = [node_3d.rotation_degrees.x, node_3d.rotation_degrees.y, node_3d.rotation_degrees.z]
-		properties["Size"] = [node_3d.scale.x, node_3d.scale.y, node_3d.scale.z]
+		properties["BobuxPosition"] = [node_3d.position.x, node_3d.position.y, node_3d.position.z]
+		properties["BobuxRotation"] = [node_3d.rotation_degrees.x, node_3d.rotation_degrees.y, node_3d.rotation_degrees.z]
+		properties["BobuxSize"] = [node_3d.scale.x, node_3d.scale.y, node_3d.scale.z]
+		if node is GPUParticles3D:
+			for key in ["Size", "Heat", "RiseVelocity", "Opacity", "Rate"]:
+				if node.has_meta(key): properties[key] = node.get_meta(key)
+			properties["Enabled"] = node.emitting
 	if node is Control:
 		var control := node as Control
 		properties["Visible"] = control.visible
-		properties["Position"] = _udim2_from_control_vector(control.position)
-		properties["Size"] = _udim2_from_control_vector(control.size)
-		properties["AnchorPoint"] = [control.pivot_offset.x, control.pivot_offset.y]
+		# The hidden DataModel has no screen dimensions. Keep authored scale terms.
+		if not properties.has("Position"): properties["Position"] = _udim2_from_control_vector(control.position)
+		if not properties.has("Size"): properties["Size"] = _udim2_from_control_vector(control.size)
+		if not properties.has("AnchorPoint"): properties["AnchorPoint"] = [0.0, 0.0]
 		properties["Rotation"] = control.rotation_degrees
 		properties["ZIndex"] = control.z_index
 	if node is Label:
@@ -552,7 +548,7 @@ func _ensure_node_ref(node: Node) -> String:
 
 
 func _should_skip_serialized_node(node: Node) -> bool:
-	if bool(node.get_meta("bobux_runtime_generated", false)):
+	if bool(node.get_meta("bobux_runtime_generated", false)) or bool(node.get_meta("roblox_face_decal", false)):
 		return true
 	if node.name in ["SelectionBody", "CollisionBody", "SpecialVisuals", "SelectionBody3D"]:
 		return true

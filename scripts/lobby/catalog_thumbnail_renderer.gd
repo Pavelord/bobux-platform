@@ -9,6 +9,13 @@ var _world: Node3D
 var _helper: Node3D
 var _camera: Camera3D
 var failures: Array[Dictionary] = []
+var _tree_generation := 0
+
+func _enter_tree() -> void:
+	_tree_generation += 1
+	if not _queue.is_empty() and not _running:
+		_running = true
+		call_deferred("_drain")
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE))
@@ -44,6 +51,11 @@ func _ready() -> void:
 	_world.add_child(_helper)
 	_helper.hide()
 
+func _exit_tree() -> void:
+	_tree_generation += 1
+	_queue.clear()
+	_running = false
+
 func request_preview(item: Dictionary, target: TextureRect) -> void:
 	_queue.append({"item": item, "target": weakref(target)})
 	if not _running:
@@ -51,11 +63,23 @@ func request_preview(item: Dictionary, target: TextureRect) -> void:
 		call_deferred("_drain")
 
 func _drain() -> void:
+	if not is_inside_tree():
+		_running = false
+		return
+	var generation := _tree_generation
 	while not _queue.is_empty():
+		if generation != _tree_generation or not is_inside_tree():
+			return
+		if not is_node_ready():
+			await ready
+			if generation != _tree_generation or not is_inside_tree():
+				return
 		var job: Dictionary = _queue.pop_front()
 		var target: Variant = job.target.get_ref()
 		if not is_instance_valid(target): continue
 		var texture := await render_item(job.item)
+		if generation != _tree_generation or not is_inside_tree():
+			return
 		target = job.target.get_ref()
 		if is_instance_valid(target):
 			target.texture = texture
@@ -97,10 +121,16 @@ static func _remove_previews(value: Variant) -> void:
 		for child in value: _remove_previews(child)
 
 func render_item(item: Dictionary, force := false) -> Texture2D:
+	var generation := _tree_generation
 	var path := CACHE + cache_key(item) + ".png"
 	if not force and FileAccess.file_exists(path):
 		return ImageTexture.create_from_image(Image.load_from_file(path))
 	if DisplayServer.get_name() == "headless": return null
+	if not is_inside_tree(): return _fail(item, "Preview renderer is outside the scene tree")
+	if not is_node_ready():
+		await ready
+	if generation != _tree_generation or not is_inside_tree() or not is_instance_valid(_helper):
+		return _fail(item, "Preview renderer is no longer available")
 	var data: Dictionary = _helper.call("_avatar_attachment_item_data", item)
 	var kind := str(item.get("item_kind", item.get("category", data.get("item_kind", "")))).to_lower()
 	_viewport.transparent_bg = kind == "boblox_promo"
@@ -117,6 +147,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 	elif kind in ["face", "chest_badge"]:
 		var source := str(item.get("texture_path", data.get("texture_path", "")))
 		var local_path := await _texture_source(source)
+		if generation != _tree_generation or not is_inside_tree(): return null
 		if local_path.is_empty(): return _fail(item, "Texture unavailable")
 		if kind == "face":
 			subject = Node3D.new()
@@ -145,6 +176,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 			for key in ["template_url", "atlas_path", "texture_path", "source_url"]:
 				if source.is_empty(): source = str(candidate.get(key, ""))
 		var local_path := await _texture_source(source)
+		if generation != _tree_generation or not is_inside_tree(): return null
 		if local_path.is_empty():
 			return _fail(item, "Clothing template unavailable")
 		subject = _mannequin()
@@ -153,6 +185,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 		var source: String = _helper.call("_avatar_attachment_source_path", item, data)
 		if not source.is_empty() and source.get_slice("?", 0).get_extension().to_lower() in ["glb", "gltf", "fbx", "obj", "tscn", "res", "tres"]:
 			var loaded: Variant = await _helper.call("_instantiate_avatar_attachment_source", source)
+			if generation != _tree_generation or not is_inside_tree(): return null
 			if loaded is Node3D: subject = loaded
 			elif loaded is Node: loaded.queue_free()
 			var parts: Array = _helper.call("_avatar_attachment_extract_parts", data)
@@ -167,14 +200,18 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 						subject.free()
 						return _fail(item, "Original mesh file unavailable; bounds are not geometry")
 					subject.add_child(_helper.call("_create_avatar_attachment_part", part))
+	if generation != _tree_generation or not is_inside_tree() or not is_instance_valid(_world): return null
 	_world.add_child(subject)
 	# Player previews opt in to interpolation in _ready; static snapshots must
 	# override that, including children loaded from animated model scenes.
 	_disable_snapshot_interpolation(subject)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	await get_tree().process_frame
+	if generation != _tree_generation or not is_inside_tree(): return null
 	await get_tree().process_frame
+	if generation != _tree_generation or not is_inside_tree(): return null
 	await RenderingServer.frame_post_draw
+	if generation != _tree_generation or not is_inside_tree(): return null
 	var bounds: Array[AABB] = []
 	_collect_bounds(subject, bounds)
 	if bounds.is_empty():
@@ -196,7 +233,9 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 	_camera.size = maxf(maxf(projected.size.x, projected.size.y) * 1.18, 0.05)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	await RenderingServer.frame_post_draw
+	if generation != _tree_generation or not is_inside_tree(): return null
 	await RenderingServer.frame_post_draw
+	if generation != _tree_generation or not is_inside_tree(): return null
 	var image := _viewport.get_texture().get_image()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_world.remove_child(subject)

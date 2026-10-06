@@ -57,6 +57,7 @@ var _pending_template_kind := ""
 var _selected_body_part_key := "torso"
 var _cloud_inventory_loaded := false
 var _cloud_inventory_loading := false
+var _inventory_reload_pending := false
 var _avatar_sync_in_flight := false
 var _avatar_sync_pending := false
 var _remote_item_texture_cache: Dictionary = {}
@@ -91,7 +92,12 @@ func ensure_cloud_inventory_loaded() -> void:
 
 
 func reload_cloud_inventory() -> void:
+	if _cloud_inventory_loading:
+		_inventory_reload_pending = true
+		return
 	_load_session_avatar_data()
+	_group_catalog()
+	_refresh_ui()
 	_cloud_inventory_loaded = false
 	await _load_cloud_inventory()
 
@@ -126,6 +132,12 @@ func _load_cloud_inventory() -> void:
 				for item in items:
 					if item is Dictionary:
 						_cloud_catalog.append(item)
+		if cloud_api.has_method("fetch_owned_avatar_items"):
+			var owned_result: Dictionary = await cloud_api.fetch_owned_avatar_items()
+			if owned_result.get("ok", false):
+				for owned_item in _extract_response_array(owned_result):
+					if owned_item is Dictionary:
+						_cloud_catalog.append(owned_item)
 		if cloud_api.has_method("load_player_profile"):
 			var current_user_id := ""
 			if typeof(UserSession) != TYPE_NIL:
@@ -154,6 +166,9 @@ func _load_cloud_inventory() -> void:
 	_apply_visuals_to_preview_player()
 	if equipped_changed:
 		_queue_avatar_sync()
+	if _inventory_reload_pending:
+		_inventory_reload_pending = false
+		call_deferred("reload_cloud_inventory")
 
 
 func _load_session_avatar_data() -> void:
@@ -651,7 +666,7 @@ func _group_catalog() -> void:
 			continue
 		var item := raw_item as Dictionary
 		var item_id := str(item.get("id", item.get("item_id", "")))
-		if item_id.is_empty() or item_id in ["classic_head", "blue_torso", "green_legs"]:
+		if item_id.is_empty() or included_item_ids.has(item_id) or item_id in ["classic_head", "blue_torso", "green_legs"]:
 			continue
 		if not _is_cloud_item_owned(item):
 			continue

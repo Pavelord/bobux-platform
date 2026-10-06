@@ -59,6 +59,7 @@ const STUDIO_PLAYTEST_COLLISION_MASK: int = 1 << 2
 # preload the runtime importer that converts .rbxl / .rbxlx place files into
 # studio_parts blocks (see addons/rbxl_importer/).
 const RbxlRuntimeImporter = preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd")
+const RbxlRuntimeImporterV2 = preload("res://addons/rbxl_importer_v2/rbxl_runtime_importer_v2.gd")
 const RbxlWedgeMeshBuilder = preload("res://addons/rbxl_importer/wedge_mesh_builder.gd")
 const RobloxGuiRuntime = preload("res://addons/rbxl_importer/roblox_gui_runtime.gd")
 const RobloxSkyMaterial = preload("res://addons/rbxl_importer/roblox_sky_material.gd")
@@ -145,9 +146,14 @@ var music_file_dialog: FileDialog = null
 var studio_music_dialog: AcceptDialog = null
 var studio_music_player: AudioStreamPlayer = null
 var studio_music_volume := DEFAULT_MODE_MUSIC_VOLUME
+var studio_music_toggle_enabled := false
+var studio_music_toggle_check: CheckButton
+var studio_music_toggle_gui: CanvasLayer
 var studio_music_track := 0
 var sky_file_dialog: FileDialog = null
 var rbxl_file_dialog: FileDialog = null
+var rbxl_v2_file_dialog: FileDialog = null
+var asset_import_dialog: FileDialog = null
 var last_rbxl_import_report: Dictionary = {}
 var toolbox_dialog: AcceptDialog = null
 var toolbox_asset_entries: Array[Dictionary] = []
@@ -274,7 +280,7 @@ func _ready() -> void:
 	if current_map_folder != "":
 		show_grid_enabled = false
 		_toggle_grid_visibility(false)
-		_load_map_from_folder(current_map_folder)
+		await _load_map_from_folder(current_map_folder)
 		# Check if icon already exists (user may have set a custom one)
 		if FileAccess.file_exists(current_map_folder + "/icon.png"):
 			custom_icon_set = true
@@ -1756,6 +1762,7 @@ func _build_block_instance_internal(shape_name: String, color: Color, material_t
 	mesh_resource.surface_set_material(0, mat)
 	mesh_inst.mesh = mesh_resource
 	mesh_inst.scale = _get_default_block_scale(shape_name)
+	RbxlMaterialCache.sync_texture_scale(mesh_inst, _get_workspace_stud_scale())
 	mesh_inst.add_to_group("studio_parts")
 	mesh_inst.set_meta("block_name", block_name)
 	mesh_inst.set_meta("roblox_class", _roblox_class_for_shape(shape_name))
@@ -1806,6 +1813,11 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 			return cone
 		"Cylinder":
 			var cylinder := CylinderMesh.new()
+			# Keep the visible mesh the same normalized size as CylinderShape3D.
+			cylinder.top_radius = 0.5
+			cylinder.bottom_radius = 0.5
+			cylinder.height = 1.0
+			cylinder.radial_segments = 32
 			cylinder.cap_top = true
 			cylinder.cap_bottom = true
 			return cylinder
@@ -1814,7 +1826,7 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 		"CornerWedge", "CornerWedgePart":
 			return RbxlWedgeMeshBuilder.build_corner_wedge(Vector3.ONE)
 		"Truss", "TrussPart":
-			return RbxlWedgeMeshBuilder.build_truss(Vector3.ONE)
+			return RbxlWedgeMeshBuilder.build_truss(Vector3(2.0, 12.0, 2.0), true)
 		_: # Box
 			return BoxMesh.new()
 
@@ -1961,6 +1973,7 @@ func _update_block_collision(block: Node3D) -> void:
 	if block == null or not is_instance_valid(block) or not (block is MeshInstance3D):
 		return
 	_rebuild_block_helpers(block as MeshInstance3D)
+	RbxlMaterialCache.sync_texture_scale(block as MeshInstance3D, _get_workspace_stud_scale())
 	_configure_studio_water_volume(block as MeshInstance3D)
 
 func _configure_studio_water_volume(block: MeshInstance3D) -> void:
@@ -2303,10 +2316,11 @@ func _update_transform_gizmo() -> void:
 		return
 
 	transform_gizmo_root.visible = true
-	transform_gizmo_root.global_position = _get_selection_pivot()
-	var distance_to_camera := camera.global_position.distance_to(transform_gizmo_root.global_position) if camera else 10.0
+	var gizmo_pivot := _get_selection_pivot()
+	var distance_to_camera := camera.global_position.distance_to(gizmo_pivot) if camera else 10.0
 	var gizmo_scale := maxf(GIZMO_MIN_SCALE, distance_to_camera * GIZMO_SCALE_DISTANCE_FACTOR)
-	transform_gizmo_root.scale = Vector3.ONE * gizmo_scale
+	var gizmo_basis := _get_selection_gizmo_basis().scaled(Vector3.ONE * gizmo_scale)
+	transform_gizmo_root.global_transform = Transform3D(gizmo_basis, gizmo_pivot)
 
 	for child in transform_gizmo_root.get_children():
 		if child is Node3D:
@@ -2366,7 +2380,10 @@ func _begin_gizmo_drag(gizmo_handle: Node3D) -> void:
 	gizmo_drag_start_bases.clear()
 	gizmo_drag_start_offsets.clear()
 
-	for block in _get_valid_selected_blocks():
+	var drag_blocks := _get_valid_selected_blocks()
+	if not drag_blocks.is_empty():
+		gizmo_drag_start_scale = drag_blocks[0].scale
+	for block in drag_blocks:
 		var block_id: int = block.get_instance_id()
 		gizmo_drag_start_positions[block_id] = block.global_position
 		gizmo_drag_start_scales[block_id] = block.scale
@@ -2416,11 +2433,24 @@ func _update_gizmo_drag(mouse_position: Vector2) -> void:
 				var block_id: int = block.get_instance_id()
 				var start_pos: Vector3 = gizmo_drag_start_positions.get(block_id, block.global_position)
 				var start_scale: Vector3 = gizmo_drag_start_scales.get(block_id, block.scale)
-				var start_axis_scale: float = _get_axis_component(start_scale, active_gizmo_axis)
+				var start_basis: Basis = gizmo_drag_start_bases.get(block_id, block.global_basis)
+				# Match the handle to the block's local axis, including after rotation.
+				var start_rotation: Basis = start_basis.orthonormalized()
+				var local_axis: Vector3 = (start_rotation.inverse() * gizmo_drag_axis_world).normalized()
+				var axis_index: int = 0
+				if absf(local_axis.y) > absf(local_axis.x) and absf(local_axis.y) > absf(local_axis.z):
+					axis_index = 1
+				elif absf(local_axis.z) > absf(local_axis.x) and absf(local_axis.z) > absf(local_axis.y):
+					axis_index = 2
+				var start_axis_scale: float = start_scale[axis_index]
 				var next_axis_scale: float = maxf(MIN_BLOCK_SCALE, start_axis_scale + scale_delta)
 				var applied_delta: float = next_axis_scale - start_axis_scale
-				block.scale = _with_axis_component(start_scale, active_gizmo_axis, next_axis_scale)
-				block.global_position = start_pos + (gizmo_drag_axis_world * (applied_delta * 0.5))
+				var new_scale := start_scale
+				new_scale[axis_index] = next_axis_scale
+				block.scale = new_scale
+				# Keep the opposite face fixed; the signed gizmo axis points outward
+				# from the handle that was dragged.
+				block.global_position = start_pos + gizmo_drag_axis_world * (applied_delta * 0.5)
 				_update_block_collision(block)
 		"rotate":
 			if mouse_hit == null:
@@ -2503,13 +2533,20 @@ func _get_selection_pivot() -> Vector3:
 	return center / float(valid_blocks.size())
 
 func _get_axis_vector(axis: String) -> Vector3:
+	var orientation := _get_selection_gizmo_basis()
 	match axis:
 		"x":
-			return Vector3.RIGHT
+			return (orientation * Vector3.RIGHT).normalized()
 		"y":
-			return Vector3.UP
+			return (orientation * Vector3.UP).normalized()
 		_:
-			return Vector3.BACK
+			return (orientation * Vector3.BACK).normalized()
+
+func _get_selection_gizmo_basis() -> Basis:
+	var valid_blocks := _get_valid_selected_blocks()
+	if valid_blocks.size() != 1:
+		return Basis.IDENTITY
+	return valid_blocks[0].global_basis.orthonormalized()
 
 func _get_axis_rotation_degrees(axis: String) -> Vector3:
 	match axis:
@@ -2631,7 +2668,7 @@ const STUDIO_ICON_ROOT := "res://assets/studio/icons/lucide"
 const STUDIO_ICON_FILES := {
 	"Select": "mouse-pointer-2.svg", "Move": "move.svg", "Scale": "scaling.svg",
 	"Rotate": "rotate-cw.svg", "Transform": "boxes.svg", "Geometric": "box-select.svg",
-	"Part": "box.svg", "Terrain": "mountain.svg", "Character": "person-standing.svg",
+	"Part": "box.svg", "Terrain": "mountain.svg", "Audio": "audio.svg", "Character": "person-standing.svg",
 	"GUI": "panels-top-left.svg", "Script": "file-code-2.svg", "Import": "download.svg",
 	"Material": "circle-dot.svg", "Color": "palette.svg", "Group": "group.svg", "Lock": "lock.svg",
 	"Anchor": "anchor.svg", "Explorer": "list-tree.svg", "Properties": "sliders-horizontal.svg",
@@ -2649,33 +2686,33 @@ func _build_main_white_layout() -> void:
 	viewport_container_node = get_node_or_null("SubViewportContainer")
 	if viewport_container_node:
 		remove_child(viewport_container_node)
-	
+
 	main_container = VBoxContainer.new()
 	main_container.name = "StudioRoot"
 	main_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	main_container.add_theme_constant_override("separation", 0)
 	add_child(main_container)
-	
+
 	_build_studio_menu_bar()
 	_build_toolbar_white()
-	
+
 	var split_main := HBoxContainer.new()
 	split_main.name = "MainSplit"
 	split_main.add_theme_constant_override("separation", 0)
 	split_main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	split_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_container.add_child(split_main)
-	
+
 	toolbox_dock_panel = _build_toolbox_dock()
 	split_main.add_child(toolbox_dock_panel)
-	
+
 	var center_split := VBoxContainer.new()
 	center_split.name = "ViewportColumn"
 	center_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	center_split.add_theme_constant_override("separation", 0)
 	split_main.add_child(center_split)
-	
+
 	_build_viewport_document_header(center_split)
 
 	viewport_frame_panel = PanelContainer.new()
@@ -2685,7 +2722,7 @@ func _build_main_white_layout() -> void:
 	viewport_frame_panel.clip_contents = true
 	viewport_frame_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#888888"), Color("#B7B7B7"), 1))
 	center_split.add_child(viewport_frame_panel)
-	
+
 	if viewport_container_node:
 		viewport_container_node.mouse_filter = Control.MOUSE_FILTER_STOP
 		viewport_container_node.focus_mode = Control.FOCUS_CLICK
@@ -2697,7 +2734,7 @@ func _build_main_white_layout() -> void:
 			viewport_container_node.gui_input.connect(_on_studio_viewport_gui_input)
 		viewport_frame_panel.add_child(viewport_container_node)
 		viewport_container_node.call_deferred("grab_focus")
-		
+
 	script_editor_tabs = TabContainer.new()
 	script_editor_tabs.name = "ScriptEditorTabs"
 	script_editor_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2705,7 +2742,7 @@ func _build_main_white_layout() -> void:
 	script_editor_tabs.tabs_visible = false
 	script_editor_tabs.visible = false
 	center_split.add_child(script_editor_tabs)
-	
+
 	right_side = VSplitContainer.new()
 	right_side.name = "RightDockSplit"
 	right_side.custom_minimum_size = Vector2(286, 0)
@@ -2726,7 +2763,7 @@ func _build_main_white_layout() -> void:
 
 	if right_inspector_panel != null:
 		inspector_panel = right_inspector_panel
-	
+
 	_build_command_bar()
 	_build_selection_overlay()
 	_ensure_studio_grid()
@@ -2822,7 +2859,7 @@ func _build_studio_ai_window() -> void:
 	hint.add_theme_color_override("font_color", Color("#5F6368"))
 	column.add_child(hint)
 	studio_ai_prompt_edit = TextEdit.new()
-	studio_ai_prompt_edit.placeholder_text = "Examples:\nCreate an anchored wooden house with a door and four windows\nWrite a script that makes the selected part change color when touched"
+	studio_ai_prompt_edit.placeholder_text = "Examples:\r\nCreate an anchored wooden house with a door and four windows\r\nWrite a script that makes the selected part change color when touched"
 	studio_ai_prompt_edit.custom_minimum_size = Vector2(0, 150)
 	studio_ai_prompt_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	studio_ai_prompt_edit.add_theme_color_override("font_color", Color("#202124"))
@@ -2873,7 +2910,7 @@ func _request_and_apply_studio_ai() -> void:
 	var requested_selection := str(context.get("selected_ref", ""))
 	var response: Dictionary = preload("res://addons/roblox_studio/studio_ai_planner.gd").plan_for_request(prompt, context)
 	if response.is_empty():
-		var script_contract := "\nStudio scripting requirements: plain Luau, no HTML entities or markdown in source. Player input uses UserInputService.JumpRequest (never Humanoid.JumpRequested). Character scripts must be LocalScript parent=StarterCharacterScripts and use script.Parent:WaitForChild('Humanoid'). General client scripts use StarterPlayerScripts, Players.LocalPlayer.Character or CharacterAdded:Wait(). StateChanged supplies oldState and newState. Save stores code; Play runs it."
+		var script_contract := "\r\nStudio scripting requirements: plain Luau, no HTML entities or markdown in source. Player input uses UserInputService.JumpRequest (never Humanoid.JumpRequested). Character scripts must be LocalScript parent=StarterCharacterScripts and use script.Parent:WaitForChild('Humanoid'). General client scripts use StarterPlayerScripts, Players.LocalPlayer.Character or CharacterAdded:Wait(). StateChanged supplies oldState and newState. Save stores code; Play runs it."
 		var scripting_request := RegEx.new()
 		scripting_request.compile("(?i)(скрипт|script|lua|прыж|jump|gui|кнопк|button|монет|coin|бафф|buff|летат|fly)")
 		var provider_prompt := prompt + script_contract if scripting_request.search(prompt) != null and prompt.length() + script_contract.length() <= 4000 else prompt
@@ -2883,7 +2920,7 @@ func _request_and_apply_studio_ai() -> void:
 			var repair_feedback := _studio_ai_source_feedback(response.get("actions", []))
 			if not repair_feedback.is_empty() and provider_prompt.length() < 2800:
 				_append_studio_ai_message("Bobux AI", "Проверка обнаружила ошибку в Lua. Запрашиваю исправленный вариант...", "#975c00")
-				response = await CloudAPI.request_studio_ai(provider_prompt + "\nPrevious generated source failed compilation. Return a corrected complete plan.\n" + repair_feedback.left(1000), context)
+				response = await CloudAPI.request_studio_ai(provider_prompt + "\r\nPrevious generated source failed compilation. Return a corrected complete plan.\r\n" + repair_feedback.left(1000), context)
 	response = _normalize_studio_ai_editor_response(response)
 	if not bool(response.get("ok", false)):
 		_finish_studio_ai_request()
@@ -2905,11 +2942,11 @@ func _request_and_apply_studio_ai() -> void:
 				return
 	var applied := _apply_studio_ai_actions(actions, requested_selection)
 	_finish_studio_ai_request()
-	var details := "\n".join(studio_ai_last_errors)
+	var details := "\r\n".join(studio_ai_last_errors)
 	if applied <= 0:
-		_append_studio_ai_message("Bobux AI", "%s\nNothing was changed in the place. %s" % [str(response.get("message", "No supported actions were returned.")), details], "#b3261e")
+		_append_studio_ai_message("Bobux AI", "%s\r\nNothing was changed in the place. %s" % [str(response.get("message", "No supported actions were returned.")), details], "#b3261e")
 		return
-	_append_studio_ai_message("Bobux AI", "%s\nApplied: %d object change(s).%s" % [str(response.get("message", "Done.")), applied, "\n" + details if not details.is_empty() else ""], "#137333" if details.is_empty() else "#975c00")
+	_append_studio_ai_message("Bobux AI", "%s\r\nApplied: %d object change(s).%s" % [str(response.get("message", "Done.")), applied, "\r\n" + details if not details.is_empty() else ""], "#137333" if details.is_empty() else "#975c00")
 
 
 func _finish_studio_ai_request() -> void:
@@ -2999,8 +3036,8 @@ func _studio_ai_source_feedback(actions: Variant) -> String:
 		for problem in preload("res://addons/roblox_studio/roblox_script_contract.gd").errors(source):
 			feedback.append("%s: %s" % [action.get("name", "Script"), problem])
 		if not bool(validation.get("ok", false)):
-			feedback.append("%s: %s\nSource: %s" % [action.get("name", "Script"), validation.get("error", "Invalid Lua"), source.left(600)])
-	return "\n".join(feedback)
+			feedback.append("%s: %s\r\nSource: %s" % [action.get("name", "Script"), validation.get("error", "Invalid Lua"), source.left(600)])
+	return "\r\n".join(feedback)
 
 
 func _normalize_studio_ai_editor_response(response: Dictionary) -> Dictionary:
@@ -3027,7 +3064,7 @@ func _append_studio_ai_message(author: String, message: String, color: String) -
 	var safe_message := message.replace("[", "(").replace("]", ")")
 	if studio_ai_result_label.text.contains("Ask for a build"):
 		studio_ai_result_label.clear()
-	studio_ai_result_label.append_text("[b]%s[/b]\n[color=%s]%s[/color]\n\n" % [safe_author, color, safe_message])
+	studio_ai_result_label.append_text("[b]%s[/b]\r\n[color=%s]%s[/color]\r\n\r\n" % [safe_author, color, safe_message])
 	studio_ai_result_label.scroll_to_line(maxi(0, studio_ai_result_label.get_line_count() - 1))
 
 
@@ -3132,14 +3169,14 @@ func _build_toolbar_white() -> void:
 	toolbar_container.custom_minimum_size = Vector2(0, 92)
 	toolbar_container.add_theme_stylebox_override("panel", _studio_panel_style(Color("#FAFAFA"), Color("#D4D4D4"), 1))
 	main_container.add_child(toolbar_container)
-	
+
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
 	margin.add_theme_constant_override("margin_top", 2)
 	margin.add_theme_constant_override("margin_bottom", 2)
 	toolbar_container.add_child(margin)
-	
+
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 0)
 	margin.add_child(vbox)
@@ -3230,6 +3267,7 @@ func _populate_home_ribbon() -> void:
 	lock_btn.pressed.connect(_toggle_selected_lock)
 	_add_to_ribbon_group(object_group, lock_btn)
 	var anchor_btn := _create_ribbon_button("Anchor", 44)
+	anchor_btn.tooltip_text = "Anchor Selection / Unanchor Selection. Anchored parts stay in place during play."
 	anchor_btn.pressed.connect(_toggle_selected_anchor)
 	_add_to_ribbon_group(object_group, anchor_btn)
 
@@ -3257,6 +3295,7 @@ func _create_part_insert_control() -> Control:
 	menu.tooltip_text = "Choose Part type: Block, Truss / Ladder, Water, Spawn..."
 	menu.custom_minimum_size = Vector2(26, 50)
 	_style_white_button(menu)
+	_style_studio_popup(menu.get_popup())
 	var shape_specs := [
 		["Block", "Box"],
 		["Ball", "Sphere"],
@@ -3290,7 +3329,7 @@ func _build_studio_menu_bar() -> void:
 	var menu_panel := PanelContainer.new()
 	menu_panel.name = "MenuBar"
 	menu_panel.custom_minimum_size = Vector2(0, 30)
-	menu_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F5F5F5"), Color("#DDDDDD"), 1))
+	menu_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F9FBFE"), Color("#DCE6EF"), 1))
 	main_container.add_child(menu_panel)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 2)
@@ -3450,14 +3489,24 @@ func _create_studio_menu_button(menu_name: String) -> MenuButton:
 	menu.flat = true
 	menu.custom_minimum_size = Vector2(64, 24)
 	menu.add_theme_font_size_override("font_size", 11)
-	menu.add_theme_color_override("font_color", Color("#333333"))
-	menu.add_theme_color_override("font_hover_color", Color("#0066CC"))
+	menu.add_theme_color_override("font_color", Color("#364454"))
+	menu.add_theme_color_override("font_hover_color", Color("#0878D1"))
+	menu.add_theme_color_override("font_pressed_color", Color("#0878D1"))
+	var menu_normal := _studio_panel_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 4)
+	var menu_hover := _studio_panel_style(Color("#EAF5FF"), Color("#C6E2FA"), 1, 4)
+	var menu_pressed := _studio_panel_style(Color("#DCEEFF"), Color("#88C5F3"), 1, 4)
+	menu.add_theme_stylebox_override("normal", menu_normal)
+	menu.add_theme_stylebox_override("hover", menu_hover)
+	menu.add_theme_stylebox_override("pressed", menu_pressed)
+	menu.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var popup := menu.get_popup()
+	_style_studio_popup(popup)
 	match menu_name:
 		"File":
 			popup.add_item("New", 101)
 			popup.add_item("Open Place...", 107)
 			popup.add_item("Import Roblox Place...", 102)
+			popup.add_item("Import Roblox Place (Experimental V2)...", 110)
 			popup.add_item("Open Maps Folder", 108)
 			popup.add_separator()
 			popup.add_item("Save", 103)
@@ -3537,6 +3586,30 @@ func _create_studio_menu_button(menu_name: String) -> MenuButton:
 	popup.id_pressed.connect(_on_studio_menu_action.bind(menu_name))
 	return menu
 
+func _style_studio_popup(popup: PopupMenu) -> void:
+	var panel := _studio_panel_style(Color("#FFFFFF"), Color("#D5E1EC"), 1, 6)
+	panel.shadow_color = Color(0.08, 0.16, 0.26, 0.18)
+	panel.shadow_size = 8
+	panel.shadow_offset = Vector2(0, 3)
+	panel.content_margin_left = 5
+	panel.content_margin_right = 5
+	panel.content_margin_top = 5
+	panel.content_margin_bottom = 5
+	var hover := _studio_panel_style(Color("#E9F4FF"), Color("#D4E9FA"), 0, 4)
+	var separator := StyleBoxFlat.new()
+	separator.bg_color = Color("#E3EAF1")
+	separator.content_margin_top = 1
+	separator.content_margin_bottom = 1
+	popup.add_theme_stylebox_override("panel", panel)
+	popup.add_theme_stylebox_override("hover", hover)
+	popup.add_theme_stylebox_override("separator", separator)
+	popup.add_theme_color_override("font_color", Color("#25364A"))
+	popup.add_theme_color_override("font_hover_color", Color("#086FC1"))
+	popup.add_theme_color_override("font_accelerator_color", Color("#718197"))
+	popup.add_theme_color_override("font_disabled_color", Color("#A3AFBC"))
+	popup.add_theme_color_override("font_separator_color", Color("#718197"))
+	popup.add_theme_constant_override("v_separation", 4)
+
 func _on_studio_menu_action(id: int, _menu_name: String = "") -> void:
 	match id:
 		101:
@@ -3557,6 +3630,8 @@ func _on_studio_menu_action(id: int, _menu_name: String = "") -> void:
 			_open_maps_folder()
 		109:
 			_capture_studio_viewport()
+		110:
+			_on_import_rbxl_v2_pressed()
 		201:
 			_undo_editor_action()
 		202:
@@ -3809,7 +3884,7 @@ func _open_studio_user_guide() -> void:
 		var safe_index := clampi(index, 0, topics.size() - 1)
 		current_index[0] = safe_index
 		var topic: Dictionary = topics[safe_index] if topics[safe_index] is Dictionary else {}
-		body.text = "[font_size=%d][b]%s[/b][/font_size]\n\n%s" % [24 if compact else 27, str(topic.get("title", "Studio Guide")), str(topic.get("body", ""))]
+		body.text = "[font_size=%d][b]%s[/b][/font_size]\r\n\r\n%s" % [24 if compact else 27, str(topic.get("title", "Studio Guide")), str(topic.get("body", ""))]
 		body.scroll_to_line(0)
 		progress.text = "%d / %d" % [safe_index + 1, topics.size()]
 		if topic_picker != null:
@@ -3848,7 +3923,7 @@ func _open_studio_user_guide() -> void:
 func _show_studio_about_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "About Bobux Studio"
-	dialog.dialog_text = "Bobux Studio\nRoblox-style DataModel editor, Luau runtime and play-test environment."
+	dialog.dialog_text = "Bobux Studio\r\nRoblox-style DataModel editor, Luau runtime and play-test environment."
 	dialog.ok_button_text = "Close"
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(460, 190))
@@ -3905,11 +3980,16 @@ func _on_ribbon_tab_pressed(tab_name: String) -> void:
 		if button == null:
 			continue
 		if name == active_ribbon_tab:
-			button.add_theme_stylebox_override("normal", _studio_panel_style(Color("#E6E7E9"), Color("#E6E7E9"), 0, 4))
-			button.add_theme_color_override("font_color", Color("#1E2024"))
+			var active_style := _studio_panel_style(Color("#EAF5FF"), Color("#B8DCF7"), 0, 4)
+			active_style.border_width_bottom = 3
+			active_style.border_color = Color("#1686D9")
+			button.add_theme_stylebox_override("normal", active_style)
+			button.add_theme_stylebox_override("hover", active_style)
+			button.add_theme_color_override("font_color", Color("#1266A3"))
 		else:
 			button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-			button.add_theme_color_override("font_color", Color("#4A4D52"))
+			button.add_theme_stylebox_override("hover", _studio_panel_style(Color("#F0F6FB"), Color("#E1EAF2"), 0, 4))
+			button.add_theme_color_override("font_color", Color("#526579"))
 	_rebuild_ribbon_for_active_tab()
 	if toolbar_status_label:
 		toolbar_status_label.text = "%s ribbon" % tab_name
@@ -4081,7 +4161,7 @@ func _audit_studio_map() -> void:
 	var text_ := TextEdit.new()
 	text_.editable = false
 	text_.custom_minimum_size = Vector2(700, 380)
-	text_.text = "Ошибок синтаксиса и проверяемой структуры не найдено. Поведение скриптов проверьте в Play." if issues.is_empty() else "\n\n".join(issues)
+	text_.text = "Ошибок синтаксиса и проверяемой структуры не найдено. Поведение скриптов проверьте в Play." if issues.is_empty() else "\r\n\r\n".join(issues)
 	dialog.add_child(text_)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
@@ -4403,9 +4483,9 @@ func _format_active_script() -> void:
 	if code == null:
 		return
 	var formatted: PackedStringArray = []
-	for raw_line in code.text.replace("\r\n", "\n").split("\n"):
+	for raw_line in code.text.replace("\r\n", "\r\n").split("\r\n"):
 		formatted.append(str(raw_line).rstrip(" \t"))
-	code.text = "\n".join(formatted)
+	code.text = "\r\n".join(formatted)
 	var script_node := _active_script_node()
 	if script_node != null:
 		_commit_script_editor_source(script_node, code.text)
@@ -4493,7 +4573,7 @@ func _analyze_active_script() -> void:
 	var output := _find_output_log(_get_active_script_tab())
 	var message := "Analysis passed: Luau source compiles." if bool(validation.get("ok", false)) else "Analysis failed: %s" % str(validation.get("error", "Unknown error"))
 	if output != null:
-		output.append_text("[Analysis] %s\n" % message)
+		output.append_text("[Analysis] %s\r\n" % message)
 	if toolbar_status_label:
 		toolbar_status_label.text = message
 
@@ -4906,7 +4986,7 @@ func _apply_studio_prefab(prefab_id: String, options: Dictionary) -> void:
 				toolbar_status_label.text = ToolboxAssetService.last_error
 				return
 	var count := _apply_studio_ai_actions(plan.actions)
-	toolbar_status_label.text = "%s · %d изменений" % [prefab_id, count] if studio_ai_last_errors.is_empty() else "\n".join(studio_ai_last_errors)
+	toolbar_status_label.text = "%s · %d изменений" % [prefab_id, count] if studio_ai_last_errors.is_empty() else "\r\n".join(studio_ai_last_errors)
 
 func _insert_library_asset(asset_id: String) -> void:
 	if _is_studio_editing_locked(): return
@@ -5341,6 +5421,27 @@ func _activate_toolbox_entry(entry: Dictionary) -> void:
 func _insert_local_mesh_asset(path: String) -> void:
 	if path.is_empty():
 		return
+	if path.get_extension().to_lower() == "obj":
+		var obj_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") or path.begins_with("user://") else path
+		var obj_mesh := RuntimeObjLoaderClass.load_mesh(obj_path)
+		if obj_mesh == null:
+			if toolbar_status_label: toolbar_status_label.text = "Could not load OBJ: %s" % path.get_file()
+			return
+		var obj_part := _build_imported_block_instance("Box", Color.WHITE, "Plastic", 0.0, true, path.get_basename().get_file())
+		obj_part.mesh = obj_mesh
+		obj_part.set_meta("roblox_class", "MeshPart")
+		obj_part.set_meta("shape_type", "MeshPart")
+		obj_part.set_meta("source_asset_path", path)
+		var obj_parent := _resolve_studio_3d_parent(_get_selected_editor_node())
+		if not (obj_parent is Node3D): obj_parent = placement_parent
+		(obj_parent as Node3D).add_child(obj_part, true)
+		obj_part.global_position = _get_editor_drop_position(10.0)
+		_update_block_collision(obj_part)
+		_set_selection([obj_part])
+		_refresh_explorer()
+		_commit_editor_history("Insert OBJ asset")
+		if toolbar_status_label: toolbar_status_label.text = "Inserted model: %s" % path.get_file()
+		return
 	var target_parent := _resolve_studio_3d_parent(_get_selected_editor_node())
 	if not (target_parent is Node3D):
 		target_parent = placement_parent
@@ -5690,6 +5791,8 @@ func _start_studio_playtest() -> void:
 	_show_viewport_document()
 	_set_studio_playtest_ui_locked(true)
 	if not current_music_source_paths.is_empty(): _play_studio_music(0)
+	if studio_music_toggle_enabled and is_instance_valid(studio_music_player):
+		studio_music_toggle_gui = preload("res://scripts/ui/mode_music_toggle.gd").attach(self, studio_music_player)
 	if toolbar_status_label:
 		toolbar_status_label.text = "Preparing Play test scene..."
 	studio_playtest_snapshot = await _capture_playtest_scene_snapshot_async("PlayTestSnapshot", playtest_generation)
@@ -5854,6 +5957,7 @@ func _stop_studio_playtest() -> void:
 			toolbar_status_label.text = "Play test is not running"
 		return
 	studio_playtest_active = false
+	if is_instance_valid(studio_music_toggle_gui): studio_music_toggle_gui.queue_free()
 	studio_playtest_paused = false
 	studio_playtest_generation += 1
 	if LuaScriptEngine != null:
@@ -6483,7 +6587,7 @@ func _open_material_selector() -> void:
 	grid.columns = 3
 	grid.custom_minimum_size = Vector2(360, 180)
 	dialog.add_child(grid)
-	for mat_name in ["Plastic", "SmoothPlastic", "Wood", "WoodPlanks", "Concrete", "Metal", "Glass", "Neon", "Slate"]:
+	for mat_name in RbxlMaterialCache.NAMED_MATERIAL_ENUMS.keys():
 		var btn := Button.new()
 		btn.text = mat_name
 		btn.custom_minimum_size = Vector2(112, 34)
@@ -6503,15 +6607,68 @@ func _open_material_selector() -> void:
 
 func _open_color_selector() -> void:
 	var dialog := AcceptDialog.new()
-	dialog.title = "Color"
+	dialog.title = "Choose Color"
 	dialog.ok_button_text = "Done"
+	var dialog_style := _studio_panel_style(Color("#F7FAFE"), Color("#C9D9E8"), 1, 8)
+	dialog_style.content_margin_left = 14
+	dialog_style.content_margin_right = 14
+	dialog_style.content_margin_top = 10
+	dialog_style.content_margin_bottom = 12
+	dialog.add_theme_stylebox_override("panel", dialog_style)
 	add_child(dialog)
+	var root := VBoxContainer.new()
+	root.custom_minimum_size = Vector2(470, 470)
+	root.add_theme_constant_override("separation", 10)
+	dialog.add_child(root)
+	var heading := Label.new()
+	heading.text = "Part color"
+	heading.add_theme_font_size_override("font_size", 18)
+	heading.add_theme_color_override("font_color", Color("#20364E"))
+	root.add_child(heading)
+	var description := Label.new()
+	description.text = "Choose a Roblox-inspired color or fine-tune it below."
+	description.add_theme_color_override("font_color", Color("#65788D"))
+	root.add_child(description)
+	var swatches := GridContainer.new()
+	swatches.columns = 8
+	swatches.add_theme_constant_override("h_separation", 7)
+	swatches.add_theme_constant_override("v_separation", 7)
+	root.add_child(swatches)
 	var picker := ColorPicker.new()
 	picker.color = current_color
-	picker.custom_minimum_size = Vector2(420, 360)
+	picker.custom_minimum_size = Vector2(440, 330)
 	picker.color_changed.connect(_on_color_changed)
-	dialog.add_child(picker)
-	dialog.popup_centered(Vector2i(460, 420))
+	var palette: Array[Color] = [
+		Color("#FFFFFF"), Color("#E7E7EC"), Color("#A3A3A3"), Color("#4A4A50"), Color("#1D1F24"),
+		Color("#EF4545"), Color("#FF8A35"), Color("#F4C542"), Color("#66B85B"), Color("#27A7A1"),
+		Color("#3F86E8"), Color("#6554C0"), Color("#BB55C8"), Color("#E85D95"), Color("#8C5A3C"),
+		Color("#80C5F2"), Color("#A7D98B"), Color("#F5D99B"), Color("#ECA8A8"), Color("#B9A7EB"),
+	]
+	for swatch_color in palette:
+		var swatch := Button.new()
+		swatch.custom_minimum_size = Vector2(30, 28)
+		swatch.tooltip_text = "#" + swatch_color.to_html(false).to_upper()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			var style := _studio_panel_style(swatch_color, Color("#CBD6E1"), 1, 5)
+			if state == "hover":
+				style.border_color = Color("#167CC3")
+				style.set_border_width_all(2)
+			elif state == "pressed":
+				style.border_color = Color("#075F9F")
+				style.set_border_width_all(2)
+			swatch.add_theme_stylebox_override(state, style)
+		swatch.pressed.connect(_select_color_swatch.bind(swatch_color, picker))
+		swatches.add_child(swatch)
+	var picker_card := PanelContainer.new()
+	picker_card.add_theme_stylebox_override("panel", _studio_panel_style(Color.WHITE, Color("#DBE4ED"), 1, 6))
+	picker_card.add_child(picker)
+	root.add_child(picker_card)
+	dialog.popup_centered(Vector2i(520, 590))
+
+func _select_color_swatch(color: Color, picker: ColorPicker) -> void:
+	if is_instance_valid(picker):
+		picker.color = color
+	_on_color_changed(color)
 
 func _open_assets_dialog() -> void:
 	var dialog := AcceptDialog.new()
@@ -6522,10 +6679,20 @@ func _open_assets_dialog() -> void:
 	root.custom_minimum_size = Vector2(640, 420)
 	root.add_theme_constant_override("separation", 8)
 	dialog.add_child(root)
+	var toolbar := HBoxContainer.new()
+	root.add_child(toolbar)
+	var import_button := Button.new()
+	import_button.text = "Import files…"
+	import_button.pressed.connect(_open_import_chooser)
+	toolbar.add_child(import_button)
+	var refresh_button := Button.new()
+	refresh_button.text = "Refresh assets"
+	refresh_button.pressed.connect(func() -> void: dialog.queue_free(); _open_assets_dialog())
+	toolbar.add_child(refresh_button)
 	var tabs := TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(tabs)
-	for tab_spec in [["Models", "Models"], ["Decals", "Decals"], ["Meshes", "Meshes"], ["Audio", "Audio"], ["Plugins", "Plugins"]]:
+	for tab_spec in [["Models", "Models"], ["Decals", "Decals"], ["Meshes", "Meshes"], ["Audio", "Audio"], ["Video", "Video"], ["Plugins", "Plugins"]]:
 		var tab_name := str(tab_spec[0])
 		var category := str(tab_spec[1])
 		var page := VBoxContainer.new()
@@ -6536,6 +6703,9 @@ func _open_assets_dialog() -> void:
 		summary.text = "%d available %s item(s). Double-click to insert or open." % [entries.size(), tab_name.to_lower()]
 		summary.add_theme_color_override("font_color", Color("#55585C"))
 		page.add_child(summary)
+		var search := LineEdit.new()
+		search.placeholder_text = "Search %s" % tab_name.to_lower()
+		page.add_child(search)
 		var list := ItemList.new()
 		list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		list.add_theme_stylebox_override("panel", _studio_panel_style(Color.WHITE, Color("#D4D6D9"), 1, 2))
@@ -6548,9 +6718,40 @@ func _open_assets_dialog() -> void:
 			list.add_item("No matching project assets")
 			list.set_item_disabled(0, true)
 		list.item_activated.connect(_on_assets_dialog_item_activated.bind(list))
+		search.text_changed.connect(_filter_assets_list.bind(list, category))
 		page.add_child(list)
+		var insert_button := Button.new()
+		insert_button.text = "Insert selected asset"
+		insert_button.pressed.connect(_insert_selected_asset.bind(list))
+		page.add_child(insert_button)
 		tabs.add_child(page)
 	dialog.popup_centered(Vector2i(700, 500))
+
+
+func _filter_assets_list(query: String, list: ItemList, category: String) -> void:
+	if list == null or not is_instance_valid(list):
+		return
+	list.clear()
+	var clean_query := query.strip_edges().to_lower()
+	for entry in _get_toolbox_entries(category):
+		var label := str(entry.get("label", "Asset"))
+		if not clean_query.is_empty() and not label.to_lower().contains(clean_query):
+			continue
+		list.add_item(label, _get_toolbar_icon(str(entry.get("icon", "Assets")), Color("#34373C")))
+		var index := list.item_count - 1
+		list.set_item_metadata(index, entry)
+		list.set_item_tooltip(index, str(entry.get("path", entry.get("description", label))))
+	if list.item_count == 0:
+		list.add_item("No matching assets")
+		list.set_item_disabled(0, true)
+
+
+func _insert_selected_asset(list: ItemList) -> void:
+	if list == null or list.get_selected_items().is_empty():
+		if toolbar_status_label:
+			toolbar_status_label.text = "Select an asset first"
+		return
+	_on_assets_dialog_item_activated(list.get_selected_items()[0], list)
 
 
 func _on_assets_dialog_item_activated(index: int, list: ItemList) -> void:
@@ -6676,10 +6877,16 @@ func _toggle_selected_can_collide() -> void:
 
 func _toggle_selected_anchor() -> void:
 	var valid_blocks := _get_valid_selected_blocks()
+	if valid_blocks.is_empty():
+		if toolbar_status_label:
+			toolbar_status_label.text = "Select one or more parts to Anchor or Unanchor"
+		return
+	var should_anchor := false
 	for block in valid_blocks:
-		block.set_meta("anchored", not bool(block.get_meta("anchored", true)))
-	_update_inspector()
-	_commit_editor_history("Toggle Anchored")
+		if not bool(block.get_meta("anchored", true)):
+			should_anchor = true
+			break
+	_set_selected_anchored(should_anchor)
 
 
 func _open_local_place_dialog() -> void:
@@ -6896,7 +7103,27 @@ func _create_ribbon_button(text: String, width: float, accent_color := Color(0.2
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content.add_child(icon)
+	var icon_tile := PanelContainer.new()
+	icon_tile.name = "RibbonIconTile"
+	icon_tile.custom_minimum_size = Vector2(30, 26)
+	icon_tile.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon_tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tile_color := Color(0, 0, 0, 0)
+	match text:
+		"Terrain": tile_color = Color("#E7F6EC")
+		"Audio": tile_color = Color("#FCEAF7")
+		"Color": tile_color = Color("#F0ECFF")
+	var tile_style := StyleBoxFlat.new()
+	tile_style.bg_color = tile_color
+	tile_style.set_corner_radius_all(7 if tile_color.a > 0.0 else 0)
+	tile_style.set_border_width_all(0)
+	tile_style.content_margin_left = 0
+	tile_style.content_margin_right = 0
+	tile_style.content_margin_top = 0
+	tile_style.content_margin_bottom = 0
+	icon_tile.add_theme_stylebox_override("panel", tile_style)
+	icon_tile.add_child(icon)
+	content.add_child(icon_tile)
 
 	var label := Label.new()
 	label.name = "RibbonLabel"
@@ -6945,12 +7172,22 @@ func _get_ribbon_icon_color(label: String, active: bool) -> Color:
 	if active:
 		return Color("#0066CC")
 	match label:
-		"Move", "Scale", "Rotate", "Transform":
+		"Select", "Move":
 			return Color("#1E6FE8")
+		"Scale":
+			return Color("#1A9B67")
+		"Rotate":
+			return Color("#D27A24")
+		"Transform":
+			return Color("#7257D8")
 		"Geometric", "Part":
 			return Color("#7B55D9")
 		"Terrain":
-			return Color("#2A9D55")
+			return Color("#229B5C")
+		"Audio":
+			return Color("#D14BB4")
+		"Color":
+			return Color("#7257D8")
 		"Character":
 			return Color("#0E9F9A")
 		"GUI":
@@ -7100,7 +7337,7 @@ func _style_white_button(btn: Button, border_color := Color(0.8, 0.8, 0.8)) -> v
 	style_normal.content_margin_right = 7
 	style_normal.content_margin_top = 4
 	style_normal.content_margin_bottom = 4
-	
+
 	var style_hover := StyleBoxFlat.new()
 	style_hover.bg_color = Color("#EAF3FF")
 	style_hover.border_color = Color("#0066CC")
@@ -7113,7 +7350,7 @@ func _style_white_button(btn: Button, border_color := Color(0.8, 0.8, 0.8)) -> v
 	style_hover.content_margin_right = 7
 	style_hover.content_margin_top = 4
 	style_hover.content_margin_bottom = 4
-	
+
 	btn.add_theme_stylebox_override("normal", style_normal)
 	btn.add_theme_stylebox_override("hover", style_hover)
 	btn.add_theme_stylebox_override("pressed", style_hover)
@@ -7205,15 +7442,145 @@ func _setup_rbxl_import_dialog() -> void:
 	rbxl_file_dialog.file_selected.connect(_on_rbxl_file_selected)
 	add_child(rbxl_file_dialog)
 
+func _setup_rbxl_v2_import_dialog() -> void:
+	if rbxl_v2_file_dialog != null and is_instance_valid(rbxl_v2_file_dialog):
+		return
+	rbxl_v2_file_dialog = FileDialog.new()
+	rbxl_v2_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	rbxl_v2_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	rbxl_v2_file_dialog.filters = PackedStringArray(["*.rbxl, *.rbxlx ; Roblox Place Files"])
+	rbxl_v2_file_dialog.use_native_dialog = true
+	rbxl_v2_file_dialog.title = "Import Roblox Place (Experimental V2)"
+	rbxl_v2_file_dialog.file_selected.connect(_on_rbxl_v2_file_selected)
+	add_child(rbxl_v2_file_dialog)
+
 func _on_import_rbxl_pressed() -> void:
 	if studio_operation_busy:
 		_is_studio_editing_locked(true)
 		return
-	_setup_rbxl_import_dialog()
-	if rbxl_file_dialog:
-		rbxl_file_dialog.popup_centered(Vector2(760, 460))
+	_open_import_chooser()
+
+func _on_import_rbxl_v2_pressed() -> void:
+	if studio_operation_busy:
+		_is_studio_editing_locked(true)
+		return
+	_setup_rbxl_v2_import_dialog()
+	rbxl_v2_file_dialog.popup_centered(Vector2i(840, 560))
+
+func _open_import_chooser() -> void:
+	if asset_import_dialog == null or not is_instance_valid(asset_import_dialog):
+		asset_import_dialog = FileDialog.new()
+		asset_import_dialog.name = "StudioAssetImportDialog"
+		asset_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILES
+		asset_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		asset_import_dialog.filters = PackedStringArray([
+			"*.rbxl, *.rbxlx ; Roblox place",
+			"*.glb, *.gltf, *.fbx, *.obj ; 3D models",
+			"*.png, *.jpg, *.jpeg, *.webp, *.bmp ; Images and textures",
+			"*.mp3, *.ogg, *.wav ; Audio",
+			"*.ogv ; Video",
+			"*.tscn, *.scn, *.res, *.tres ; Godot scenes and resources",
+		])
+		# Use the platform file picker (Windows Explorer / Android system picker),
+		# never Godot's in-app filesystem browser for user imports.
+		asset_import_dialog.use_native_dialog = true
+		asset_import_dialog.title = "Import assets into Studio"
+		asset_import_dialog.files_selected.connect(_on_import_files_selected)
+		add_child(asset_import_dialog)
+	asset_import_dialog.popup_centered(Vector2i(840, 560))
+
+func _on_import_files_selected(paths: PackedStringArray) -> void:
+	for raw_path in paths:
+		var path := str(raw_path).strip_edges()
+		if path.is_empty():
+			continue
+		var extension := path.get_extension().to_lower()
+		if extension in ["rbxl", "rbxlx"]:
+			await _on_rbxl_file_selected(path)
+		elif extension in ["glb", "gltf", "fbx", "obj", "tscn", "scn", "res", "tres"]:
+			_insert_imported_model_file(path)
+		elif extension in ["png", "jpg", "jpeg", "webp", "bmp"]:
+			_insert_local_image_asset(path)
+		elif extension in ["mp3", "ogg", "wav"]:
+			_insert_local_audio_asset(path)
+		elif extension == "ogv":
+			_insert_local_video_asset(path)
+		else:
+			if toolbar_status_label:
+				toolbar_status_label.text = "Unsupported file type: %s" % path.get_file()
+
+func _insert_imported_model_file(path: String) -> void:
+	var extension := path.get_extension().to_lower()
+	var imported_root: Node3D = null
+	if extension == "obj":
+		var mesh := RuntimeObjLoaderClass.load_mesh(path)
+		if mesh != null:
+			var part := _build_imported_block_instance("Box", Color.WHITE, "Plastic", 0.0, true, path.get_basename().get_file())
+			part.mesh = mesh
+			part.set_meta("roblox_class", "MeshPart")
+			part.set_meta("shape_type", "MeshPart")
+			part.set_meta("source_asset_path", path)
+			var target := _resolve_studio_3d_parent(_get_selected_editor_node())
+			if not (target is Node3D): target = placement_parent
+			(target as Node3D).add_child(part, true)
+			part.global_position = _get_editor_drop_position(10.0)
+			_update_block_collision(part)
+			_set_selection([part])
+			_refresh_explorer()
+			_commit_editor_history("Import OBJ model")
+			return
+	elif extension in ["glb", "gltf", "fbx"]:
+		var document: GLTFDocument = FBXDocument.new() if extension == "fbx" else GLTFDocument.new()
+		var state: GLTFState = FBXState.new() if extension == "fbx" else GLTFState.new()
+		if document.append_from_file(path, state) == OK:
+			var generated := document.generate_scene(state)
+			if generated is Node3D:
+				imported_root = generated as Node3D
+	elif path.begins_with("res://") or path.begins_with("user://"):
+		var resource := ResourceLoader.load(path)
+		if resource is PackedScene:
+			var generated := (resource as PackedScene).instantiate()
+			if generated is Node3D: imported_root = generated as Node3D
+		elif resource is Mesh:
+			var mesh_part := MeshInstance3D.new()
+			mesh_part.mesh = resource as Mesh
+			imported_root = mesh_part
+	if imported_root == null:
+		if toolbar_status_label: toolbar_status_label.text = "Could not import model: %s" % path.get_file()
+		return
+	var wrapper := Node3D.new()
+	wrapper.name = path.get_basename().get_file()
+	wrapper.set_meta("roblox_class", "Model")
+	wrapper.set_meta("source_asset_path", path)
+	var target_parent := _resolve_studio_3d_parent(_get_selected_editor_node())
+	if not (target_parent is Node3D): target_parent = placement_parent
+	(target_parent as Node3D).add_child(wrapper, true)
+	wrapper.global_position = _get_editor_drop_position(10.0)
+	wrapper.add_child(imported_root, true)
+	var mesh_nodes: Array[MeshInstance3D] = []
+	_collect_mesh_instances(wrapper, mesh_nodes)
+	for mesh_node in mesh_nodes:
+		mesh_node.add_to_group("studio_parts")
+		mesh_node.set_meta("roblox_class", "MeshPart")
+		mesh_node.set_meta("shape_type", "MeshPart")
+		mesh_node.set_meta("block_name", mesh_node.name)
+		mesh_node.set_meta("can_collide", true)
+		mesh_node.set_meta("transparency", 0.0)
+		mesh_node.set_meta("source_asset_path", path)
+		_update_block_collision(mesh_node)
+	_set_selection(mesh_nodes)
+	explorer_selected_node = wrapper
+	_refresh_explorer()
+	_commit_editor_history("Import 3D model")
+	if toolbar_status_label: toolbar_status_label.text = "Imported model: %s (%d mesh(es))" % [path.get_file(), mesh_nodes.size()]
 
 func _on_rbxl_file_selected(path: String) -> void:
+	await _run_rbxl_file_selected(path, false)
+
+func _on_rbxl_v2_file_selected(path: String) -> void:
+	await _run_rbxl_file_selected(path, true)
+
+func _run_rbxl_file_selected(path: String, use_experimental_v2: bool) -> void:
 	var clean_path := path.strip_edges()
 	if clean_path.is_empty():
 		return
@@ -7237,11 +7604,7 @@ func _on_rbxl_file_selected(path: String) -> void:
 			return
 	elif _should_prefetch_rbxl_assets_remotely():
 		await _prefetch_rbxl_assets_from_server(clean_path)
-	_clear_map_for_rbxl_import()
-	show_grid_enabled = false
-	_toggle_grid_visibility(false)
-	await get_tree().process_frame
-	var importer := RbxlRuntimeImporter.new()
+	var importer: Variant = RbxlRuntimeImporterV2.new() if use_experimental_v2 else RbxlRuntimeImporter.new()
 	importer.scale_factor = 0.5
 	importer.import_lighting = true
 	importer.replace_existing = false
@@ -7252,7 +7615,37 @@ func _on_rbxl_file_selected(path: String) -> void:
 		if toolbar_status_label:
 			toolbar_status_label.text = "Importing %s (%d/%d)" % [message, done, maxi(total, 1)]
 	)
-	var report: Dictionary = await importer.import_json_async(remote_place, placement_parent, self) if not remote_place.is_empty() else await importer.import_file_async(clean_path, self)
+	var prepared_v2: Dictionary = {}
+	if use_experimental_v2 and not remote_place.is_empty():
+		var remote_validation_error := str(importer.validate_place_data(remote_place))
+		if not remote_validation_error.is_empty():
+			last_rbxl_import_report = {"ok": false, "error": remote_validation_error, "importer_backend": "experimental_v2"}
+			if toolbar_status_label:
+				toolbar_status_label.text = "Experimental V2 import failed; current place preserved: %s" % remote_validation_error
+			_end_studio_operation()
+			return
+	if use_experimental_v2 and remote_place.is_empty():
+		if toolbar_status_label:
+			toolbar_status_label.text = "V2: checking map before replacing the current place..."
+		prepared_v2 = await importer.prepare_file_async(clean_path, self)
+		if not bool(prepared_v2.get("ok", false)):
+			var preflight_error := str(prepared_v2.get("error", "Experimental V2 could not parse this place"))
+			last_rbxl_import_report = {"ok": false, "error": preflight_error, "importer_backend": "experimental_v2"}
+			if toolbar_status_label:
+				toolbar_status_label.text = "Experimental V2 import failed; current place preserved: %s" % preflight_error
+			_end_studio_operation()
+			return
+	_clear_map_for_rbxl_import()
+	show_grid_enabled = false
+	_toggle_grid_visibility(false)
+	await get_tree().process_frame
+	var report: Dictionary = {}
+	if not remote_place.is_empty():
+		report = await importer.import_json_async(remote_place, placement_parent, self)
+	elif use_experimental_v2:
+		report = await importer.import_json_async(prepared_v2.get("json", {}), placement_parent, self)
+	else:
+		report = await importer.import_file_async(clean_path, self)
 	last_rbxl_import_report = report.duplicate(true)
 	show_grid_enabled = false
 	_toggle_grid_visibility(false)
@@ -7388,10 +7781,8 @@ func _register_imported_sound_asset(sound_data: Dictionary) -> void:
 			break
 	if not known:
 		current_imported_sound_assets.append(stored)
-	var resolved_path := str(stored.get("resolved_path", "")).strip_edges()
-	if bool(stored.get("as_music", false)) and not resolved_path.is_empty() and FileAccess.file_exists(resolved_path):
-		if not current_music_source_paths.has(resolved_path):
-			current_music_source_paths.append(resolved_path)
+	# SoundService also contains one-shot effects. Their scripts own playback;
+	# adding them to the music playlist loops every effect for the whole round.
 	_refresh_music_source_ui()
 
 func _refresh_music_source_ui() -> void:
@@ -7413,22 +7804,22 @@ func _build_toolbox_tab() -> void:
 	toolbox.name = "Toolbox"
 	toolbox.add_theme_constant_override("separation", 8)
 	left_panel.add_child(toolbox)
-	
+
 	var search_edit := LineEdit.new()
 	search_edit.placeholder_text = "Search catalog..."
 	search_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	toolbox.add_child(search_edit)
-	
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	toolbox.add_child(scroll)
-	
+
 	var items_vbox := VBoxContainer.new()
 	scroll.add_child(items_vbox)
-	
+
 	# Load some drafts / catalog items
 	var label := Label.new()
-	label.text = "Double click / Drag model\nto insert into Workspace."
+	label.text = "Double click / Drag model\r\nto insert into Workspace."
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size", 11)
 	label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
@@ -7439,20 +7830,68 @@ func _build_terrain_tab() -> void:
 	terrain.name = "Terrain"
 	terrain.add_theme_constant_override("separation", 8)
 	left_panel.add_child(terrain)
-	
-	var label := Label.new()
-	label.text = "Terrain generator tools."
-	label.add_theme_font_size_override("font_size", 12)
-	terrain.add_child(label)
+	var heading := Label.new()
+	heading.text = "Terrain"
+	heading.add_theme_font_size_override("font_size", 18)
+	terrain.add_child(heading)
+	var description := Label.new()
+	description.text = "Build voxel ground, paint materials, and sculpt hills in the viewport."
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.add_theme_color_override("font_color", Color("#697586"))
+	terrain.add_child(description)
+	var open_editor := Button.new()
+	open_editor.text = "Open Terrain Editor"
+	open_editor.pressed.connect(_open_terrain_panel_popup)
+	terrain.add_child(open_editor)
+	var dimensions := GridContainer.new()
+	dimensions.columns = 2
+	dimensions.add_theme_constant_override("h_separation", 8)
+	dimensions.add_theme_constant_override("v_separation", 4)
+	terrain.add_child(dimensions)
+	var width_spin := SpinBox.new()
+	var depth_spin := SpinBox.new()
+	var height_spin := SpinBox.new()
+	for spec in [["Width", width_spin, 8, 64, 32], ["Depth", depth_spin, 8, 64, 32], ["Max height", height_spin, 1, 16, 10]]:
+		var caption := Label.new()
+		caption.text = str(spec[0])
+		dimensions.add_child(caption)
+		var spin: SpinBox = spec[1]
+		spin.min_value = float(spec[2])
+		spin.max_value = float(spec[3])
+		spin.step = 1
+		spin.value = float(spec[4])
+		dimensions.add_child(spin)
+	var presets := GridContainer.new()
+	presets.columns = 2
+	presets.add_theme_constant_override("h_separation", 6)
+	presets.add_theme_constant_override("v_separation", 6)
+	terrain.add_child(presets)
+	for preset in [["Flat", "flat"], ["Hills", "hills"], ["Islands", "islands"]]:
+		var button := Button.new()
+		button.text = str(preset[0])
+		button.pressed.connect(func() -> void:
+			if roblox_terrain_editor == null:
+				roblox_terrain_editor = RobloxTerrainEditorClass.new()
+			roblox_terrain_editor.prepare(self, placement_parent)
+			var seed := randi_range(1, 999999)
+			roblox_terrain_editor.generate(str(preset[1]), int(width_spin.value), int(depth_spin.value), int(height_spin.value), seed)
+		)
+		presets.add_child(button)
+	var hint := Label.new()
+	hint.text = "Use the editor to choose Grass, Ground, Rock, Sand, Snow, Water, Mud, or Concrete and paint directly on the map."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color("#697586"))
+	terrain.add_child(hint)
 
 func _show_explorer_context_menu(item: TreeItem, pos: Vector2) -> void:
 	if explorer_popup:
 		explorer_popup.queue_free()
 	explorer_popup = PopupMenu.new()
 	add_child(explorer_popup)
-	
+
 	var metadata = item.get_metadata(0)
-	
+
 	if metadata is String:
 		var service_name: String = metadata
 		explorer_popup.add_item("Properties", 1)
@@ -7475,7 +7914,7 @@ func _show_explorer_context_menu(item: TreeItem, pos: Vector2) -> void:
 				explorer_popup.add_item("Delete (Del)", 11)
 				explorer_popup.add_item("Duplicate (Ctrl+D)", 12)
 			explorer_popup.add_separator()
-			
+
 			var add_submenu := PopupMenu.new()
 			add_submenu.name = "AddChildMenu"
 			var insert_classes := {
@@ -7494,7 +7933,7 @@ func _show_explorer_context_menu(item: TreeItem, pos: Vector2) -> void:
 				add_submenu.add_item(str(insert_classes[insert_id]), insert_id)
 			explorer_popup.add_child(add_submenu)
 			explorer_popup.add_submenu_item("Insert Object...", "AddChildMenu")
-			
+
 			explorer_popup.id_pressed.connect(func(id):
 				match id:
 					1:
@@ -7510,7 +7949,7 @@ func _show_explorer_context_menu(item: TreeItem, pos: Vector2) -> void:
 				if insert_classes.has(id):
 					_insert_roblox_instance(node, str(insert_classes[id]))
 			)
-			
+
 	explorer_popup.position = get_viewport().get_mouse_position()
 	explorer_popup.popup()
 
@@ -7695,7 +8134,7 @@ func _insert_roblox_instance(selected_parent: Node, roblox_class: String) -> voi
 		return
 	var instance := RobloxDataModelClass.create_instance(roblox_class, roblox_class)
 	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
-		instance.set_meta("code", "-- %s\nprint('%s started')\n" % [roblox_class, roblox_class])
+		instance.set_meta("code", "-- %s\r\nprint('%s started')\r\n" % [roblox_class, roblox_class])
 		instance.set_meta("lua_source", instance.get_meta("code"))
 		instance.set_meta("disabled", false)
 	if instance is Label:
@@ -7898,7 +8337,7 @@ func _add_script_to_node(parent_node: Node, service_name: String = "", requested
 			script_parent = Node.new()
 			script_parent.name = service_name
 			add_child(script_parent)
-			
+
 	if script_parent == null:
 		script_parent = placement_parent
 
@@ -7911,12 +8350,12 @@ func _add_script_to_node(parent_node: Node, service_name: String = "", requested
 	new_script.set_meta("script_type", script_class)
 	new_script.set_meta("roblox_class", script_class)
 	new_script.set_meta("disabled", false)
-	var source := "-- Server Script\nlocal object = script.Parent\nprint('Script loaded in: ' .. object.Name)\n"
+	var source := "-- Server Script\r\nlocal object = script.Parent\r\nprint('Script loaded in: ' .. object.Name)\r\n"
 	if script_class == "LocalScript":
-		source = "-- LocalScript: runs on the player's copy during Play\nlocal player = game:GetService('Players').LocalPlayer\nprint('LocalScript loaded for ' .. player.Name)\n"
+		source = "-- LocalScript: runs on the player's copy during Play\r\nlocal player = game:GetService('Players').LocalPlayer\r\nprint('LocalScript loaded for ' .. player.Name)\r\n"
 	new_script.set_meta("code", source)
 	new_script.set_meta("lua_source", source)
-	
+
 	script_parent.add_child(new_script, true)
 	explorer_selected_node = new_script
 	_refresh_explorer()
@@ -8350,7 +8789,7 @@ func _create_authored_tool(tool_parent: Node, specification: Dictionary = {}) ->
 	var source := """local tool = script.Parent
 local lastSwing = 0
 tool.Equipped:Connect(function()
-    tool:SetAttribute(\"Equipped\", true)
+	tool:SetAttribute(\"Equipped\", true)
 end)
 tool.Unequipped:Connect(function()
     tool:SetAttribute(\"Equipped\", false)
@@ -8482,13 +8921,9 @@ func _builtin_model_part_specs(asset_name: String) -> Array[Dictionary]:
 				{"name":"Knob", "shape":"Sphere", "size":[0.45,0.45,0.45], "position":[1.8,4,0.32], "color":"#E1B34C", "material":"Metal", "can_collide":false, "tint":false},
 			]
 		"ladder":
-			var ladder: Array[Dictionary] = [
-				{"name":"LeftRail", "shape":"Box", "size":[0.45,12,0.45], "position":[-1.6,6,0], "color":"#B8B8B8", "material":"Metal", "climbable":true},
-				{"name":"RightRail", "shape":"Box", "size":[0.45,12,0.45], "position":[1.6,6,0], "color":"#B8B8B8", "material":"Metal", "climbable":true},
-			]
-			for rung_index in range(7):
-				ladder.append({"name":"Rung%d" % (rung_index + 1), "shape":"Cylinder", "size":[0.34,3.2,0.34], "position":[0,1.1 + rung_index * 1.65,0], "rotation":[0,0,90], "color":"#B8B8B8", "material":"Metal", "climbable":true})
-			return ladder
+			# Use the same open X-braced TrussPart used by Roblox instead of the
+			# old disconnected rails and oversized cylinder rungs.
+			return [{"name":"TrussLadder", "shape":"Truss", "size":[2.0,12.0,2.0], "position":[0,6.0,0], "color":"#A3A2A5", "material":"Plastic", "climbable":true}]
 		"arch":
 			return [
 				{"name":"LeftPillar", "shape":"Box", "size":[3,10,3], "position":[-5,5,0], "color":"#B8A58D", "material":"Concrete"},
@@ -8498,7 +8933,7 @@ func _builtin_model_part_specs(asset_name: String) -> Array[Dictionary]:
 		"stairs":
 			var stairs: Array[Dictionary] = []
 			for stair_index in range(8):
-				stairs.append({"name":"Step%d" % (stair_index + 1), "shape":"Box", "size":[6,0.75,2.2], "position":[0,0.375 + stair_index * 0.75,stair_index * -1.7], "color":"#9A9DA3", "material":"Concrete"})
+				stairs.append({"name":"Step%d" % (stair_index + 1), "shape":"Box", "size":[6,0.75,2.2], "position":[0,0.375 + stair_index * 0.75,stair_index * -1.7], "color":"#A87945", "material":"WoodPlanks"})
 			return stairs
 	return []
 
@@ -8765,26 +9200,64 @@ func _show_service_properties(service_name: String) -> void:
 func _open_script_in_editor(script_node: Node) -> void:
 	var inst_id := script_node.get_instance_id()
 	_ensure_script_document_button(script_node)
-	
+
 	if open_scripts.has(inst_id):
 		_show_script_document(inst_id)
 		return
-			
+
 	var tab_root := VBoxContainer.new()
 	tab_root.name = script_node.name
 	script_editor_tabs.add_child(tab_root)
 	open_scripts[inst_id] = tab_root
 	_show_script_document(inst_id)
-	
+
+	# --- Toolbar ---
 	var toolbar := HBoxContainer.new()
-	toolbar.add_theme_constant_override("separation", 8)
+	toolbar.add_theme_constant_override("separation", 6)
+	toolbar.add_theme_constant_override("margin_left", 8)
+	toolbar.add_theme_constant_override("margin_right", 8)
+	toolbar.add_theme_constant_override("margin_top", 4)
+	toolbar.add_theme_constant_override("margin_bottom", 4)
 	tab_root.add_child(toolbar)
-	
+
+	var script_type := str(script_node.get_meta("script_type", "Script"))
+	var type_label := Label.new()
+	type_label.text = script_type
+	type_label.add_theme_font_size_override("font_size", 11)
+	type_label.add_theme_color_override("font_color", Color("#888888"))
+	type_label.add_theme_constant_override("margin_right", 12)
+	toolbar.add_child(type_label)
+
 	var save_btn := Button.new()
 	save_btn.text = "Save"
+	save_btn.tooltip_text = "Save script (Ctrl+S)"
 	_style_white_button(save_btn)
 	toolbar.add_child(save_btn)
-	
+
+	var find_btn := Button.new()
+	find_btn.text = "Find"
+	find_btn.tooltip_text = "Find (Ctrl+F)"
+	_style_white_button(find_btn)
+	toolbar.add_child(find_btn)
+
+	var replace_btn := Button.new()
+	replace_btn.text = "Replace"
+	replace_btn.tooltip_text = "Replace (Ctrl+H)"
+	_style_white_button(replace_btn)
+	toolbar.add_child(replace_btn)
+
+	var goto_btn := Button.new()
+	goto_btn.text = "Go to Line"
+	goto_btn.tooltip_text = "Go to Line (Ctrl+G)"
+	_style_white_button(goto_btn)
+	toolbar.add_child(goto_btn)
+
+	var validate_btn := Button.new()
+	validate_btn.text = "Validate"
+	validate_btn.tooltip_text = "Check syntax (Ctrl+Shift+V)"
+	_style_white_button(validate_btn)
+	toolbar.add_child(validate_btn)
+
 	var keyboard_btn: Button = null
 	if _is_mobile_studio_runtime():
 		keyboard_btn = Button.new()
@@ -8792,74 +9265,419 @@ func _open_script_in_editor(script_node: Node) -> void:
 		keyboard_btn.tooltip_text = "Focus the code editor and open the screen keyboard"
 		_style_white_button(keyboard_btn)
 		toolbar.add_child(keyboard_btn)
-	
+
 	var close_btn := Button.new()
 	close_btn.text = "Close"
+	close_btn.tooltip_text = "Close tab (Ctrl+W)"
 	_style_white_button(close_btn)
 	toolbar.add_child(close_btn)
-	
+
+	# Spacer to push close button right
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	toolbar.add_child(spacer)
+
+	# --- Editor ---
 	var code_edit := CodeEdit.new()
 	code_edit.text = script_node.get_meta("code", "")
 	code_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	setup_lua_editor(code_edit)
 	tab_root.add_child(code_edit)
+
 	if keyboard_btn != null:
 		keyboard_btn.pressed.connect(func() -> void:
 			code_edit.grab_focus()
 		)
 		code_edit.call_deferred("grab_focus")
+
 	var document_button := script_document_buttons.get(inst_id, null) as Button
+	var is_dirty := false
 	code_edit.text_changed.connect(func() -> void:
+		is_dirty = true
 		if document_button != null and is_instance_valid(document_button) and not document_button.text.ends_with(" *"):
 			document_button.text = "%s *" % script_node.name
+		# Real-time validation (debounced)
+		call_deferred("_validate_script_realtime", code_edit, inst_id)
 	)
-	
+
+	# --- Output Panel (resizable) ---
 	var console_panel := PanelContainer.new()
-	console_panel.custom_minimum_size = Vector2(0, 84 if _is_mobile_studio_runtime() else 120)
+	console_panel.custom_minimum_size = Vector2(0, 150 if _is_mobile_studio_runtime() else 200)
+	console_panel.size_flags_vertical = Control.SIZE_SHRINK_END
 	console_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#17191D"), Color("#333840"), 1))
 	tab_root.add_child(console_panel)
-	
+
 	var console_vbox := VBoxContainer.new()
+	console_vbox.add_theme_constant_override("separation", 4)
+	console_vbox.add_theme_constant_override("margin_left", 8)
+	console_vbox.add_theme_constant_override("margin_right", 8)
+	console_vbox.add_theme_constant_override("margin_top", 6)
+	console_vbox.add_theme_constant_override("margin_bottom", 6)
 	console_panel.add_child(console_vbox)
-	
+
+	var console_header := HBoxContainer.new()
+	console_header.add_theme_constant_override("separation", 8)
+	console_vbox.add_child(console_header)
+
 	var console_title := Label.new()
-	console_title.text = "Output Log:"
+	console_title.text = "Output Log"
 	console_title.add_theme_font_size_override("font_size", 11)
 	console_title.add_theme_color_override("font_color", Color("#D9DCE1"))
-	console_vbox.add_child(console_title)
-	
+	console_header.add_child(console_title)
+
+	var clear_console_btn := Button.new()
+	clear_console_btn.text = "Clear"
+	clear_console_btn.custom_minimum_size = Vector2(60, 22)
+	_style_white_button(clear_console_btn)
+	console_header.add_child(clear_console_btn)
+
 	var console_text := RichTextLabel.new()
 	console_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	console_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	console_text.scroll_following = true
 	console_text.add_theme_color_override("default_color", Color("#C8CDD5"))
+	console_text.add_theme_font_size_override("normal_font_size", 12)
+	console_text.bbcode_enabled = true
 	console_vbox.add_child(console_text)
-	
-	save_btn.pressed.connect(func():
-		if not is_instance_valid(script_node):
-			console_text.append_text("[Error] Script instance no longer exists.\n")
-			return
-		code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
-		var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
-		if not bool(validation.get("ok", false)):
-			console_text.append_text("[Compile Error] %s\n" % str(validation.get("error", "Unknown syntax error")))
-			return
-		_commit_script_editor_source(script_node, code_edit.text)
-		if document_button != null and is_instance_valid(document_button):
-			document_button.text = script_node.name
-		console_text.append_text("[System] Saved. The script starts automatically with Play. Restart Play to apply changes.\n")
+
+	# Store references for external access
+	code_edit.set_meta("_script_inst_id", inst_id)
+	code_edit.set_meta("_console_text", console_text)
+	code_edit.set_meta("_document_button", document_button)
+	code_edit.set_meta("_script_node", script_node)
+
+	# --- Connections ---
+	save_btn.pressed.connect(func() -> void: _save_script_tab(code_edit))
+	find_btn.pressed.connect(func() -> void: _show_find_dialog(code_edit))
+	replace_btn.pressed.connect(func() -> void: _show_replace_dialog(code_edit))
+	goto_btn.pressed.connect(func() -> void: _show_goto_line_dialog(code_edit))
+	validate_btn.pressed.connect(func() -> void: _validate_script_now(code_edit, console_text))
+	clear_console_btn.pressed.connect(func() -> void: console_text.clear())
+
+	close_btn.pressed.connect(func() -> void:
+		if is_dirty:
+			var confirm := ConfirmationDialog.new()
+			confirm.title = "Unsaved Changes"
+			confirm.dialog_text = "Save changes to %s before closing?" % script_node.name
+			confirm.ok_button_text = "Save"
+			confirm.add_button("Don't Save", true, "dont_save")
+			confirm.add_button("Cancel", false, "cancel")
+			add_child(confirm)
+			confirm.confirmed.connect(func() -> void: _save_and_close_tab(code_edit))
+			confirm.custom_action.connect(func(action: String) -> void:
+				if action == "dont_save":
+					_close_script_tab(code_edit, false)
+			)
+			confirm.popup_centered()
+		else:
+			_close_script_tab(code_edit, false)
 	)
-	
-	close_btn.pressed.connect(func():
-		open_scripts.erase(inst_id)
-		var doc_button := script_document_buttons.get(inst_id, null) as Button
-		script_document_buttons.erase(inst_id)
-		if doc_button != null and is_instance_valid(doc_button):
-			doc_button.queue_free()
-		tab_root.queue_free()
-		_show_viewport_document()
-	)
-	
+
+	# Shortcuts
+	var shortcuts := [
+		["ui_save", func() -> void: _save_script_tab(code_edit)],
+		["ui_find", func() -> void: _show_find_dialog(code_edit)],
+		["ui_replace", func() -> void: _show_replace_dialog(code_edit)],
+		["ui_goto_line", func() -> void: _show_goto_line_dialog(code_edit)],
+		["ui_toggle_breakpoint", func() -> void: _toggle_breakpoint_at_caret(code_edit)],
+	]
+	for sc in shortcuts:
+		var sc_name: Variant = sc[0]
+		var sc_func: Variant = sc[1]
+		var shortcut := InputMap.action_get_events(sc_name)
+		if shortcut.size() > 0:
+			code_edit.add_shortcut(shortcut[0], sc_func.callable())
+
 	script_editor_tabs.current_tab = script_editor_tabs.get_tab_idx_from_control(tab_root)
+
+
+# ===== Script Editor Helpers =====
+func _save_script_tab(code_edit: CodeEdit) -> void:
+	var inst_id := int(code_edit.get_meta("_script_inst_id", 0))
+	var console_text := code_edit.get_meta("_console_text", null) as RichTextLabel
+	var document_button := code_edit.get_meta("_document_button", null) as Button
+	var script_node := code_edit.get_meta("_script_node", null) as Node
+
+	if not is_instance_valid(script_node):
+		if console_text: console_text.append_text("[Error] Script instance no longer exists.\r\n")
+		return
+
+	code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
+	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
+	if not bool(validation.get("ok", false)):
+		if console_text: console_text.append_text("[Compile Error] %s\r\n" % str(validation.get("error", "Unknown syntax error")))
+		return
+
+	_commit_script_editor_source(script_node, code_edit.text)
+	if document_button != null and is_instance_valid(document_button):
+		document_button.text = script_node.name
+	if console_text: console_text.append_text("[System] Saved successfully.\r\n")
+
+
+func _save_and_close_tab(code_edit: CodeEdit) -> void:
+	_save_script_tab(code_edit)
+	_close_script_tab(code_edit, true)
+
+
+func _close_script_tab(code_edit: CodeEdit, saved: bool) -> void:
+	var inst_id := int(code_edit.get_meta("_script_inst_id", 0))
+	var doc_button := code_edit.get_meta("_document_button", null) as Button
+
+	if open_scripts.has(inst_id):
+		open_scripts.erase(inst_id)
+	if script_document_buttons.has(inst_id):
+		script_document_buttons.erase(inst_id)
+	if doc_button != null and is_instance_valid(doc_button):
+		doc_button.queue_free()
+
+	var tab_root := code_edit.get_parent()
+	if tab_root != null and is_instance_valid(tab_root):
+		tab_root.queue_free()
+
+	_show_viewport_document()
+
+
+func _show_find_dialog(code_edit: CodeEdit) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Find"
+	dialog.ok_button_text = "Find Next"
+	dialog.add_button("Find Previous", true, "prev")
+	add_child(dialog)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("margin_left", 16)
+	vbox.add_theme_constant_override("margin_right", 16)
+	vbox.add_theme_constant_override("margin_top", 16)
+	vbox.add_theme_constant_override("margin_bottom", 16)
+	dialog.add_child(vbox)
+
+	var search := LineEdit.new()
+	search.placeholder_text = "Search text..."
+	search.custom_minimum_size = Vector2(380, 32)
+	search.add_theme_stylebox_override("normal", _studio_line_edit_style())
+	vbox.add_child(search)
+
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 8)
+	vbox.add_child(options)
+
+	var case_check := CheckBox.new()
+	case_check.text = "Match Case"
+	options.add_child(case_check)
+
+	var word_check := CheckBox.new()
+	word_check.text = "Whole Word"
+	options.add_child(word_check)
+
+	var regex_check := CheckBox.new()
+	regex_check.text = "Regex"
+	options.add_child(regex_check)
+
+	var find_state := {"last_needle": "", "last_options": 0}
+
+	dialog.confirmed.connect(func() -> void:
+		_do_find(code_edit, search.text, case_check.button_pressed, word_check.button_pressed, regex_check.button_pressed, false, find_state)
+	)
+	dialog.custom_action.connect(func(action: String) -> void:
+		if action == "prev":
+			_do_find(code_edit, search.text, case_check.button_pressed, word_check.button_pressed, regex_check.button_pressed, true, find_state)
+	)
+
+	search.grab_focus()
+	dialog.popup_centered(Vector2i(440, 200))
+
+
+func _do_find(code_edit: CodeEdit, needle: String, match_case: bool, whole_word: bool, use_regex: bool, reverse: bool, find_state: Dictionary) -> void:
+	if needle.is_empty():
+		return
+	find_state["last_needle"] = needle
+	find_state["last_options"] = (1 if match_case else 0) | (2 if whole_word else 0) | (4 if use_regex else 0)
+
+	var flags := 0
+	if not match_case: flags |= 1
+	if whole_word: flags |= 2
+	if use_regex: flags |= 4
+	if reverse: flags |= 8
+
+	var caret_line := code_edit.get_caret_line()
+	var caret_col := code_edit.get_caret_column()
+	var start_line := caret_line
+	var start_col := caret_col
+
+	var found := code_edit.search(needle, flags, start_line, start_col)
+	var found_line: int = found.x
+	var found_col: int = found.y
+	if found_line >= 0:
+		code_edit.set_caret_line(found_line)
+		code_edit.set_caret_column(found_col)
+		code_edit.select(found_line, found_col, found_line, found_col + needle.length())
+		code_edit.center_viewport_to_caret()
+	else:
+		# Wrap around
+		var wrap_line := code_edit.get_line_count() - 1 if reverse else 0
+		var wrap_col := code_edit.get_line(wrap_line).length() if reverse else 0
+		found = code_edit.search(needle, flags, wrap_line, wrap_col)
+		found_line = found.x
+		found_col = found.y
+		if found_line >= 0:
+			code_edit.set_caret_line(found_line)
+			code_edit.set_caret_column(found_col)
+			code_edit.select(found_line, found_col, found_line, found_col + needle.length())
+			code_edit.center_viewport_to_caret()
+
+
+func _show_replace_dialog(code_edit: CodeEdit) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Replace"
+	dialog.ok_button_text = "Replace"
+	dialog.add_button("Replace All", true, "replace_all")
+	dialog.add_button("Find Next", false, "find_next")
+	add_child(dialog)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("margin_left", 16)
+	vbox.add_theme_constant_override("margin_right", 16)
+	vbox.add_theme_constant_override("margin_top", 16)
+	vbox.add_theme_constant_override("margin_bottom", 16)
+	dialog.add_child(vbox)
+
+	var find_row := HBoxContainer.new()
+	find_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(find_row)
+	var find_label := Label.new()
+	find_label.text = "Find:"
+	find_label.custom_minimum_size = Vector2(50, 0)
+	find_row.add_child(find_label)
+	var search := LineEdit.new()
+	search.placeholder_text = "Search text..."
+	search.custom_minimum_size = Vector2(0, 32)
+	search.add_theme_stylebox_override("normal", _studio_line_edit_style())
+	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	find_row.add_child(search)
+
+	var replace_row := HBoxContainer.new()
+	replace_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(replace_row)
+	var replace_label := Label.new()
+	replace_label.text = "Replace:"
+	replace_label.custom_minimum_size = Vector2(50, 0)
+	replace_row.add_child(replace_label)
+	var replace := LineEdit.new()
+	replace.placeholder_text = "Replace with..."
+	replace.custom_minimum_size = Vector2(0, 32)
+	replace.add_theme_stylebox_override("normal", _studio_line_edit_style())
+	replace.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	replace_row.add_child(replace)
+
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 8)
+	vbox.add_child(options)
+	var case_check := CheckBox.new()
+	case_check.text = "Match Case"
+	options.add_child(case_check)
+	var word_check := CheckBox.new()
+	word_check.text = "Whole Word"
+	options.add_child(word_check)
+	var regex_check := CheckBox.new()
+	regex_check.text = "Regex"
+	options.add_child(regex_check)
+
+	dialog.confirmed.connect(func() -> void:
+		_do_replace(code_edit, search.text, replace.text, case_check.button_pressed, word_check.button_pressed, regex_check.button_pressed, false)
+	)
+	dialog.custom_action.connect(func(action: String) -> void:
+		if action == "replace_all":
+			_do_replace(code_edit, search.text, replace.text, case_check.button_pressed, word_check.button_pressed, regex_check.button_pressed, true)
+		elif action == "find_next":
+			_do_find(code_edit, search.text, case_check.button_pressed, word_check.button_pressed, regex_check.button_pressed, false, {})
+	)
+
+	search.grab_focus()
+	dialog.popup_centered(Vector2i(480, 220))
+
+
+func _do_replace(code_edit: CodeEdit, needle: String, replacement: String, match_case: bool, whole_word: bool, use_regex: bool, replace_all: bool) -> void:
+	if needle.is_empty():
+		return
+	var flags := 0
+	if not match_case: flags |= 1
+	if whole_word: flags |= 2
+	if use_regex: flags |= 4
+
+	var count := 0
+	if replace_all:
+		count = code_edit.replace_all(needle, replacement, flags)
+		if count > 0:
+			var console := code_edit.get_meta("_console_text", null) as RichTextLabel
+			if console: console.append_text("[System] Replaced %d occurrence(s).\r\n" % count)
+	else:
+		var caret_line := code_edit.get_caret_line()
+		var caret_col := code_edit.get_caret_column()
+		var found := code_edit.search(needle, flags, caret_line, caret_col)
+		var found_line: int = found.x
+		var found_col: int = found.y
+		if found_line >= 0:
+			code_edit.set_caret_line(found_line)
+			code_edit.set_caret_column(found_col)
+			code_edit.select(found_line, found_col, found_line, found_col + needle.length())
+			code_edit.center_viewport_to_caret()
+			code_edit.insert_text_at_caret(replacement)
+			var console := code_edit.get_meta("_console_text", null) as RichTextLabel
+			if console: console.append_text("[System] Replaced 1 occurrence.\r\n")
+		else:
+			var console := code_edit.get_meta("_console_text", null) as RichTextLabel
+			if console: console.append_text("[System] No match found.\r\n")
+
+
+func _show_goto_line_dialog(code_edit: CodeEdit) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Go to Line"
+	dialog.ok_button_text = "Go"
+	add_child(dialog)
+
+	var spin := SpinBox.new()
+	spin.min_value = 1
+	spin.max_value = maxi(1, code_edit.get_line_count())
+	spin.value = code_edit.get_caret_line() + 1
+	spin.custom_minimum_size = Vector2(240, 36)
+	spin.add_theme_stylebox_override("normal", _studio_line_edit_style())
+	dialog.add_child(spin)
+
+	dialog.confirmed.connect(func() -> void:
+		var line := clampi(int(spin.value) - 1, 0, code_edit.get_line_count() - 1)
+		code_edit.set_caret_line(line)
+		code_edit.set_caret_column(0)
+		code_edit.center_viewport_to_caret()
+	)
+
+	spin.grab_focus()
+	dialog.popup_centered(Vector2i(300, 140))
+
+
+func _validate_script_now(code_edit: CodeEdit, console_text: RichTextLabel) -> void:
+	code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
+	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
+	if bool(validation.get("ok", false)):
+		console_text.append_text("[color=#4EC9B0][Validate] Syntax OK[/color]\r\n")
+	else:
+		console_text.append_text("[color=#F44747][Validate Error] %s[/color]\r\n" % str(validation.get("error", "Unknown error")))
+
+
+func _validate_script_realtime(code_edit: CodeEdit, inst_id: int) -> void:
+	# Debounced real-time validation - only show errors, not success
+	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
+	if not bool(validation.get("ok", false)):
+		# Could show inline error markers here in future
+		pass
+
+
+func _toggle_breakpoint_at_caret(code_edit: CodeEdit) -> void:
+	var line := code_edit.get_caret_line()
+	var breakpoints: PackedInt32Array = code_edit.get_breakpointed_lines()
+	code_edit.set_line_as_breakpoint(line, not breakpoints.has(line))
 
 
 func _on_lua_script_message(context: Node, message: String, is_error: bool) -> void:
@@ -8876,7 +9694,7 @@ func _on_lua_script_message(context: Node, message: String, is_error: bool) -> v
 		if output != null:
 			if output.get_line_count() > 500:
 				output.clear()
-			output.append_text(("[Error] " if is_error else "") + message + "\n")
+			output.append_text(("[Error] " if is_error else "") + message + "\r\n")
 	if is_error and toolbar_status_label != null:
 		toolbar_status_label.text = "%s: %s" % [context.name, message.left(220)]
 
@@ -8909,6 +9727,17 @@ func setup_lua_editor(code_edit: CodeEdit) -> void:
 		"tostring", "tonumber", "type", "typeof", "rawget", "rawset"
 	]:
 		highlighter.add_keyword_color(api, Color("#9CDCFE"))
+	for roblox_api in [
+		"Game", "Workspace", "Players", "Lighting", "ReplicatedStorage",
+		"ServerScriptService", "ServerStorage", "StarterGui", "StarterPack",
+		"StarterPlayer", "Teams", "SoundService", "TextChatService",
+		"RunService", "TweenService", "Debris", "CollectionService",
+		"DataStoreService", "UserInputService", "ContextActionService",
+		"MarketplaceService", "BadgeService", "InsertService", "PhysicsService",
+		"HttpService", "TeleportService", "LocalizationService", "coroutine",
+		"os", "debug", "bit32", "utf8", "buffer", "super"
+	]:
+		highlighter.add_keyword_color(roblox_api, Color("#9CDCFE"))
 	highlighter.add_color_region('"', '"', Color("#CE9178"))
 	highlighter.add_color_region("'", "'", Color("#CE9178"))
 	highlighter.add_color_region("[[", "]]", Color("#CE9178"))
@@ -8944,7 +9773,7 @@ func _set_item_icon(item: TreeItem, type_name: String) -> void:
 		icon = explorer_tree.get_theme_icon("Folder", "EditorIcons") if explorer_tree.has_theme_icon("Folder", "EditorIcons") else null
 	elif type_name == "Script" or type_name == "LocalScript" or type_name == "ModuleScript":
 		icon = explorer_tree.get_theme_icon("Script", "EditorIcons") if explorer_tree.has_theme_icon("Script", "EditorIcons") else null
-	
+
 	if icon:
 		item.set_icon(0, icon)
 
@@ -9699,11 +10528,11 @@ func _get_model_drafts_root_path() -> String:
 	return "user://studio_drafts/models".path_join(owner_key)
 
 func _style_toolbar_button(button: Button, active: bool) -> void:
-	var accent: Color = button.get_meta("accent_color", Color("#0066CC"))
 	var label_text := _get_ribbon_button_label(button)
+	var accent: Color = _get_ribbon_icon_color(label_text, false)
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color("#DDEEFF") if active else Color("#FAFAFA")
-	normal.border_color = accent if active else Color("#D0D0D0")
+	normal.bg_color = Color("#DDEEFF") if active else Color("#FFFFFF").lerp(accent, 0.09)
+	normal.border_color = accent if active else Color("#FFFFFF").lerp(accent, 0.38)
 	normal.set_border_width_all(1)
 	normal.corner_radius_top_left = 2
 	normal.corner_radius_top_right = 2
@@ -9715,8 +10544,8 @@ func _style_toolbar_button(button: Button, active: bool) -> void:
 	normal.content_margin_bottom = 0
 
 	var hover := normal.duplicate()
-	hover.bg_color = Color("#CFE8FF") if active else Color("#EEF6FF")
-	hover.border_color = Color("#2C8CD6")
+	hover.bg_color = Color("#CFE8FF") if active else Color("#FFFFFF").lerp(accent, 0.18)
+	hover.border_color = accent.lightened(0.12)
 
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
@@ -10257,7 +11086,7 @@ func _on_transform_entered(value: float) -> void:
 				if c.name == "Y": n_pos.y = c.value
 				if c.name == "Z": n_pos.z = c.value
 		selected_block.position = n_pos
-		
+
 	var scale_hbox = inspector_panel.get_node_or_null("ScaleHBox")
 	if scale_hbox:
 		var n_scale = Vector3.ONE
@@ -10297,7 +11126,7 @@ func _on_damage_amount_changed(value: float) -> void:
 
 func _on_material_changed(index: int) -> void:
 	if selected_block and is_instance_valid(selected_block):
-		var mat_types := ["Plastic", "Neon", "Glass", "Metal"]
+		var mat_types := RbxlMaterialCache.NAMED_MATERIAL_ENUMS.keys()
 		var mat_type: String = mat_types[index] if index < mat_types.size() else "Plastic"
 		selected_block.set_meta("material_type", mat_type)
 		if selected_block is MeshInstance3D:
@@ -10319,9 +11148,14 @@ func _rebuild_block_material(block: MeshInstance3D) -> void:
 	var transparency: float = block.get_meta("transparency", 0.0)
 	var new_mat := _create_material(color, mat_type, transparency)
 	var reflectance := clampf(float(block.get_meta("Reflectance", 0.0)), 0.0, 1.0)
-	new_mat.metallic = reflectance
 	new_mat.metallic_specular = lerpf(0.5, 1.0, reflectance)
-	block.mesh.surface_set_material(0, new_mat)
+	block.material_override = new_mat
+	RbxlMaterialCache.sync_texture_scale(block, _get_workspace_stud_scale())
+	var props: Dictionary = block.get_meta("roblox_properties", {}).duplicate(false)
+	props["Material"] = RbxlMaterialCache.NAMED_MATERIAL_ENUMS.get(mat_type, 256)
+	props["Color"] = [color.r, color.g, color.b]
+	props["Transparency"] = transparency
+	block.set_meta("roblox_properties", props)
 	_refresh_special_block_visuals(block)
 
 func _on_color_changed(color: Color) -> void:
@@ -10383,21 +11217,48 @@ func _on_music_browse_pressed() -> void:
 		studio_music_dialog = AcceptDialog.new()
 		studio_music_dialog.title = "Фоновая музыка режима"
 		studio_music_dialog.ok_button_text = "Готово"
+		studio_music_dialog.add_theme_stylebox_override(
+			"panel",
+			_studio_panel_style(Color("#F7FAFE"), Color("#CBDCEB"), 1, 8)
+		)
 		var column := VBoxContainer.new()
-		column.custom_minimum_size = Vector2(480, 230)
+		column.custom_minimum_size = Vector2(600, 320)
+		column.add_theme_constant_override("separation", 10)
+		var heading := Label.new()
+		heading.text = "Музыка проекта"
+		heading.add_theme_font_size_override("font_size", 20)
+		heading.add_theme_color_override("font_color", Color("#1F2937"))
+		column.add_child(heading)
 		var info := Label.new()
-		info.text = "Треки сохраняются с картой и передаются другим игрокам."
+		info.text = "Добавьте плейлист проекта. Треки сохраняются вместе с картой и проигрываются по порядку."
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_theme_color_override("font_color", Color("#687386"))
 		column.add_child(info)
 		var actions := HBoxContainer.new()
 		column.add_child(actions)
 		var browse := Button.new()
-		browse.text = "Добавить MP3 / OGG / WAV"
+		browse.text = "＋  Добавить треки"
 		browse.pressed.connect(func(): music_file_dialog.popup_centered(Vector2(720, 420)))
+		_style_white_button(browse, Color("#D14BB4"))
 		actions.add_child(browse)
+		var preview := Button.new()
+		preview.text = "▶  Прослушать"
+		preview.pressed.connect(func() -> void:
+			if not current_music_source_paths.is_empty():
+				_play_studio_music(studio_music_track)
+		)
+		_style_white_button(preview, Color("#229B5C"))
+		actions.add_child(preview)
 		var stop := Button.new()
-		stop.text = "Остановить"
+		stop.text = "■  Стоп"
 		stop.pressed.connect(func(): if is_instance_valid(studio_music_player): studio_music_player.stop())
+		_style_white_button(stop, Color("#DC5864"))
 		actions.add_child(stop)
+		var clear := Button.new()
+		clear.text = "Очистить"
+		clear.pressed.connect(_on_music_clear_pressed)
+		_style_white_button(clear)
+		actions.add_child(clear)
 		atmosphere_music_volume_label = Label.new()
 		column.add_child(atmosphere_music_volume_label)
 		atmosphere_music_volume_slider = HSlider.new()
@@ -10405,6 +11266,12 @@ func _on_music_browse_pressed() -> void:
 		atmosphere_music_volume_slider.value = studio_music_volume * 100
 		atmosphere_music_volume_slider.value_changed.connect(_on_music_volume_changed)
 		column.add_child(atmosphere_music_volume_slider)
+		studio_music_toggle_check = CheckButton.new()
+		studio_music_toggle_check.text = "Кнопка включения музыки в игре"
+		studio_music_toggle_check.button_pressed = studio_music_toggle_enabled
+		studio_music_toggle_check.add_theme_color_override("font_color", Color("#263238"))
+		studio_music_toggle_check.toggled.connect(func(enabled: bool): studio_music_toggle_enabled = enabled)
+		column.add_child(studio_music_toggle_check)
 		var scroll := ScrollContainer.new()
 		scroll.custom_minimum_size.y = 150
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -10412,11 +11279,17 @@ func _on_music_browse_pressed() -> void:
 		atmosphere_music_list = VBoxContainer.new()
 		atmosphere_music_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.add_child(atmosphere_music_list)
-		studio_music_dialog.add_child(column)
+		var inset := MarginContainer.new()
+		inset.add_theme_constant_override("margin_left", 18)
+		inset.add_theme_constant_override("margin_right", 18)
+		inset.add_theme_constant_override("margin_top", 14)
+		inset.add_theme_constant_override("margin_bottom", 12)
+		inset.add_child(column)
+		studio_music_dialog.add_child(inset)
 		add_child(studio_music_dialog)
 		_on_music_volume_changed(studio_music_volume * 100)
 	_rebuild_music_track_list()
-	studio_music_dialog.popup_centered(Vector2i(600, 340))
+	studio_music_dialog.popup_centered(Vector2i(660, 470))
 
 func _play_studio_music(index: int) -> void:
 	if current_music_source_paths.is_empty(): return
@@ -10513,16 +11386,14 @@ func _apply_mode_settings_to_ui(settings: Dictionary, folder: String = "") -> vo
 	for key in settings.keys():
 		merged_settings[key] = settings[key]
 	studio_music_volume = clampf(float(merged_settings.get("music_volume", DEFAULT_MODE_MUSIC_VOLUME)), 0, 1)
+	studio_music_toggle_enabled = bool(merged_settings.get("music_toggle_enabled", false))
+	if is_instance_valid(studio_music_toggle_check): studio_music_toggle_check.set_pressed_no_signal(studio_music_toggle_enabled)
 
 	current_music_source_paths.clear()
 	current_sky_source_path = ""
 	current_imported_sound_assets.clear()
 	current_roblox_environment_settings.clear()
-	var music_playlist: Array = merged_settings.get("music_playlist", [])
-	if music_playlist.is_empty():
-		var legacy_music_file := str(merged_settings.get("music_file", "")).strip_edges()
-		if not legacy_music_file.is_empty():
-			music_playlist = [legacy_music_file]
+	var music_playlist: Array = AudioFileLoader.imported_music_playlist(settings, folder)
 	var skybox_file := str(merged_settings.get("skybox_file", "")).strip_edges()
 	for music_file_variant in music_playlist:
 		var music_file := str(music_file_variant).strip_edges()
@@ -10657,6 +11528,7 @@ func _collect_roblox_environment_settings() -> Dictionary:
 		settings["fog_enabled"] = bool(env.get("fog_enabled"))
 		settings["fog_color"] = _color_to_array(env.get("fog_light_color") as Color if env.get("fog_light_color") is Color else Color(0.78, 0.78, 0.78))
 		settings["fog_density"] = float(env.get("fog_density")) if env.get("fog_density") != null else 0.0
+	settings["render_snapshot"] = preload("res://addons/roblox_runtime/roblox_environment_snapshot.gd").capture(env_node.environment if env_node != null else null, sun_light)
 	return settings
 
 func _collect_roblox_place_manifest_from_import() -> Dictionary:
@@ -10858,6 +11730,8 @@ func _apply_roblox_environment_settings_to_environment(env: Environment, setting
 	env.set("fog_enabled", bool(settings.get("fog_enabled", false)))
 	env.set("fog_light_color", _color_from_array(settings.get("fog_color", [0.78, 0.78, 0.78]), Color(0.78, 0.78, 0.78)))
 	env.set("fog_density", clampf(float(settings.get("fog_density", 0.0)), 0.0, 0.05))
+	preload("res://addons/roblox_runtime/roblox_environment_snapshot.gd").apply(env, sun_light, settings)
+
 
 func _apply_roblox_procedural_sky_to_environment(env: Environment, sky_color: Color) -> void:
 	RobloxSkyMaterial.apply_to_environment(env, sky_color)
@@ -11027,7 +11901,9 @@ func _collect_mode_settings_for_save(folder: String) -> Dictionary:
 	var settings := _get_default_mode_settings()
 	var music_volume_percent := studio_music_volume * 100.0
 	settings["music_volume"] = clampf(float(music_volume_percent) / 100.0, 0.0, 1.0)
+	settings["music_toggle_enabled"] = studio_music_toggle_enabled
 	settings["music_playlist"] = _store_mode_playlist_files(current_music_source_paths, folder)
+	settings["roblox_sound_playlist_policy"] = 2
 	settings["skybox_file"] = _store_mode_asset_file(current_sky_source_path, folder, MODE_SKY_FILE_BASENAME)
 	settings["roblox_sound_assets"] = current_imported_sound_assets.duplicate(true)
 	if not current_roblox_environment_settings.is_empty():
@@ -11127,11 +12003,18 @@ func _store_runtime_object_asset_files(objects: Array[Dictionary], folder: Strin
 
 func _store_manifest_asset_files(manifest: Dictionary, folder: String) -> void:
 	var stored := {}
+	var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
 	for section in ["instances", "tools", "gui", "storage_libraries"]:
 		for entry in manifest.get(section, []):
 			var props: Dictionary = entry.get("properties", {})
-			for key in ["BobuxMeshResource", "SoundId"]:
-				var source := _resolve_existing_file_path_for_folder(str(props.get(key, "")), current_map_folder)
+			for key in preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").CONTENT_KEYS:
+				var content := str(props.get(key, ""))
+				var source := _resolve_existing_file_path_for_folder(content, folder)
+				if source.is_empty(): source = _resolve_existing_file_path_for_folder(content, current_map_folder)
+				if source.is_empty() and not content.is_empty():
+					if key in ["MeshId", "MeshID"]: source = importer._find_cached_mesh_json_asset(importer._sanitize_asset_id(content))
+					elif key == "SoundId": source = importer._resolve_sound_content_to_local_path(content)
+					elif key != "BobuxMeshResource": source = importer._resolve_texture_content_to_local_path(content)
 				if source.is_empty(): continue
 				if not stored.has(source):
 					stored[source] = _store_mode_asset_file(source, folder, "manifest_asset_%04d" % stored.size())
@@ -11299,6 +12182,7 @@ func _runtime_object_data_from_node(node: Node) -> Dictionary:
 func _load_runtime_objects_from_map(raw_objects: Variant) -> void:
 	if not (raw_objects is Array):
 		return
+	current_roblox_place_manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").bind_runtime_assets(current_roblox_place_manifest, raw_objects)
 	var parent: Node = placement_parent if placement_parent else self
 	for object_variant in raw_objects:
 		if not (object_variant is Dictionary):
@@ -11358,6 +12242,10 @@ func _create_runtime_object_node_from_data(data: Dictionary) -> Node3D:
 	runtime_node.rotation_degrees = Vector3(float(data.get("rx", 0.0)), float(data.get("ry", 0.0)), float(data.get("rz", 0.0)))
 	runtime_node.add_to_group(RBXL_RUNTIME_OBJECT_GROUP)
 	runtime_node.set_meta("runtime_object_data", data.duplicate(true))
+	if runtime_node is GPUParticles3D:
+		runtime_node.set_meta("roblox_class", roblox_class)
+		runtime_node.set_meta("roblox_properties", data.get("properties", {"Enabled": data.get("enabled", true), "Rate": data.get("rate", 16)}))
+		preload("res://addons/roblox_runtime/roblox_particles.gd").configure(runtime_node)
 	runtime_node.set_meta("roblox_class", roblox_class)
 	return runtime_node
 
@@ -11441,20 +12329,20 @@ func _on_publish_pressed() -> void:
 	desc_edit.placeholder_text = "Enter a description..."
 	desc_edit.text = str(existing_meta.get("description", ""))
 	vbox.add_child(desc_edit)
-	
+
 	var icon_label := Label.new()
 	icon_label.text = "Icon (Options):"
 	vbox.add_child(icon_label)
-	
+
 	var icon_hbox = HBoxContainer.new()
 	vbox.add_child(icon_hbox)
-	
+
 	var icon_path_edit = LineEdit.new()
 	icon_path_edit.placeholder_text = "Default (Screenshot)"
 	icon_path_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	icon_path_edit.editable = false
 	icon_hbox.add_child(icon_path_edit)
-	
+
 	var browse_btn = Button.new()
 	browse_btn.text = " Browse... "
 	icon_hbox.add_child(browse_btn)
@@ -11466,7 +12354,7 @@ func _on_publish_pressed() -> void:
 	file_dialog.title = "Select Icon Image"
 	file_dialog.use_native_dialog = true
 	add_child(file_dialog)
-	
+
 	browse_btn.pressed.connect(func(): file_dialog.popup_centered(Vector2(600, 400)))
 	file_dialog.file_selected.connect(func(path: String): icon_path_edit.text = path)
 
@@ -11534,6 +12422,13 @@ func _publish_map(folder: String, map_name: String, description: String, custom_
 	if not save_ok:
 		_finish_publish_progress(false, "Could not save map_data.json.")
 		return {"ok": false, "error": "Could not save map_data.json."}
+	var saved_payload: Dictionary = await _read_json_dictionary_async(folder + "/map_data.json")
+	var missing_visual_assets := _find_unbundled_manifest_visual_assets(saved_payload, folder)
+	if not missing_visual_assets.is_empty():
+		var missing_summary := ", ".join(missing_visual_assets.slice(0, 5))
+		var error_text := "Could not package imported image(s): %s. Download or re-import these images, then publish again." % missing_summary
+		_finish_publish_progress(false, error_text)
+		return {"ok": false, "error": error_text, "missing_assets": missing_visual_assets}
 	print("[Studio] Publishing '%s' to Bobux Cloud..." % map_name)
 	_show_publish_progress("Publishing Map", "Uploading %s to Bobux Cloud..." % map_name, 0.24)
 	var cloud_result: Dictionary = await _upload_published_map_to_cloud(folder, map_name)
@@ -11802,7 +12697,7 @@ func _collect_publish_asset_file_names(payload: Dictionary, playlist: Array, fol
 	var result: Array[String] = []
 	for section in ["instances", "tools", "gui", "storage_libraries"]:
 		for entry in payload.get("roblox_manifest", {}).get(section, []):
-			for key in ["BobuxMeshResource", "SoundId"]:
+			for key in preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").CONTENT_KEYS:
 				_append_publish_asset_file_name(result, str(entry.get("properties", {}).get(key, "")))
 	for file_variant in playlist:
 		_append_publish_asset_file_name(result, str(file_variant).strip_edges())
@@ -11829,8 +12724,31 @@ func _collect_publish_asset_file_names(payload: Dictionary, playlist: Array, fol
 		_append_publish_assets_from_folder(result, folder)
 	return result
 
+func _find_unbundled_manifest_visual_assets(payload: Dictionary, folder: String) -> Array[String]:
+	var missing: Array[String] = []
+	var manifest: Dictionary = payload.get("roblox_manifest", {}) if payload.get("roblox_manifest", {}) is Dictionary else {}
+	var visual_content_keys := ["Image", "Texture", "TextureID", "TextureId", "ColorMap", "NormalMap", "RoughnessMap", "MetalnessMap"]
+	for section in ["instances", "tools", "gui", "storage_libraries"]:
+		var entries: Array = manifest.get(section, []) if manifest.get(section, []) is Array else []
+		for entry_variant in entries:
+			if not (entry_variant is Dictionary):
+				continue
+			var entry: Dictionary = entry_variant
+			var properties: Dictionary = entry.get("properties", {}) if entry.get("properties", {}) is Dictionary else {}
+			for property_name in visual_content_keys:
+				var value := str(properties.get(property_name, "")).strip_edges()
+				if value.is_empty():
+					continue
+				var bundled_name := value.get_file() if value.contains(":") or value.is_absolute_path() else value
+				if not FileAccess.file_exists(folder.path_join(bundled_name)):
+					missing.append("%s.%s (ref %s)" % [str(entry.get("class", "Instance")), property_name, str(entry.get("ref", "?"))])
+	return missing
+
 func _append_publish_asset_file_name(result: Array[String], value: String) -> void:
+	value = value.strip_edges()
 	if value.is_empty():
+		return
+	if preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").is_asset_reference(value):
 		return
 	if value.begins_with("res://") or value.begins_with("user://") or value.find(":") == 1:
 		value = value.get_file()
@@ -11839,6 +12757,10 @@ func _append_publish_asset_file_name(result: Array[String], value: String) -> vo
 		value = value.substr(2)
 	if value.contains("../") or value.begins_with("/"):
 		value = value.get_file()
+	# Old saves prefixed failed web downloads with user://<map>/ or ./.
+	# Re-check after stripping that obsolete local prefix, not only before it.
+	if preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").is_asset_reference(value):
+		return
 	if value.is_empty() or result.has(value):
 		return
 	result.append(value)
@@ -12155,6 +13077,7 @@ func _save_map(folder: String) -> bool:
 		var authored_manifest: Variant = data_model.call("build_manifest", current_roblox_place_manifest)
 		if authored_manifest is Dictionary:
 			current_roblox_place_manifest = (authored_manifest as Dictionary).duplicate(false)
+	current_roblox_place_manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").bind_runtime_assets(current_roblox_place_manifest, runtime_objects)
 	_store_manifest_asset_files(current_roblox_place_manifest, folder)
 	var data = {
 		"time_of_day": time_val,
@@ -12216,7 +13139,12 @@ func _load_map_from_folder(folder: String) -> void:
 	_apply_mode_settings_to_ui(data.get("mode_settings", _get_default_mode_settings()), folder)
 
 	var blocks: Array = data.get("blocks", [])
+	var loaded_block_count := 0
 	for block_data in blocks:
+		loaded_block_count += 1
+		if loaded_block_count % 64 == 0:
+			if toolbar_status_label: toolbar_status_label.text = "Loading parts %d/%d..." % [loaded_block_count, blocks.size()]
+			await get_tree().process_frame
 		var target_parent = placement_parent if placement_parent else self
 		var pos := Vector3(
 			block_data.get("px", 0.0),
@@ -12285,6 +13213,7 @@ func _load_map_from_folder(folder: String) -> void:
 		mesh_inst.set_meta("bobux_color", col)
 		_update_block_collision(mesh_inst)
 		target_parent.add_child(mesh_inst)
+		RbxlMaterialCache.sync_texture_scale(mesh_inst, _get_workspace_stud_scale())
 
 	_load_runtime_objects_from_map(data.get("runtime_objects", []))
 	await _install_roblox_manifest_data_model_preview()

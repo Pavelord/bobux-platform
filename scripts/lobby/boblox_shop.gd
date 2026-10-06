@@ -19,6 +19,7 @@ var _compact := false
 var _busy := false
 var _refreshing := false
 var _dialog: ConfirmationDialog
+var _payment_notice: Control
 var _email: LineEdit
 var _consent: CheckBox
 var _dialog_status: Label
@@ -336,6 +337,9 @@ func _set_account(data: Dictionary) -> void:
 	account_updated.emit(account)
 
 func _show_checkout(product: Dictionary) -> void:
+	if not bool(catalog.get("sales_enabled", false)):
+		show_purchase_unavailable_notice()
+		return
 	if _busy: return
 	_chosen = product
 	var pending := ConfigFile.new()
@@ -388,6 +392,155 @@ func _show_checkout(product: Dictionary) -> void:
 	_dialog_status.text = "Продажи ещё не открыты. Деньги не списываются." if not can_buy else "Тестовый платёж: настоящие деньги не списываются." if catalog.get("test", false) else "Данные карты вводятся только на странице платёжного сервиса."
 	_update_checkout_button()
 	_dialog.popup_centered()
+
+func show_purchase_unavailable_notice() -> void:
+	if bool(catalog.get("sales_enabled", false)):
+		return
+	if is_instance_valid(_payment_notice):
+		_payment_notice.show()
+		return
+	var message := "Оплата Boblox и Bricks Club пока не подключена. Для неё нужно настроить платёжный сервис. Когда у проекта появится больше игроков, вернёмся к запуску покупок.\n\nПока можно добровольно поддержать автора — это поможет чаще выпускать обновления и новые возможности для всех игроков. Поддержка не начисляет Boblox и не открывает клуб. Мы запомним вашу поддержку и постараемся отблагодарить вас по мере развития проекта."
+	_show_retro_notice("Покупки пока недоступны", message, true)
+
+func _open_creator_support() -> void:
+	var url := str(catalog.get("creator_support_url", "")).strip_edges()
+	if url.begins_with("https://"):
+		var error := OS.shell_open(url)
+		if error != OK:
+			_show_support_link_notice("Не удалось открыть страницу поддержки. Попробуй ещё раз позже.")
+		return
+	_show_support_link_notice("Ссылка на поддержку пока не настроена. Когда автор её добавит, эта кнопка будет открывать страницу поддержки.")
+
+func _show_support_link_notice(message: String) -> void:
+	_show_retro_notice("Поддержка автора", message, false)
+
+func _show_retro_notice(title: String, message: String, with_support_button: bool) -> void:
+	if is_instance_valid(_payment_notice):
+		_payment_notice.queue_free()
+	var overlay := ColorRect.new()
+	overlay.name = "BobloxUnavailableNotice"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.44)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = 100
+	overlay.z_as_relative = false
+	add_child(overlay)
+	_payment_notice = overlay
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.x = minf(520.0, maxf(240.0, get_viewport_rect().size.x - 32.0))
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color.WHITE
+	panel_style.border_color = Color("#666666")
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(0)
+	panel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.28)
+	panel_style.shadow_size = 10
+	panel_style.shadow_offset = Vector2(0, 3)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+	var card := VBoxContainer.new()
+	card.add_theme_constant_override("separation", 0)
+	panel.add_child(card)
+	var header := PanelContainer.new()
+	var header_style := StyleBoxFlat.new()
+	header_style.bg_color = Color("#0076b4")
+	header_style.set_corner_radius_all(0)
+	header_style.content_margin_left = 16
+	header_style.content_margin_right = 8
+	header_style.content_margin_top = 7
+	header_style.content_margin_bottom = 7
+	header.add_theme_stylebox_override("panel", header_style)
+	card.add_child(header)
+	var heading := HBoxContainer.new()
+	heading.add_theme_constant_override("separation", 8)
+	header.add_child(heading)
+	var heading_label := _label(title, 19, Color.WHITE, true)
+	heading.add_child(heading_label)
+	var close := Button.new()
+	close.text = "×"
+	close.custom_minimum_size = Vector2(34, 30)
+	close.add_theme_font_size_override("font_size", 24)
+	close.add_theme_color_override("font_color", Color.WHITE)
+	close.add_theme_color_override("font_hover_color", Color.WHITE)
+	close.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	close.add_theme_stylebox_override("hover", _style(Color("#1689c5"), 2))
+	close.pressed.connect(_close_retro_notice)
+	heading.add_child(close)
+	var content_margin := MarginContainer.new()
+	content_margin.add_theme_constant_override("margin_left", 20)
+	content_margin.add_theme_constant_override("margin_right", 20)
+	content_margin.add_theme_constant_override("margin_top", 20)
+	content_margin.add_theme_constant_override("margin_bottom", 16)
+	card.add_child(content_margin)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 14)
+	content_margin.add_child(content)
+	var text := _label(message, 16, INK)
+	text.custom_minimum_size.y = 76 if with_support_button else 36
+	content.add_child(text)
+	var rule := ColorRect.new()
+	rule.color = Color("#d4d4d4")
+	rule.custom_minimum_size.y = 1
+	content.add_child(rule)
+	var footer: BoxContainer
+	if get_viewport_rect().size.x < 460.0:
+		footer = VBoxContainer.new()
+		footer.add_theme_constant_override("separation", 8)
+	else:
+		var button_row := HBoxContainer.new()
+		button_row.alignment = BoxContainer.ALIGNMENT_END
+		button_row.add_theme_constant_override("separation", 10)
+		footer = button_row
+	footer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(footer)
+	if with_support_button:
+		var support := _notice_button("Поддержать автора", Color("#0076b4"), Color.WHITE)
+		if footer is VBoxContainer:
+			support.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		support.pressed.connect(func():
+			_close_retro_notice()
+			_open_creator_support()
+		)
+		footer.add_child(support)
+	var okay := _notice_button("Хорошо", Color("#e6e6e6"), Color("#333333"))
+	if footer is VBoxContainer:
+		okay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	okay.pressed.connect(_close_retro_notice)
+	footer.add_child(okay)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	overlay.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var local_panel := panel.get_global_rect()
+			if not local_panel.has_point(event.global_position):
+				_close_retro_notice()
+	)
+	overlay.resized.connect(func() -> void:
+		panel.custom_minimum_size.x = minf(520.0, maxf(240.0, overlay.size.x - 32.0))
+	)
+
+func _notice_button(text: String, background: Color, foreground: Color) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(144, 38)
+	button.add_theme_font_size_override("font_size", 15)
+	button.add_theme_color_override("font_color", foreground)
+	button.add_theme_color_override("font_hover_color", foreground)
+	button.add_theme_stylebox_override("normal", _style(background, 8))
+	var hover := background.lightened(0.08)
+	button.add_theme_stylebox_override("hover", _style(hover, 8))
+	button.add_theme_stylebox_override("pressed", _style(background.darkened(0.08), 8))
+	return button
+
+func _close_retro_notice() -> void:
+	if not is_instance_valid(_payment_notice):
+		return
+	var notice := _payment_notice
+	_payment_notice = null
+	notice.queue_free()
 
 func _update_checkout_button() -> void:
 	var email := _email.text.strip_edges()

@@ -11,6 +11,13 @@ static func _matches(text_: String, pattern: String) -> bool:
 
 static func plan_for_request(prompt: String, context: Dictionary) -> Dictionary:
 	var text_ := prompt.to_lower()
+	if _matches(text_, "ежеднев|daily") and _matches(text_, "бобл|boblox|bobux"):
+		return Prefabs.commerce_plan("daily_boblox", {})
+	if _matches(text_, "геймпас|gamepass|game pass") and _matches(text_, "монет|coin"):
+		var price_regex := RegEx.new()
+		price_regex.compile("(?:за|for)\\s+(\\d+)\\s*(?:боб|bob)")
+		var match_ := price_regex.search(text_)
+		return Prefabs.commerce_plan("gamepass_coin", {"Price":int(match_.get_string(1)) if match_ else 150})
 	var settings := _settings_plan(text_)
 	if not settings.is_empty(): return settings
 	var editing := _matches(text_, "исправ|почин|передел|измени|изменить|редакт|настрой|увелич|уменьш|fix|repair|edit|update|change")

@@ -6,6 +6,8 @@ var _button: Button
 var _status: Label
 var _card: PanelContainer
 var _confetti: Control
+var _scroll: ScrollContainer
+var _shell: VBoxContainer
 
 class Confetti extends Control:
 	var age := 0.0
@@ -35,10 +37,15 @@ func _ready() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	screen.add_child(center)
+	_shell = VBoxContainer.new()
+	_shell.add_theme_constant_override("separation", 12)
+	center.add_child(_shell)
 	var scroll := ScrollContainer.new()
+	_scroll = scroll
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(minf(620, get_viewport().get_visible_rect().size.x - 32), minf(660, get_viewport().get_visible_rect().size.y - 32))
-	center.add_child(scroll)
+	_shell.add_child(scroll)
+	get_viewport().size_changed.connect(_resize_dialog)
+	_resize_dialog()
 	_card = PanelContainer.new()
 	_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -66,7 +73,7 @@ func _ready() -> void:
 	column.add_child(_label("Turbo Bricks Club · навсегда", 23, Color("c62935")))
 	var message := _label("Спасибо за активное участие в развитии игры!\n\nВаши идеи, тестирование и поддержка помогают Bobux расти. Вы были рядом, когда многое только начиналось, и ваш вклад останется частью нашей истории.\n\nВ знак благодарности — пожизненный максимальный Bricks Club и галочка рядом с именем.", 17, Color("495367"))
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message.custom_minimum_size.x = minf(540, get_viewport().get_visible_rect().size.x - 92)
+	message.custom_minimum_size.x = 0
 	column.add_child(message)
 	_status = _label("Награда закреплена за вашим аккаунтом.", 13, Color("748094"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -83,7 +90,8 @@ func _ready() -> void:
 	hover.bg_color = Color("00c060")
 	_button.add_theme_stylebox_override("hover", hover)
 	_button.add_theme_color_override("font_color", Color.WHITE)
-	column.add_child(_button)
+	_shell.add_child(_button)
+	_button.action_mode = BaseButton.ACTION_MODE_BUTTON_RELEASE
 	_button.pressed.connect(_claim)
 	_confetti = Confetti.new()
 	_confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -92,6 +100,12 @@ func _ready() -> void:
 	_card.modulate.a = 0
 	create_tween().tween_property(_card, "modulate:a", 1.0, 0.35)
 	# Keep the heading visible on a short mobile screen; keyboard focus scrolls to the claim button.
+
+func _resize_dialog() -> void:
+	var viewport_size := get_viewport().get_visible_rect().size
+	_shell.custom_minimum_size.x = maxf(240, minf(620, viewport_size.x - 32))
+	_scroll.custom_minimum_size = Vector2(_shell.custom_minimum_size.x, maxf(80, minf(580, viewport_size.y - 104)))
+	_scroll.size_flags_vertical = Control.SIZE_FILL
 
 func _label(text_: String, pixels: int, color: Color) -> Label:
 	var label := Label.new()

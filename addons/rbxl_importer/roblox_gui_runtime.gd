@@ -382,7 +382,7 @@ static func _create_control_for_entry(entry: Dictionary, options: Dictionary) ->
 	control.set_meta("roblox_class", roblox_class)
 	control.set_meta("roblox_layout_order", int(props.get("LayoutOrder", 0)))
 	control.set_meta("roblox_display_order", int(props.get("DisplayOrder", 0)))
-	control.tooltip_text = "%s: %s" % [roblox_class, str(entry.get("name", ""))]
+	control.tooltip_text = "%s: %s" % [roblox_class, str(entry.get("name", ""))] if bool(options.get("editor_preview", false)) else ""
 	control.visible = bool(props.get("Enabled", props.get("Visible", true)))
 	control.mouse_filter = Control.MOUSE_FILTER_IGNORE if bool(options.get("ignore_mouse", true)) else Control.MOUSE_FILTER_PASS
 	_apply_udim2_layout(control, props, options)
@@ -443,6 +443,29 @@ static func _attach_texture_child(control: Control, texture: Texture2D, props: D
 	var image_alpha := 1.0 - clampf(float(props.get("ImageTransparency", 0.0)), 0.0, 1.0)
 	rect.self_modulate = _color_with_alpha(image_color, image_alpha)
 	control.add_child(rect)
+
+
+static func sync_image(control: Control, props: Dictionary, target: Node) -> void:
+	var key := hash([props.get("Image", ""), props.get("ImageRectSize"), props.get("ImageRectOffset"), props.get("ImageColor3"), props.get("ImageTransparency"), props.get("ScaleType")])
+	if control.get_meta("bobux_live_image_key", -1) == key: return
+	control.set_meta("bobux_live_image_key", key)
+	for child in control.get_children():
+		if child.name == "RobloxImage" or (control.has_meta("bobux_image_missing") and child is Label):
+			control.remove_child(child)
+			child.queue_free()
+	var source := str(props.get("Image", ""))
+	var avatar = preload("res://addons/roblox_runtime/roblox_avatar_thumbnail.gd")
+	var identity: String = avatar.user_id(source)
+	if not identity.is_empty():
+		var profile: Dictionary = avatar.profile_for(target, identity)
+		if not profile.is_empty():
+			_attach_texture_child(control, null, props)
+			var rect := control.get_node("RobloxImage") as TextureRect
+			rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			avatar.render(rect, profile, "avatarheadshot" in source.to_lower())
+		return
+	var texture := _load_gui_image_texture(props)
+	if texture != null: _attach_texture_child(control, texture, props)
 
 
 static func _apply_udim2_layout(control: Control, props: Dictionary, options: Dictionary = {}) -> void:
@@ -909,15 +932,13 @@ static func _load_gui_image_texture(props: Dictionary) -> Texture2D:
 	if image_source.begins_with("res://") or image_source.begins_with("user://") or image_source.find(":") == 1:
 		paths.append(image_source)
 	for path in paths:
-		if path.is_empty() or not FileAccess.file_exists(path):
+		if path.is_empty() or not preload("res://autoload/map_media_stream.gd").service().can_stream(path):
 			continue
 		if path.begins_with("res://"):
 			var resource := load(path)
 			if resource is Texture2D:
 				return resource as Texture2D
-		var image := Image.new()
-		if image.load(path) == OK:
-			return ImageTexture.create_from_image(image)
+		return preload("res://autoload/map_media_stream.gd").service().request_texture(path, Color.TRANSPARENT)
 	return null
 
 
@@ -1222,3 +1243,18 @@ static func _color_from_variant(raw: Variant, fallback: Color) -> Color:
 		var dict: Dictionary = raw
 		return Color(float(dict.get("r", fallback.r)), float(dict.get("g", fallback.g)), float(dict.get("b", fallback.b)), float(dict.get("a", fallback.a)))
 	return fallback
+
+
+static func absolute_rect(control: Control) -> Rect2:
+	# Layout the logical GUI against its viewport, even before its visible mirror
+	# is built. Legacy scripts use AbsoluteSize to calculate list row spacing.
+	var props: Dictionary = control.get_meta("roblox_properties", {})
+	var parent := control.get_parent_control()
+	var parent_rect := absolute_rect(parent) if parent != null else control.get_viewport().get_visible_rect()
+	if _is_gui_root_class(str(control.get_meta("roblox_class", ""))): return parent_rect
+	var size_data := _udim2_from_variant(props.get("Size", {}), {"x":{"scale":0,"offset":control.size.x},"y":{"scale":0,"offset":control.size.y}})
+	var pos_data := _udim2_from_variant(props.get("Position", {}), {"x":{"scale":0,"offset":control.position.x},"y":{"scale":0,"offset":control.position.y}})
+	var size_ := Vector2(float(size_data.x.scale)*parent_rect.size.x+float(size_data.x.offset), float(size_data.y.scale)*parent_rect.size.y+float(size_data.y.offset))
+	var position_ := Vector2(float(pos_data.x.scale)*parent_rect.size.x+float(pos_data.x.offset), float(pos_data.y.scale)*parent_rect.size.y+float(pos_data.y.offset))
+	var anchor := _vector2_from_variant(props.get("AnchorPoint", []), Vector2.ZERO)
+	return Rect2(parent_rect.position + position_ - anchor*size_, size_)

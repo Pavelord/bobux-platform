@@ -8,7 +8,7 @@ static func protect_strings(source: String) -> Dictionary:
 	spans.reverse()
 	for token in spans:
 		var value := str(token.text)
-		if not (value.begins_with("'") or value.begins_with('"') or (value.begins_with("[") and value.length() > 1)): continue
+		if not (value.begins_with("'") or value.begins_with('"') or value.begins_with("`") or (value.begins_with("[") and value.length() > 1)): continue
 		var placeholder := '"' + prefix + str(literals.size()) + '"'
 		literals[placeholder] = value
 		source = source.left(token.start) + placeholder + source.substr(token.end)
@@ -49,7 +49,7 @@ static func tokens(source: String) -> Array[Dictionary]:
 			var newline := source.find("\n", index)
 			index = source.length() if newline < 0 else newline + 1
 			continue
-		if character in ["'", '"']:
+		if character in ["'", '"', "`"]:
 			index += 1
 			while index < source.length():
 				if source[index] == "\\":

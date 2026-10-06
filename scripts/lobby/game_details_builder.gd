@@ -186,12 +186,17 @@ static func _load_servers(lobby: Control, info: Dictionary, target: VBoxContaine
 	var status := UI._label("Loading servers…", 16, UI.MUTED)
 	target.add_child(status)
 	var filter := str(info.get("map_id", info.get("id", info.get("name", ""))))
-	var response: Dictionary = await CloudAPI.fetch_active_servers(filter)
+	var response: Dictionary = await CloudAPI.fetch_active_servers("", 64)
 	if not is_instance_valid(target): return
 	target.set_meta("loading", false)
 	status.text = "No active servers. Press Play to start." if response.get("ok", false) else "Could not load servers. Try again."
+	var map_name := str(info.get("name", "")).strip_edges()
 	for server in response.get("data", []):
 		if not server is Dictionary: continue
+		if not NetworkManager.room_matches_published_map(server, filter, map_name): continue
+		if str(server.get("status", "")).strip_edges().to_lower() != "active": continue
+		var maximum := int(server.get("max_players", 0))
+		if maximum > 0 and int(server.get("players_count", 0)) >= maximum: continue
 		status.hide()
 		var panel := _panel()
 		target.add_child(panel)

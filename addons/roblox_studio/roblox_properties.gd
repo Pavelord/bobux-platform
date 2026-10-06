@@ -17,7 +17,7 @@ extends RefCounted
 const ROBLOX_CLASS_META := "roblox_class"
 const DEFAULT_BLOCK_DAMAGE := 25.0
 
-const MATERIAL_OPTIONS := ["Plastic", "SmoothPlastic", "Wood", "WoodPlanks", "Concrete", "Metal", "Glass", "Neon", "Slate"]
+const MATERIAL_OPTIONS := ["Plastic", "SmoothPlastic", "Neon", "Wood", "WoodPlanks", "Marble", "Basalt", "Slate", "CrackedLava", "Concrete", "Limestone", "Granite", "Pavement", "Brick", "Pebble", "Cobblestone", "Rock", "Sandstone", "CorrodedMetal", "DiamondPlate", "Foil", "Metal", "Grass", "LeafyGrass", "Sand", "Fabric", "Snow", "Mud", "Ground", "Asphalt", "Salt", "Ice", "Glacier", "Glass", "ForceField", "Water", "Cardboard", "Carpet", "CeramicTiles", "ClayRoofTiles", "RoofShingles", "Leather", "Plaster", "Rubber"]
 const SHAPE_OPTIONS := ["Box", "Sphere", "Cylinder", "Wedge", "CornerWedge", "Truss", "Water", "Spawn", "Checkpoint", "Teleport"]
 const SCRIPT_TYPES := ["Script", "LocalScript", "ModuleScript"]
 

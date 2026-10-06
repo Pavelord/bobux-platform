@@ -9,6 +9,8 @@ const Extras = preload("res://addons/roblox_studio/studio_extra_prefabs.gd")
 
 static func entries() -> Array[Dictionary]:
 	var result: Array[Dictionary] = [
+		_item("gamepass_coin", "Геймпасс · монета усиления", "Магазин", "150 Boblox один раз за режим. Монета в инвентаре: скорость 30, прыжок 70. Покупка и право владения сохраняются сервером; автор получает 70%."),
+		_item("daily_boblox", "GUI · ежедневные 10 Boblox", "Магазин", "Кнопка справа сверху. 10 Boblox раз в сутки UTC на аккаунт во всех режимах вместе. Повторные нажатия не начисляют валюту."),
 		_item("pistol", "Пистолет · инвентарь", "Оружие", "Пули, урон, прицел. Damage, Cooldown, EquipOnSpawn."),
 		_item("rpg", "RPG · инвентарь", "Оружие", "Ракеты и взрыв. Damage, Cooldown, EquipOnSpawn."),
 		_item("pistol_pickup", "Пистолет · подобрать E", "Оружие", "Мировой предмет с ProximityPrompt. После подбора появляется в Backpack."),
@@ -43,6 +45,7 @@ static func _item(id: String, title: String, category: String, description: Stri
 	return {"id": id, "name": title, "category": category, "description": description}
 
 static func parameters(id: String) -> Dictionary:
+	if id == "gamepass_coin": return {"Price": 150, "Speed": 30, "JumpPower": 70}
 	if "pistol" in id or "rpg" in id: return {"Damage": 70 if "rpg" in id else 25, "Cooldown": 1 if "rpg" in id else 0.25, "EquipOnSpawn": false}
 	if "coin" in id: return {"Speed": 30, "JumpPower": 70, "FallSpeed": 22, "EquipOnSpawn": false}
 	if id in ["zombie", "fast_zombie", "target_dummy"]: return {"Health": 60 if id == "fast_zombie" else 100, "WalkSpeed": 22 if id == "fast_zombie" else 10, "Damage": 10, "DetectionRange": 80}
@@ -70,6 +73,7 @@ static func _number(options: Dictionary, key: String, default_: float, minimum: 
 	return clampf(float(value), minimum, maximum)
 
 static func plan(id: String, options: Dictionary = {}) -> Dictionary:
+	if id in ["gamepass_coin", "daily_boblox"]: return commerce_plan(id, options)
 	var actions: Array = []
 	var root_id := "prefab"
 	if id in ["pistol", "rpg", "pistol_pickup", "rpg_pickup", "pistol_dispenser", "rpg_dispenser", "buff_coin", "coin_pickup", "coin_dispenser"]:
@@ -134,6 +138,21 @@ static func plan(id: String, options: Dictionary = {}) -> Dictionary:
 	else:
 		return Extras.plan(id, options)
 	return {"ok": true, "message": "Добавлена настраиваемая заготовка: %s. Скрипты доступны у объектов в Explorer; запуск — Play." % id, "actions": actions}
+
+static func commerce_plan(id: String, options: Dictionary) -> Dictionary:
+	var pass_ := id == "gamepass_coin"
+	var price := int(_number(options, "Price", 150, 1, 1000000))
+	var actions: Array = []
+	if pass_:
+		actions = plan("buff_coin", options).actions
+		actions[0].parent = "ReplicatedStorage"
+		actions[0].name = "GamepassBoostCoin"
+	var attrs := {"PrefabId": id, "Price": price, "ProductId": "boost_coin_v1", "ToolTemplate": "GamepassBoostCoin"}
+	actions.append({"type":"create_instance", "id":"commerce_gui", "class":"ScreenGui", "name":id.to_pascal_case(), "parent":"StarterGui"})
+	actions.append({"type":"create_instance", "id":"commerce_button", "class":"TextButton", "name":"OpenReward" if not pass_ else "OpenGamepass", "parent":"action:commerce_gui", "properties":{
+		"Text":"", "TextSize":16, "TextColor3":[1,1,1], "BackgroundColor3":[0.05,0.4,0.7] if pass_ else [0.08,0.52,0.31], "BorderSizePixel":0,
+		"Size":{"x":{"scale":0,"offset":44},"y":{"scale":0,"offset":44}}, "Position":{"x":{"scale":1,"offset":-62 if pass_ else -114},"y":{"scale":0,"offset":64}}, "Attributes":attrs}})
+	return {"ok":true, "message":"Готовая механика добавлена. В Studio — бесплатный предпросмотр; в опубликованной игре кошелёк и повторное получение проверяет сервер.", "actions":actions}
 
 const PICKUP := """local tool = script.Parent
 local prompt = tool:WaitForChild("ProximityPrompt")
