@@ -66,7 +66,8 @@ func _run() -> void:
 	var mat := preload("res://addons/rbxl_importer/material_cache.gd").new().get_part_material({"Color": [0.6, 0.25, 0.12], "TopSurface": 3, "BottomSurface": 4, "BobuxStudScale": 0.5})
 	check(mat.next_pass is ShaderMaterial, "separate stud and inlet face material")
 	check(mat.next_pass.get_shader_parameter("face_types") == Vector4(3, 4, 0, 0), "surface types preserved per face")
-	check(mat.next_pass.get_shader_parameter("studs_texture").get_width() == 2048, "original user texture retained")
+	var surface_atlas := mat.next_pass.get_shader_parameter("surface_atlas") as Texture2D
+	check(surface_atlas != null and surface_atlas.get_width() == 128 and surface_atlas.get_height() == 2048, "Roblox surface atlas retained")
 	scene.queue_free()
 	await process_frame
 	print("[legacy_media_physics] failures=", failures)
