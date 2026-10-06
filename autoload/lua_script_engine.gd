@@ -5113,6 +5113,7 @@ func _apply_manifest_part_appearance(mesh_instance: MeshInstance3D, properties: 
 	else:
 		material = imported
 	mesh_instance.material_override = material
+	_manifest_material_cache.sync_texture_scale(mesh_instance, BobuxInstance.wrap(mesh_instance)._stud_scale())
 	mesh_instance.set_meta("anchored", bool(properties.get("Anchored", true)))
 	mesh_instance.set_meta("can_collide", bool(properties.get("CanCollide", true)))
 	mesh_instance.set_meta("transparency", float(properties.get("Transparency", 0.0)))

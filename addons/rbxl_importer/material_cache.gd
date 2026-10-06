@@ -31,51 +31,105 @@ const ROBLOX_MATERIALS := {
 	15:  {"name": "Limestone",     "roughness": 0.80, "metallic": 0.0},
 	16:  {"name": "Pavement",      "roughness": 0.84, "metallic": 0.0},
 	17:  {"name": "ForceField",    "roughness": 0.30, "metallic": 0.0, "transparent": true, "alpha": 0.4},
-	256: {"name": "Plastic",       "roughness": 0.45, "metallic": 0.0},
-	272: {"name": "SmoothPlastic", "roughness": 0.10, "metallic": 0.0},
-	280: {"name": "Neon",          "roughness": 0.20, "metallic": 0.0, "emission": 1.5},
-	288: {"name": "Neon",          "roughness": 0.20, "metallic": 0.0, "emission": 2.0},
-	304: {"name": "Metal",         "roughness": 0.22, "metallic": 0.85},
-	512: {"name": "Wood",          "roughness": 0.96, "metallic": 0.0},
-	528: {"name": "WoodPlanks",    "roughness": 0.88, "metallic": 0.0},
-	544: {"name": "Marble",        "roughness": 0.20, "metallic": 0.0},
-	800: {"name": "Concrete",      "roughness": 0.82, "metallic": 0.0},
-	1024:{"name": "Metal",         "roughness": 0.22, "metallic": 0.85},
-	1040:{"name": "DiamondPlate",  "roughness": 0.30, "metallic": 0.90},
-	1056:{"name": "Foil",          "roughness": 0.12, "metallic": 1.0},
-	1280:{"name": "Grass",         "roughness": 0.97, "metallic": 0.0},
-	1296:{"name": "LeafyGrass",    "roughness": 0.97, "metallic": 0.0},
-	1312:{"name": "Sand",          "roughness": 0.96, "metallic": 0.0},
-	1328:{"name": "Fabric",        "roughness": 0.92, "metallic": 0.0},
-	1344:{"name": "Snow",          "roughness": 0.82, "metallic": 0.0},
-	1360:{"name": "Mud",           "roughness": 1.00, "metallic": 0.0},
-	1376:{"name": "Ground",        "roughness": 0.95, "metallic": 0.0},
-	1392:{"name": "Asphalt",       "roughness": 0.91, "metallic": 0.0},
-	1408:{"name": "Pavement",      "roughness": 0.84, "metallic": 0.0},
-	1424:{"name": "Limestone",     "roughness": 0.80, "metallic": 0.0},
-	1440:{"name": "Basalt",        "roughness": 0.86, "metallic": 0.0},
-	1536:{"name": "Ice",           "roughness": 0.00, "metallic": 0.0, "transparent": true, "alpha": 0.55},
-	1552:{"name": "Glacier",       "roughness": 0.06, "metallic": 0.0},
-	1792:{"name": "Glass",         "roughness": 0.05, "metallic": 0.0, "transparent": true, "alpha": 0.35},
-	1808:{"name": "ForceField",    "roughness": 0.30, "metallic": 0.0, "transparent": true, "alpha": 0.4},
+	256: {"name": "Plastic", "roughness": 0.45, "metallic": 0.0},
+	272: {"name": "SmoothPlastic", "roughness": 0.1, "metallic": 0.0},
+	288: {"name": "Neon", "roughness": 0.2, "metallic": 0.0, "emission": 2.0},
+	512: {"name": "Wood", "roughness": 0.85, "metallic": 0.0},
+	528: {"name": "WoodPlanks", "roughness": 0.85, "metallic": 0.0},
+	784: {"name": "Marble", "roughness": 0.2, "metallic": 0.0},
+	788: {"name": "Basalt", "roughness": 0.85, "metallic": 0.0},
+	800: {"name": "Slate", "roughness": 0.85, "metallic": 0.0},
+	804: {"name": "CrackedLava", "roughness": 0.85, "metallic": 0.0},
+	816: {"name": "Concrete", "roughness": 0.85, "metallic": 0.0},
+	820: {"name": "Limestone", "roughness": 0.85, "metallic": 0.0},
+	832: {"name": "Granite", "roughness": 0.85, "metallic": 0.0},
+	836: {"name": "Pavement", "roughness": 0.85, "metallic": 0.0},
+	848: {"name": "Brick", "roughness": 0.85, "metallic": 0.0},
+	864: {"name": "Pebble", "roughness": 0.85, "metallic": 0.0},
+	880: {"name": "Cobblestone", "roughness": 0.85, "metallic": 0.0},
+	896: {"name": "Rock", "roughness": 0.85, "metallic": 0.0},
+	912: {"name": "Sandstone", "roughness": 0.85, "metallic": 0.0},
+	1040: {"name": "CorrodedMetal", "roughness": 0.85, "metallic": 0.55},
+	1056: {"name": "DiamondPlate", "roughness": 0.3, "metallic": 0.9},
+	1072: {"name": "Foil", "roughness": 0.12, "metallic": 1.0},
+	1088: {"name": "Metal", "roughness": 0.22, "metallic": 0.85},
+	1280: {"name": "Grass", "roughness": 0.85, "metallic": 0.0},
+	1284: {"name": "LeafyGrass", "roughness": 0.85, "metallic": 0.0},
+	1296: {"name": "Sand", "roughness": 0.85, "metallic": 0.0},
+	1312: {"name": "Fabric", "roughness": 0.85, "metallic": 0.0},
+	1328: {"name": "Snow", "roughness": 0.85, "metallic": 0.0},
+	1344: {"name": "Mud", "roughness": 0.85, "metallic": 0.0},
+	1360: {"name": "Ground", "roughness": 0.85, "metallic": 0.0},
+	1376: {"name": "Asphalt", "roughness": 0.85, "metallic": 0.0},
+	1392: {"name": "Salt", "roughness": 0.85, "metallic": 0.0},
+	1536: {"name": "Ice", "roughness": 0.08, "metallic": 0.0},
+	1552: {"name": "Glacier", "roughness": 0.12, "metallic": 0.0},
+	1568: {"name": "Glass", "roughness": 0.05, "metallic": 0.0, "transparent": true, "alpha": 0.35},
+	1584: {"name": "ForceField", "roughness": 0.85, "metallic": 0.0},
+	1792: {"name": "Air", "roughness": 0.85, "metallic": 0.0},
+	2048: {"name": "Water", "roughness": 0.12, "metallic": 0.0},
+	2304: {"name": "Cardboard", "roughness": 0.85, "metallic": 0.0},
+	2305: {"name": "Carpet", "roughness": 0.85, "metallic": 0.0},
+	2306: {"name": "CeramicTiles", "roughness": 0.85, "metallic": 0.0},
+	2307: {"name": "ClayRoofTiles", "roughness": 0.85, "metallic": 0.0},
+	2308: {"name": "RoofShingles", "roughness": 0.85, "metallic": 0.0},
+	2309: {"name": "Leather", "roughness": 0.85, "metallic": 0.0},
+	2310: {"name": "Plaster", "roughness": 0.85, "metallic": 0.0},
+	2311: {"name": "Rubber", "roughness": 0.85, "metallic": 0.0},
 }
 
 const _DEFAULT := {"name": "Plastic", "roughness": 0.45, "metallic": 0.0}
+const MATERIAL_TEXTURE_ALIASES := {
+	"Cardboard": "WoodPlanks",
+	"Carpet": "Fabric",
+	"Leather": "Fabric",
+	"Plaster": "Concrete",
+}
 const NAMED_MATERIAL_ENUMS := {
 	"Plastic": 256,
 	"SmoothPlastic": 272,
+	"Neon": 288,
 	"Wood": 512,
 	"WoodPlanks": 528,
-	"Concrete": 800,
-	"Brick": 5,
+	"Marble": 784,
+	"Basalt": 788,
+	"Slate": 800,
+	"CrackedLava": 804,
+	"Concrete": 816,
+	"Limestone": 820,
+	"Granite": 832,
+	"Pavement": 836,
+	"Brick": 848,
+	"Pebble": 864,
+	"Cobblestone": 880,
+	"Rock": 896,
+	"Sandstone": 912,
+	"CorrodedMetal": 1040,
+	"DiamondPlate": 1056,
+	"Foil": 1072,
+	"Metal": 1088,
 	"Grass": 1280,
-	"Sand": 1312,
-	"Metal": 1024,
-	"Glass": 1792,
-	"Neon": 288,
-	"Slate": 2,
-	"Rock": 9,
+	"LeafyGrass": 1284,
+	"Sand": 1296,
+	"Fabric": 1312,
+	"Snow": 1328,
+	"Mud": 1344,
+	"Ground": 1360,
+	"Asphalt": 1376,
+	"Salt": 1392,
 	"Ice": 1536,
+	"Glacier": 1552,
+	"Glass": 1568,
+	"ForceField": 1584,
+	"Water": 2048,
+	"Cardboard": 2304,
+	"Carpet": 2305,
+	"CeramicTiles": 2306,
+	"ClayRoofTiles": 2307,
+	"RoofShingles": 2308,
+	"Leather": 2309,
+	"Plaster": 2310,
+	"Rubber": 2311,
 }
 const NAMED_MATERIAL_PATTERNS := {
 	"Wood": "wood",
@@ -95,27 +149,122 @@ var _surface_texture_cache: Dictionary = {}
 var use_procedural_material_fallbacks: bool = false
 var use_roblox_surface_patterns: bool = true
 
+func _apply_texture_pack(material: StandardMaterial3D, material_name: String) -> bool:
+	if _is_renderless_server(): return false
+	if material_name in ["Plastic", "SmoothPlastic", "Neon", "ForceField", "Air", "Water"]:
+		return false
+	var texture_name: String = str(MATERIAL_TEXTURE_ALIASES.get(material_name, material_name))
+	var folder := ""
+	var color_texture: Texture2D
+	# Some pre-2022 folders contain 4x4 white placeholders for materials that
+	# did not have a real texture. Keep looking so Modern/Ice and Modern/Foil
+	# can provide their actual appearance instead of silently rendering white.
+	for era in ["PartsPre2022", "Modern"]:
+		var candidate_folder := "res://Roblox-Materials/%s/%s/" % [era, texture_name]
+		var candidate_path := candidate_folder + "color.png"
+		if not ResourceLoader.exists(candidate_path):
+			continue
+		var candidate_texture := load(candidate_path) as Texture2D
+		if candidate_texture == null or candidate_texture.get_width() <= 4 or candidate_texture.get_height() <= 4:
+			continue
+		folder = candidate_folder
+		color_texture = candidate_texture
+		break
+	if color_texture == null:
+		return false
+	material.albedo_texture = color_texture
+	if ResourceLoader.exists(folder + "normal.png"):
+		material.normal_enabled = true
+		material.normal_texture = load(folder + "normal.png")
+	if ResourceLoader.exists(folder + "roughness.png"):
+		material.roughness = 1.0
+		material.roughness_texture = load(folder + "roughness.png")
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	if ResourceLoader.exists(folder + "metalness.png"):
+		material.metallic = 1.0
+		material.metallic_texture = load(folder + "metalness.png")
+		material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.texture_repeat = true
+	material.uv1_triplanar = true
+	material.uv1_triplanar_sharpness = 8.0
+	material.set_meta("bobux_texture_tile_studs", 8.0)
+	return true
+
+## Local triplanar coordinates follow rotation; physical scale controls repeats.
+## A resized part gets its own material instance without duplicating textures.
+static func sync_texture_scale(part: MeshInstance3D, stud_scale: float = -1.0) -> void:
+	if part == null or part.mesh == null:
+		return
+	if stud_scale <= 0.0:
+		stud_scale = 1.0
+		var cursor: Node = part
+		while cursor != null:
+			if cursor.has_meta("roblox_stud_scale"):
+				stud_scale = float(cursor.get_meta("roblox_stud_scale"))
+				break
+			cursor = cursor.get_parent()
+	for index in part.mesh.get_surface_count():
+		var original := part.get_active_material(index) as StandardMaterial3D
+		if original == null or not original.uv1_triplanar or not original.has_meta("bobux_texture_tile_studs"):
+			continue
+		var basis := part.global_basis if part.is_inside_tree() else part.basis
+		var scale_ := Vector3(basis.x.length(), basis.y.length(), basis.z.length())
+		var repeats := scale_ / (float(original.get_meta("bobux_texture_tile_studs")) * maxf(stud_scale, 0.001))
+		if original.uv1_scale.is_equal_approx(repeats):
+			continue
+		var material := original.duplicate(false) as StandardMaterial3D
+		material.uv1_scale = repeats
+		if part.material_override != null:
+			part.material_override = material
+			return
+		part.set_surface_override_material(index, material)
+
 
 static func resolve_material_enum(value: Variant) -> Dictionary:
-	var key: int = int(value) if value != null else 256
+	if value is Dictionary:
+		value = value.get("Value", value.get("value", value.get("Name", value.get("name", 256))))
+	var key := 256
+	if value is int or value is float:
+		key = int(value)
+	elif value is String:
+		key = int(value) if value.is_valid_int() else int(NAMED_MATERIAL_ENUMS.get(value.get_slice(".", value.count(".")), 256))
 	if ROBLOX_MATERIALS.has(key):
 		return ROBLOX_MATERIALS[key]
 	# Fallback by name lookup: try common plastic-ish id range.
 	return _DEFAULT
 
 
+static func surface_type_value(value: Variant) -> int:
+	if value is Dictionary:
+		value = value.get("Value", value.get("value", value.get("Name", value.get("name", 0))))
+	if value is int or value is float:
+		return int(value)
+	if value is String:
+		if value.is_valid_int(): return int(value)
+		return int({"Smooth": 0, "Glue": 1, "Weld": 2, "Studs": 3, "Inlet": 4,
+			"Universal": 5, "Hinge": 6, "Motor": 7, "SteppingMotor": 8,
+			"SmoothNoOutlines": 10}.get(value.get_slice(".", value.count(".")), 0))
+	return 0
+
+
 ## Build (or fetch a cached) StandardMaterial3D for the given Roblox properties.
 ## `color_rgb` is [r,g,b] in 0..1, `material_id` is the Roblox Material enum.
+static func _is_renderless_server() -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	var state := tree.root.get_node_or_null("GameState") if tree != null else null
+	return state != null and bool(state.get("dedicated_server_mode"))
+
 func get_part_material(props: Dictionary) -> StandardMaterial3D:
 	# SurfaceType belongs to an individual face, independently of Material.
 	var pattern := material_pattern_from_properties(props) if use_procedural_material_fallbacks else ""
 	var base := get_material(part_color_from_properties(props), _prop(props, "Material", 256),
 		_prop(props, "Transparency", 0.0), _prop(props, "Reflectance", 0.0), pattern)
-	if not use_roblox_surface_patterns:
+	if not use_roblox_surface_patterns or _is_renderless_server():
 		return base
-	var faces := Vector4(float(_prop(props, "TopSurface", 0)), float(_prop(props, "BottomSurface", 0)),
-		float(_prop(props, "RightSurface", 0)), float(_prop(props, "LeftSurface", 0)))
-	var ends := Vector2(float(_prop(props, "FrontSurface", 0)), float(_prop(props, "BackSurface", 0)))
+	var faces := Vector4(surface_type_value(_prop(props, "TopSurface", 0)), surface_type_value(_prop(props, "BottomSurface", 0)),
+		surface_type_value(_prop(props, "RightSurface", 0)), surface_type_value(_prop(props, "LeftSurface", 0)))
+	var ends := Vector2(surface_type_value(_prop(props, "FrontSurface", 0)), surface_type_value(_prop(props, "BackSurface", 0)))
 	if faces == Vector4.ZERO and ends == Vector2.ZERO:
 		return base
 	var scale_ := maxf(float(_prop(props, "BobuxStudScale", 0.5)), 0.001)
@@ -124,8 +273,8 @@ func get_part_material(props: Dictionary) -> StandardMaterial3D:
 	var result := base.duplicate() as StandardMaterial3D
 	var overlay := ShaderMaterial.new()
 	overlay.shader = preload("res://addons/rbxl_importer/brick_surfaces.gdshader")
-	overlay.set_shader_parameter("studs_texture", preload("res://assets/materials/brick_surfaces/studs.png"))
-	overlay.set_shader_parameter("inlets_texture", preload("res://assets/materials/brick_surfaces/inlets.png"))
+	overlay.set_shader_parameter("surface_atlas", preload("res://Roblox-Materials/ClassicSurfaceTypes/studs_atlas_preview.png"))
+	overlay.set_shader_parameter("part_color", base.albedo_color)
 	overlay.set_shader_parameter("face_types", faces)
 	overlay.set_shader_parameter("end_types", ends)
 	overlay.set_shader_parameter("stud_scale", scale_)
@@ -160,7 +309,7 @@ func get_named_material(color: Color, material_name: String, transparency: float
 	).duplicate(true) as StandardMaterial3D
 	if material != null:
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-		material.uv1_triplanar = not pattern.is_empty()
+		material.uv1_triplanar = material.albedo_texture != null
 	return material
 
 
@@ -170,7 +319,7 @@ func get_material(color_rgb: Variant, material_id: Variant, transparency: Varian
 	var r := float(reflectance) if reflectance != null else 0.0
 	var mdata := resolve_material_enum(material_id)
 
-	var cache_key := "%d|%.4f,%.4f,%.4f|%.3f|%.3f|%s" % [int(material_id), color.r, color.g, color.b, t, r, surface_pattern]
+	var cache_key := "%d|%.4f,%.4f,%.4f|%.3f|%.3f|%s" % [str(mdata.name).hash(), color.r, color.g, color.b, t, r, surface_pattern]
 	if _cache.has(cache_key):
 		return _cache[cache_key]
 
@@ -192,7 +341,7 @@ func get_material(color_rgb: Variant, material_id: Variant, transparency: Varian
 		mat.emission_enabled = true
 		mat.emission = color
 		mat.emission_energy_multiplier = emission_val
-	if not surface_pattern.is_empty():
+	if not _apply_texture_pack(mat, str(mdata.name)) and not surface_pattern.is_empty():
 		mat.albedo_texture = _get_surface_pattern_texture(surface_pattern)
 		mat.uv1_triplanar = true
 		mat.uv1_scale = _uv_scale_for_pattern(surface_pattern)
@@ -216,15 +365,7 @@ func get_material(color_rgb: Variant, material_id: Variant, transparency: Varian
 static func roblox_material_to_bobux(material_id: Variant) -> String:
 	var mdata := resolve_material_enum(material_id)
 	var name: String = mdata.get("name", "Plastic")
-	match name:
-		"Neon":
-			return "Neon"
-		"Glass", "Ice", "ForceField", "Glacier":
-			return "Glass"
-		"Metal", "DiamondPlate", "Foil":
-			return "Metal"
-		_:
-			return "Plastic"
+	return name if NAMED_MATERIAL_ENUMS.has(name) else "Plastic"
 
 
 static func part_color_from_properties(props: Dictionary) -> Color:

@@ -1401,6 +1401,8 @@ func _build_home_dashboard() -> void:
 	if home_friend_popup == null:
 		_ensure_home_friend_popup()
 
+	home_content.add_child(preload("res://scripts/lobby/roblox_legends_panel.gd").new())
+
 	var recommended_panel_parts := _create_dashboard_panel(home_content, "Recommended", "Popular experiences and worlds with players online.", 278.0, "See All", Callable(self, "_open_home_see_all_games"))
 	recommended_status_label = recommended_panel_parts.get("status_label", null)
 	recommended_cards_grid = _create_home_game_grid(_get_home_game_grid_columns())

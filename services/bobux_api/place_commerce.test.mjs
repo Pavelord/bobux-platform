@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import express from 'express';
+import { BobloxWallet } from './boblox_wallet.mjs';
+import { PlaceCommerce, definition, mountPlaceCommerce } from './place_commerce.mjs';
+const wallet = new BobloxWallet(':memory:');
+let now = Date.UTC(2026, 9, 4, 23, 59);
+const store = new PlaceCommerce(wallet, () => now);
+const map = definition('map one', 'creator', {roblox_manifest:{instances:[
+  {properties:{Attributes:{PrefabId:'daily_boblox'}}},
+  {properties:{Attributes:{PrefabId:'gamepass_coin',Price:150}}}
+]}});
+assert.equal(map.price,150);
+wallet.apply({userId:'buyer',amount:200,operationId:'test:fund:buyer',reason:'test'});
+assert.throws(() => store.purchase('buyer',map,1), /Цена/);
+assert.equal(wallet.read('buyer').balance,200);
+assert.equal(store.purchase('buyer',map,150).purchased,true);
+assert.equal(store.purchase('buyer',map,150).purchased,false);
+assert.equal(wallet.read('buyer').balance,50);
+assert.equal(wallet.read('creator').balance,105);
+assert.throws(() => store.purchase('poor',map,150), /Insufficient/);
+assert.equal(store.owned('poor',map),false);
+assert.equal(store.claim('buyer',map).applied,true);
+assert.equal(store.claim('buyer',{...map,id:'second map'}).applied,false);
+assert.equal(wallet.read('buyer').balance,60);
+assert.throws(() => store.claim('buyer',{...map,daily:false}));
+now += 60000;
+assert.equal(store.claim('buyer',map).applied,true);
+assert.equal(wallet.read('buyer').balance,70);
+assert.equal(new PlaceCommerce(wallet).owned('buyer',map),true);
+const app = express();
+mountPlaceCommerce(app,wallet,async req => req.headers.authorization === 'test-session' ? {record:{id:'buyer'}} : null,async id => id===map.id?map:null);
+const server=app.listen(0,'127.0.0.1');
+await new Promise(r=>server.once('listening',r));
+const url=`http://127.0.0.1:${server.address().port}/api/boblox/place`;
+assert.equal((await fetch(url+'/status?map_id=map%20one')).status,401);
+assert.equal((await fetch(url+'/status?map_id=missing',{headers:{authorization:'test-session'}})).status,404);
+const result=await fetch(url+'/purchase',{method:'POST',headers:{authorization:'test-session','content-type':'application/json'},body:JSON.stringify({map_id:map.id,expected_price:150,user_id:'victim',amount:999999})});
+assert.equal(result.status,200);
+assert.equal(wallet.read('victim').balance,0);
+await new Promise(r=>server.close(r));
+wallet.close();
+console.log('[place-commerce] PASS: atomic debit/revenue/ownership, retries, insufficient funds, cross-map daily limit, UTC rollover, authenticated HTTP, tampered user/amount');

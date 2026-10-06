@@ -3206,6 +3206,7 @@ func _load_selected_map() -> void:
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 
 		map_target.add_child(mesh_inst)
+		RbxlMaterialCache.sync_texture_scale(mesh_inst, _manifest_stud_scale(_map_roblox_manifest))
 		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
@@ -5324,6 +5325,7 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 			mesh_inst.add_to_group(_get_room_spawn_group_name(clean_room_id))
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 		map_target.add_child(mesh_inst)
+		RbxlMaterialCache.sync_texture_scale(mesh_inst, _manifest_stud_scale(_room_runtime_roblox_manifests[clean_room_id]))
 		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)

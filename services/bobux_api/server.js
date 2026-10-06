@@ -1,11 +1,15 @@
+import { mountLegends } from './roblox_legends.mjs';
 import { mountPlaceImport } from "./place_import.mjs";
 import { CreatorPublishing } from "./creator_publishing.mjs";
 import crypto from "node:crypto";
 import { SocialStore, mountSocial } from "./social_store.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import express from "express";
 import { createBobloxFromEnv, mountBoblox } from "./boblox_routes.mjs";
+import { mountPlaceCommerce, definition as placeCommerceDefinition } from "./place_commerce.mjs";
+import { lookupMapRecords } from "./map_lookup.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 let bobloxCommerce = null;
@@ -174,6 +178,9 @@ async function main() {
   });
 
   bobloxCommerce = await createBobloxFromEnv();
+  const legendsDbPath = process.env.BOBUX_LEGENDS_DATABASE_PATH || path.resolve("data/legends.sqlite");
+  await fs.mkdir(path.dirname(legendsDbPath), { recursive: true });
+  const legendsDb = bobloxCommerce?.wallet?.db || new DatabaseSync(legendsDbPath);
   if (bobloxCommerce) {
     // Resolved from the owner's existing accounts. Names may change; ownership must not.
     for (const [userId, username] of [
@@ -181,7 +188,7 @@ async function main() {
       ["0lf79436w2q2is7", "Master_Void"], ["fc39kwx4dt1s2u0", "Insar43k"],
       ["644ot865524y2b3", "oxlpekxx"], ["4am11hqkmmm81xv", "pondev"],
       ["37j41m875xucshz", "vorexx"], ["w7tgv3g9tuf3304", "stickmasterluke"],
-      ["24j34m88py3372r", "zsertok"], ["434551yu51wb221", "Не знающий"]
+      ["24j34m88py3372r", "zsertok"], ["434551yu51wb221", "Не знающий"], ["59rp17e7a08s22i", "INSAR43K123"]
     ]) {
       const account = await getAuthUserById(userId);
       if (!account?.id) { console.warn(`Founder reward: authentication record missing: ${username}`); continue; }
@@ -199,6 +206,21 @@ async function main() {
     } catch (error) { sendError(res, error); }
   });
   mountBoblox(app, bobloxCommerce, userFromRequest);
+  mountPlaceCommerce(app, bobloxCommerce?.wallet, userFromRequest, async id => {
+    const row = (await lookupMapRecords(pbFetch, id)).map(fromPbRecord).find(item => item.id === id && item.is_published && String(item.visibility || "public").toLowerCase() !== "private");
+    if (!row) return null;
+    let data = row.data;
+    if (data?.__bobux_external_map_data_url) {
+      const url = new URL(data.__bobux_external_map_data_url);
+      const prefix = '/api/storage/v1/object/public/';
+      if (!url.pathname.startsWith(prefix)) return null;
+      const relative = safeObjectPath(decodeURIComponent(url.pathname.slice(prefix.length)));
+      if (!relative.startsWith('map-assets/')) return null;
+      data = JSON.parse(await fs.readFile(path.join(STORAGE_DIR, relative), 'utf8'));
+    }
+    return placeCommerceDefinition(id, row.owner_id, data);
+  });
+  mountLegends(app, legendsDb, userFromRequest, async () => listRows('maps', ['id','name','owner_id','owner_name','is_published','is_public','visibility','thumbnail','updated_at']));
   mountPlaceImport(app, userFromRequest);
   if (bobloxCommerce?.provider) {
     const reconcileBoblox = () => bobloxCommerce.reconcile().catch(() => console.warn("Boblox payment reconciliation will retry."));
@@ -633,6 +655,16 @@ async function main() {
   });
 
   // PRACTICE SCREENSHOT: "My creations" route - gathers maps, models and avatar items created by the current user.
+  app.post("/api/rest/v1/rpc/fetch_owned_avatar_items", express.json({ limit: "4kb" }), async (req, res) => {
+    try {
+      const user = await userFromRequest(req);
+      const userId = user.record.id;
+      const owned = await getOwnedInventoryItemIds(userId, "avatar_item");
+      const items = (await listRows("avatar_items")).filter(row => row.owner_id === userId || owned.has(String(row.id || "")));
+      res.json(items.map(row => ({ ...sanitizeMarketplaceOutput(row), owned: true })));
+    } catch (error) { sendError(res, error); }
+  });
+
   app.post("/api/rest/v1/rpc/fetch_my_creations", express.json({ limit: "5mb" }), async (req, res) => {
     try {
       const user = await userFromRequest(req);
@@ -1406,7 +1438,11 @@ async function listRows(collection, requestedFields = []) {
 }
 
 async function queryRows(collection, rawQuery, applyLimit = true) {
-  let rows = await listRows(collection, fieldsNeededForQuery(collection, rawQuery));
+  const requestedId = typeof rawQuery.id === 'string' && rawQuery.id.startsWith('eq.') ? decodeURIComponent(rawQuery.id.slice(3)) : '';
+  const needed = fieldsNeededForQuery(collection, rawQuery);
+  let rows = collection === 'maps' && requestedId
+    ? (await lookupMapRecords(pbFetch, requestedId, normalizePocketBaseFields(collection, needed))).map(fromPbRecord)
+    : await listRows(collection, needed);
   rows = rows.filter((row) => matchesQuery(row, rawQuery));
   rows = applyOrder(rows, rawQuery.order);
   rows = rows.map((row) => sanitizeOutputRow(collection, row));

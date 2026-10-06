@@ -19,7 +19,8 @@ export function mountBoblox(app, commerce, authenticate) {
     return commerce;
   };
   app.get("/api/boblox/catalog", route(async (_req, res) => res.json({ ok: true,
-    ...(commerce?.publicCatalog() || { ...catalog, sales_enabled: false, test: false }) })));
+    ...(commerce?.publicCatalog() || { ...catalog, sales_enabled: false, test: false,
+      creator_support_url: process.env.BOBLOX_CREATOR_SUPPORT_URL || "" }) })));
   app.get("/api/boblox/wallet", route(async (req, res) => res.json({ ok: true, ...requireCommerce().account(await user(req)) })));
   app.post("/api/boblox/founder-reward/claim", route(async (req, res) => {
     res.json({ ok: true, ...requireCommerce().claimFounder(await user(req)) });
@@ -57,5 +58,6 @@ export async function createBobloxFromEnv(env = process.env) {
   const filename = env.BOBLOX_DATABASE_PATH || "/var/lib/bobux/boblox.sqlite";
   // Test purchases cannot become real currency when switching the merchant to live mode.
   const wallet = new BobloxWallet(mode === "test" ? `${filename}.test` : filename);
-  return new BobloxCommerce(wallet, { provider, termsUrl: env.BOBLOX_TERMS_URL, supportUrl: env.BOBLOX_SUPPORT_URL });
+  return new BobloxCommerce(wallet, { provider, termsUrl: env.BOBLOX_TERMS_URL, supportUrl: env.BOBLOX_SUPPORT_URL,
+    creatorSupportUrl: env.BOBLOX_CREATOR_SUPPORT_URL || "" });
 }

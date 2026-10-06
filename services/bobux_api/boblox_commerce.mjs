@@ -38,8 +38,8 @@ export class YooKassa {
 }
 
 export class BobloxCommerce {
-  constructor(wallet, { provider = null, now = Date.now, termsUrl = "", supportUrl = "" } = {}) {
-    Object.assign(this, { wallet, provider, now, termsUrl, supportUrl });
+  constructor(wallet, { provider = null, now = Date.now, termsUrl = "", supportUrl = "", creatorSupportUrl = "" } = {}) {
+    Object.assign(this, { wallet, provider, now, termsUrl, supportUrl, creatorSupportUrl });
     this.db = wallet.db;
     this.inFlight = new Map();
     this.refreshInFlight = new Map();
@@ -92,7 +92,7 @@ export class BobloxCommerce {
   }
   publicCatalog() {
     return { ...catalog, sales_enabled: !!this.provider, test: this.provider?.test ?? false,
-      terms_url: this.termsUrl, support_url: this.supportUrl };
+      terms_url: this.termsUrl, support_url: this.supportUrl, creator_support_url: this.creatorSupportUrl };
   }
   product(id) {
     const pack = catalog.packs.find(p => p.id === id);
