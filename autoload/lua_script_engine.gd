@@ -3845,7 +3845,10 @@ func _prepare_lua_body(lua_code: String) -> String:
 	if _lua != null and _lua.has_method("get_runtime_name"):
 		# Luau's own parser owns types, compound assignments, continue and
 		# interpolation. Only Godot/Roblox API adapters remain source based.
-		var native_source: Dictionary = lexer.protect_strings(normalize_script_source(lua_code))
+		# The embedded Luau VM misparses multiline backtick templates. Normalize
+		# interpolation before protecting literals so single- and multiline
+		# templates use the same safe path in native and fallback runtimes.
+		var native_source: Dictionary = lexer.protect_strings(_replace_luau_backtick_strings(normalize_script_source(lua_code)))
 		var native_body := _rewrite_lua_multi_return_calls(native_source.source)
 		return lexer.restore_strings(_rewrite_lua_async_calls(native_body), native_source.literals)
 	var protected: Dictionary = lexer.protect_strings(_replace_luau_backtick_strings(normalize_script_source(lua_code)))
