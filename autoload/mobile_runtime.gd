@@ -150,7 +150,20 @@ func check_for_updates(show_prompt: bool = true) -> void:
 	var request := HTTPRequest.new()
 	request.timeout = UPDATE_CHECK_TIMEOUT_SECONDS
 	add_child(request)
-	var error: Error = request.request(manifest_url)
+	# Manifests change in place between releases. Ask every intermediary to
+	# revalidate so Android does not keep an old build number from cache.
+	var request_headers := PackedStringArray([
+		"Cache-Control: no-cache, no-store",
+		"Pragma: no-cache"
+	])
+	var cache_separator: String = "&" if manifest_url.contains("?") else "?"
+	var cache_busted_manifest_url: String = "%s%s_cb=%s-%s" % [
+		manifest_url,
+		cache_separator,
+		str(Time.get_unix_time_from_system()),
+		str(Time.get_ticks_msec())
+	]
+	var error: Error = request.request(cache_busted_manifest_url, request_headers)
 	if error != OK:
 		request.queue_free()
 		_checking_updates = false
@@ -174,10 +187,11 @@ func check_for_updates(show_prompt: bool = true) -> void:
 		return
 	var manifest: Dictionary = parsed as Dictionary
 	var platform_payload: Dictionary = _get_platform_payload(manifest)
-	var remote_build: int = int(platform_payload.get("build", manifest.get("build", 0)))
+	var remote_build: int = maxi(int(platform_payload.get("build", 0)), int(manifest.get("build", 0)))
 	var current_build: int = int(ProjectSettings.get_setting("bobux/mobile/build", 1))
 	var download_url: String = _get_update_download_url(platform_payload, manifest)
 	var has_update: bool = remote_build > current_build and not download_url.is_empty()
+	print("[MobileRuntime] Update manifest build=%d installed_build=%d available=%s url=%s" % [remote_build, current_build, str(has_update), download_url])
 	_latest_update_payload = platform_payload if has_update else {}
 	update_check_finished.emit(has_update, "Update available." if has_update else "Mobile build is up to date.")
 	if has_update and (show_prompt or bool(platform_payload.get("required", false))):
@@ -660,12 +674,14 @@ func _get_platform_payload(manifest: Dictionary) -> Dictionary:
 
 
 func _get_update_download_url(platform_payload: Dictionary, manifest: Dictionary) -> String:
-	for key in ["apk_url", "download_url", "url", "zip_url"]:
+	# Prefer the versioned URL; a stable APK URL can remain cached by browsers
+	# or Android's download provider across consecutive releases.
+	for key in ["versioned_apk_url", "apk_url", "download_url", "url", "zip_url"]:
 		if platform_payload.has(key):
 			var value: String = str(platform_payload.get(key, "")).strip_edges()
 			if not value.is_empty():
 				return value
-	for key in ["apk_url", "download_url", "url", "zip_url"]:
+	for key in ["versioned_apk_url", "apk_url", "download_url", "url", "zip_url"]:
 		if manifest.has(key):
 			var value: String = str(manifest.get(key, "")).strip_edges()
 			if not value.is_empty():

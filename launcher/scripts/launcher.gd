@@ -11,8 +11,8 @@ const DOWNLOAD_TIMEOUT_SECONDS: float = 120.0
 const HTTP_ATTEMPTS_PER_URL: int = 3
 const DOWNLOAD_ATTEMPTS_PER_URL: int = 8
 const DOWNLOAD_CHUNK_BYTES: int = 512 * 1024
-const LAUNCHER_VERSION: String = "0.1.14"
-const LAUNCHER_BUILD: int = 16
+const LAUNCHER_VERSION: String = "0.1.17"
+const LAUNCHER_BUILD: int = 19
 const MIN_GAME_EXECUTABLE_BYTES: int = 10 * 1024 * 1024
 
 var _title_label: Label = null
@@ -28,6 +28,9 @@ var _temp_dir: String = ""
 var _staging_dir: String = ""
 var _game_backup_dir: String = ""
 var _launcher_staging_dir: String = ""
+var _download_base_bytes: int = 0
+var _download_total_size: int = -1
+var _download_label: String = "update"
 
 func _ready() -> void:
 	_install_root = _get_install_root()
@@ -42,15 +45,8 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _active_download_request == null:
 		return
-	var downloaded: int = _active_download_request.get_downloaded_bytes()
-	var total: int = _active_download_request.get_body_size()
-	if total > 0:
-		_set_progress(float(downloaded) / float(total), "Downloading %.1f / %.1f MB" % [
-			float(downloaded) / 1048576.0,
-			float(total) / 1048576.0
-		])
-	else:
-		_set_progress(-1.0, "Downloading %.1f MB" % (float(downloaded) / 1048576.0))
+	var downloaded: int = _download_base_bytes + _active_download_request.get_downloaded_bytes()
+	_render_download_progress(downloaded, _download_total_size, _download_label)
 
 func _build_ui() -> void:
 	var background := ColorRect.new()
@@ -213,7 +209,8 @@ func _download_and_install(manifest: Dictionary) -> Dictionary:
 	DirAccess.make_dir_recursive_absolute(_staging_dir)
 	var zip_name: String = "game_%s.zip" % _hash_suffix(expected_hash)
 	var zip_path: String = _temp_dir.path_join(zip_name)
-	var download_result: Dictionary = await _download_file_from_urls(urls, zip_path, "game build", expected_hash)
+	var package_size: int = int(manifest.get("package_size", -1))
+	var download_result: Dictionary = await _download_file_from_urls(urls, zip_path, "game build", expected_hash, package_size)
 	if not bool(download_result.get("ok", false)):
 		return download_result
 	_set_status("Extracting update...", "Unpacking game files.", 0.82)
@@ -263,7 +260,8 @@ func _maybe_self_update_launcher(manifest: Dictionary) -> Dictionary:
 	DirAccess.make_dir_recursive_absolute(_launcher_staging_dir)
 	var zip_name: String = "launcher_%s.zip" % _hash_suffix(expected_hash)
 	var zip_path: String = _temp_dir.path_join(zip_name)
-	var download_result: Dictionary = await _download_file_from_urls(urls, zip_path, "launcher", expected_hash)
+	var package_size: int = int(launcher_manifest.get("package_size", -1))
+	var download_result: Dictionary = await _download_file_from_urls(urls, zip_path, "launcher", expected_hash, package_size)
 	if not bool(download_result.get("ok", false)):
 		return download_result
 	var extract_result: Dictionary = _extract_zip_to_directory(zip_path, _launcher_staging_dir)
@@ -304,14 +302,32 @@ func _write_and_run_self_update_script() -> Dictionary:
 	var pid := OS.create_process("powershell.exe", PackedStringArray(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", helper_path]), false)
 	return {"ok": pid > 0, "error": "Could not start update helper." if pid <= 0 else ""}
 
-func _download_file_from_urls(urls: Array[String], destination_path: String, label: String, expected_hash: String = "") -> Dictionary:
+func _download_file_from_urls(urls: Array[String], destination_path: String, label: String, expected_hash: String = "", expected_size: int = -1) -> Dictionary:
 	var last_error: String = ""
+	var resume_part_path: String = "%s.part" % destination_path
+	if expected_size > 0 and FileAccess.file_exists(resume_part_path) and _file_size(resume_part_path) > expected_size:
+		DirAccess.remove_absolute(resume_part_path)
+	if FileAccess.file_exists(destination_path):
+		var existing_size := _file_size(destination_path)
+		var existing_hash := _sha256_file(destination_path) if not expected_hash.is_empty() else ""
+		if (expected_size <= 0 or existing_size == expected_size) and (expected_hash.is_empty() or existing_hash == expected_hash):
+			_set_download_progress(existing_size, expected_size, label)
+			return {"ok": true, "cached": true}
+		DirAccess.remove_absolute(destination_path)
+	# If a previous process closed after receiving the final range, promote the
+	# complete partial file so it can be hash-checked without downloading again.
+	if expected_size > 0 and FileAccess.file_exists(resume_part_path) and _file_size(resume_part_path) == expected_size:
+		var promote_error := DirAccess.rename_absolute(resume_part_path, destination_path)
+		if promote_error == OK:
+			var promoted_hash := _sha256_file(destination_path) if not expected_hash.is_empty() else ""
+			if expected_hash.is_empty() or promoted_hash == expected_hash:
+				_set_download_progress(expected_size, expected_size, label)
+				return {"ok": true, "cached": true}
+			DirAccess.remove_absolute(destination_path)
 	for url in urls:
 		for attempt in range(DOWNLOAD_ATTEMPTS_PER_URL):
-			if FileAccess.file_exists(destination_path):
-				DirAccess.remove_absolute(destination_path)
 			_set_status("Downloading update...", "Downloading %s from %s (attempt %d/%d, resumable)" % [label, _short_url_for_status(url), attempt + 1, DOWNLOAD_ATTEMPTS_PER_URL], -1.0)
-			var result: Dictionary = await _download_file_resumable(url, destination_path, label)
+			var result: Dictionary = await _download_file_resumable(url, destination_path, label, expected_size)
 			if bool(result.get("ok", false)) and not expected_hash.is_empty():
 				var actual_hash: String = _sha256_file(destination_path)
 				if actual_hash != expected_hash:
@@ -337,11 +353,11 @@ func _download_file_from_urls(urls: Array[String], destination_path: String, lab
 			await get_tree().create_timer(0.7 + float(attempt) * 0.8).timeout
 	return {"ok": false, "error": last_error if not last_error.is_empty() else "All download mirrors failed."}
 
-func _download_file_resumable(url: String, destination_path: String, label: String) -> Dictionary:
+func _download_file_resumable(url: String, destination_path: String, label: String, expected_size: int = -1) -> Dictionary:
 	var part_path: String = "%s.part" % destination_path
 	DirAccess.make_dir_recursive_absolute(destination_path.get_base_dir())
 	var downloaded: int = _file_size(part_path)
-	var total_size: int = -1
+	var total_size: int = expected_size
 	var range_supported: bool = true
 	while true:
 		var chunk_end: int = downloaded + DOWNLOAD_CHUNK_BYTES - 1
@@ -357,18 +373,44 @@ func _download_file_resumable(url: String, destination_path: String, label: Stri
 		var body: PackedByteArray = result.get("body", PackedByteArray())
 		var response_headers: PackedStringArray = result.get("headers", PackedStringArray())
 		if status == 206:
-			total_size = _extract_total_size_from_content_range(response_headers, total_size)
+			var range_start := _extract_start_from_content_range(response_headers, -1)
+			if range_start != downloaded:
+				return {"ok": false, "error": "Server resumed at byte %d; expected byte %d." % [range_start, downloaded], "retryable": false}
+			var server_total := _extract_total_size_from_content_range(response_headers, -1)
+			if server_total > 0 and expected_size > 0 and server_total != expected_size:
+				return {"ok": false, "error": "Manifest size (%d) does not match server size (%d)." % [expected_size, server_total], "retryable": false}
+			if server_total > 0:
+				total_size = server_total
 		elif status == 200 and downloaded == 0:
 			range_supported = false
-			total_size = _extract_content_length(response_headers, body.size())
+			var response_total := _extract_content_length(response_headers, body.size())
+			if expected_size > 0 and response_total > 0 and response_total != expected_size:
+				return {"ok": false, "error": "Manifest size (%d) does not match server size (%d)." % [expected_size, response_total], "retryable": false}
+			total_size = expected_size if expected_size > 0 else response_total
+		elif status == 200 and downloaded > 0:
+			# The server ignored Range. This response is a whole-file body, so
+			# replace the old partial instead of appending and corrupting the ZIP.
+			range_supported = false
+			var response_total := _extract_content_length(response_headers, body.size())
+			if expected_size > 0 and response_total > 0 and response_total != expected_size:
+				return {"ok": false, "error": "Manifest size (%d) does not match server size (%d)." % [expected_size, response_total], "retryable": false}
+			total_size = expected_size if expected_size > 0 else response_total
 		else:
 			return {"ok": false, "error": "Server did not continue resumable download: status=%d" % status}
 		if body.is_empty():
 			return {"ok": false, "error": "Download returned an empty chunk."}
-		var write_result: Dictionary = _append_bytes_to_file(part_path, body)
-		if not bool(write_result.get("ok", false)):
-			return write_result
-		downloaded += body.size()
+		if status == 206:
+			var write_result: Dictionary = _append_bytes_to_file(part_path, body)
+			if not bool(write_result.get("ok", false)):
+				return write_result
+			downloaded += body.size()
+		else:
+			var restart_result := _write_bytes_to_file(part_path, body)
+			if not bool(restart_result.get("ok", false)):
+				return restart_result
+			downloaded = body.size()
+		_download_base_bytes = downloaded
+		_download_total_size = total_size
 		_set_download_progress(downloaded, total_size, label)
 		if not range_supported:
 			break
@@ -376,6 +418,8 @@ func _download_file_resumable(url: String, destination_path: String, label: Stri
 			break
 		if body.size() < DOWNLOAD_CHUNK_BYTES and total_size <= 0:
 			break
+	if total_size > 0 and downloaded != total_size:
+		return {"ok": false, "error": "Download ended at %d of %d bytes." % [downloaded, total_size]}
 	var rename_error: Error = DirAccess.rename_absolute(part_path, destination_path)
 	if rename_error != OK:
 		return {"ok": false, "error": "Could not finalize download: %s" % error_string(rename_error)}
@@ -412,6 +456,12 @@ func _http_get_bytes(url: String, headers: PackedStringArray, label: String) -> 
 	}
 
 func _set_download_progress(downloaded: int, total_size: int, label: String) -> void:
+	_download_base_bytes = downloaded
+	_download_total_size = total_size
+	_download_label = label
+	_render_download_progress(downloaded, total_size, label)
+
+func _render_download_progress(downloaded: int, total_size: int, label: String) -> void:
 	if total_size > 0:
 		_set_progress(float(downloaded) / float(total_size), "Downloading %s %.1f / %.1f MB" % [
 			label,
@@ -431,6 +481,15 @@ func _append_bytes_to_file(path: String, bytes: PackedByteArray) -> Dictionary:
 	if file == null:
 		return {"ok": false, "error": "Could not open partial download for writing."}
 	file.seek_end()
+	file.store_buffer(bytes)
+	file.close()
+	return {"ok": true}
+
+func _write_bytes_to_file(path: String, bytes: PackedByteArray) -> Dictionary:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return {"ok": false, "error": "Could not restart partial download from the server response."}
 	file.store_buffer(bytes)
 	file.close()
 	return {"ok": true}
@@ -456,6 +515,21 @@ func _extract_total_size_from_content_range(headers: PackedStringArray, fallback
 		var total_text: String = clean_header.substr(slash_index + 1).strip_edges()
 		if total_text.is_valid_int():
 			return int(total_text)
+	return fallback
+
+func _extract_start_from_content_range(headers: PackedStringArray, fallback: int = -1) -> int:
+	for header in headers:
+		var clean_header: String = str(header).strip_edges()
+		if not clean_header.to_lower().begins_with("content-range:"):
+			continue
+		var range_text: String = clean_header.substr(clean_header.find(":") + 1).strip_edges()
+		var space_index := range_text.find(" ")
+		if space_index >= 0:
+			range_text = range_text.substr(space_index + 1).strip_edges()
+		var dash_index := range_text.find("-")
+		var start_text := range_text.substr(0, dash_index).strip_edges() if dash_index >= 0 else ""
+		if start_text.is_valid_int():
+			return int(start_text)
 	return fallback
 
 func _extract_content_length(headers: PackedStringArray, fallback: int = -1) -> int:

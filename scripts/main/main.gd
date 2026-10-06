@@ -240,6 +240,8 @@ func _ready() -> void:
 		NetworkManager.room_peer_profiles_updated.connect(_on_room_peer_profiles_updated)
 	if NetworkManager.has_signal("room_emptied") and not NetworkManager.room_emptied.is_connected(_on_room_emptied):
 		NetworkManager.room_emptied.connect(_on_room_emptied)
+	if NetworkManager.has_signal("smart_play_reconnecting") and not NetworkManager.smart_play_reconnecting.is_connected(_on_smart_play_reconnecting):
+		NetworkManager.smart_play_reconnecting.connect(_on_smart_play_reconnecting)
 	
 	# FIX B (Death Loop): Do NOT load the map here on the client.
 	# The client MUST wait for the server's _confirm_room_join RPC.
@@ -1597,8 +1599,10 @@ func _show_network_loading(title: String, subtitle: String, progress_ratio: floa
 		return
 	var was_hidden: bool = not _network_loading_overlay.visible
 	_network_loading_overlay.visible = true
-	_network_loading_title.text = title
-	_network_loading_subtitle.text = subtitle
+	var failed := title in ["Could Not Spawn", "Connection Failed", "Connection Lost", "Map Load Failed"]
+	_network_loading_title.text = title if failed else "Joining experience..."
+	_network_loading_subtitle.text = subtitle if failed else ""
+	_network_loading_subtitle.visible = failed
 	if _network_loading_transport and _network_loading_transport.text.is_empty():
 		_network_loading_transport.text = "Connecting via dedicated WebSocket..."
 	_update_network_transport_badge(_network_loading_transport.text if _network_loading_transport else "")
@@ -1607,8 +1611,10 @@ func _show_network_loading(title: String, subtitle: String, progress_ratio: floa
 		if _network_loading_tween != null:
 			_network_loading_tween.kill()
 		_network_loading_tween = create_tween()
-		_network_loading_overlay.modulate.a = 0.0
-		_network_loading_card.scale = Vector2(0.96, 0.96)
+		# Main replaces Lobby while the same join is already visible. Do not
+		# expose the empty gray World through a second entrance fade.
+		_network_loading_overlay.modulate.a = 1.0
+		_network_loading_card.scale = Vector2.ONE
 		_network_loading_tween.set_parallel(true)
 		_network_loading_tween.tween_property(_network_loading_overlay, "modulate:a", 1.0, NETWORK_LOADING_TWEEN_SECONDS)
 		_network_loading_tween.tween_property(_network_loading_card, "scale", Vector2.ONE, NETWORK_LOADING_TWEEN_SECONDS)
@@ -2233,6 +2239,7 @@ func _spawn_local_player_direct(peer_id: int, state: Dictionary = {}) -> Charact
 		return existing_player
 	var player_instance: CharacterBody3D = PLAYER_SCENE.instantiate() as CharacterBody3D
 	player_instance.name = str(peer_id)
+	player_instance.apply_world_stud_scale(_manifest_stud_scale(_map_roblox_manifest))
 	player_instance.set_multiplayer_authority(peer_id, true)
 	var initial_spawn_position: Vector3 = _get_spawn_position_for_peer(peer_id)
 	player_instance.position = initial_spawn_position
@@ -3094,6 +3101,9 @@ func _load_selected_map() -> void:
 	_map_player_settings = data.get("player_settings", _get_default_player_settings())
 	_map_mode_settings = data.get("mode_settings", _get_default_mode_settings())
 	_map_roblox_manifest = data.get("roblox_manifest", {}) if data.get("roblox_manifest", {}) is Dictionary else {}
+	# MultiplayerSpawner may deliver players before the map download finishes.
+	for character in players.get_children():
+		_apply_character_map_scale(character, _map_roblox_manifest)
 	_map_asset_urls = data.get("mode_asset_urls", {}) if data.get("mode_asset_urls", {}) is Dictionary else {}
 
 	# Set time of day
@@ -3112,6 +3122,11 @@ func _load_selected_map() -> void:
 	# FIX A (Death Loop): Use the @onready member 'world' instead of a
 	# local variable that shadows it, which caused spawn targets to desync.
 	var map_target: Node3D = self.world
+	map_target.set_meta("bobux_authored_origin", room_origin)
+	map_target.set_meta("roblox_stud_scale", _manifest_stud_scale(_map_roblox_manifest))
+	map_target.set_meta("bobux_map_asset_folder", GameState.selected_map_folder)
+	map_target.set_meta("bobux_map_asset_urls", _map_asset_urls)
+	map_target.set_meta("roblox_manifest", _map_roblox_manifest.duplicate(false))
 
 	for block_data in blocks:
 		var pos := Vector3(
@@ -3191,6 +3206,7 @@ func _load_selected_map() -> void:
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 
 		map_target.add_child(mesh_inst)
+		RbxlMaterialCache.sync_texture_scale(mesh_inst)
 		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
@@ -3210,7 +3226,7 @@ func _load_selected_map() -> void:
 	print("[Main] Loaded %d blocks from user map" % blocks.size())
 
 	# Enable glow if any block uses Neon material
-	if has_neon:
+	if has_neon and _map_roblox_manifest.is_empty():
 		var env_node: WorldEnvironment = $World/WorldEnvironment
 		if env_node and env_node.environment:
 			env_node.environment.glow_enabled = true
@@ -3236,6 +3252,8 @@ func _restore_runtime_roblox_block_metadata(block: Node, block_data: Dictionary)
 			block.set_meta(meta_key, block_data[meta_key])
 	if block_data.has("anchored"):
 		block.set_meta("anchored", bool(block_data.get("anchored", true)))
+	for key in ["can_collide", "transparency"]:
+		if block_data.has(key): block.set_meta(key, block_data[key])
 	if block_data.get("roblox_properties", {}) is Dictionary:
 		block.set_meta("roblox_properties", (block_data.get("roblox_properties", {}) as Dictionary).duplicate(true))
 	if block_data.get("roblox_special_mesh", {}) is Dictionary:
@@ -3405,7 +3423,7 @@ func _apply_saved_roblox_block_texture(mesh_inst: MeshInstance3D, block_data: Di
 	if material == null:
 		material = StandardMaterial3D.new()
 	else:
-		material = material.duplicate(true) as StandardMaterial3D
+		material = material.duplicate(false) as StandardMaterial3D
 	material.albedo_texture = texture
 	material.uv1_triplanar = not use_mesh_uvs
 	if material.albedo_color.a >= 0.99:
@@ -3431,7 +3449,7 @@ func _apply_material_to_missing_mesh_surfaces(mesh_inst: MeshInstance3D, fallbac
 	for surface_index in range(mesh_inst.mesh.get_surface_count()):
 		var existing := mesh_inst.get_active_material(surface_index)
 		if existing == null or not mesh_has_own_appearance:
-			mesh_inst.set_surface_override_material(surface_index, fallback_material.duplicate(true))
+			mesh_inst.set_surface_override_material(surface_index, fallback_material.duplicate(false))
 
 func _mesh_surface_material_has_visible_appearance(material: Material) -> bool:
 	if material == null:
@@ -3461,7 +3479,7 @@ func _ensure_mesh_materials_double_sided(mesh_inst: MeshInstance3D) -> void:
 			fallback.cull_mode = BaseMaterial3D.CULL_DISABLED
 			mesh_inst.set_surface_override_material(surface_index, fallback)
 		elif existing is BaseMaterial3D:
-			var material := (existing as BaseMaterial3D).duplicate(true) as BaseMaterial3D
+			var material := (existing as BaseMaterial3D).duplicate(false) as BaseMaterial3D
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
 			mesh_inst.set_surface_override_material(surface_index, material)
 
@@ -3469,7 +3487,7 @@ func _saved_block_texture_asset_path(block_data: Dictionary, map_folder: String 
 	var file_name := str(block_data.get("roblox_texture_asset_file", "")).strip_edges()
 	if not file_name.is_empty():
 		var resolved := map_folder.path_join(file_name) if not map_folder.is_empty() and not file_name.is_absolute_path() and not file_name.begins_with("res://") and not file_name.begins_with("user://") else _resolve_map_asset_path(file_name)
-		if FileAccess.file_exists(resolved):
+		if MapMediaStream.can_stream(resolved):
 			return resolved
 		if FileAccess.file_exists(file_name):
 			return file_name
@@ -3487,26 +3505,7 @@ func _load_texture_from_file_path(path: String) -> Texture2D:
 		var resource := load(path)
 		if resource is Texture2D:
 			return resource as Texture2D
-	if not FileAccess.file_exists(path):
-		return null
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return null
-	var bytes := file.get_buffer(file.get_length())
-	file.close()
-	if bytes.size() < 12:
-		return null
-	var image := Image.new()
-	var err := ERR_UNAVAILABLE
-	if bytes.slice(0, 8) == PackedByteArray([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]):
-		err = image.load_png_from_buffer(bytes)
-	elif bytes.size() >= 3 and bytes[0] == 0xFF and bytes[1] == 0xD8 and bytes[2] == 0xFF:
-		err = image.load_jpg_from_buffer(bytes)
-	elif bytes.size() >= 12 and bytes.slice(0, 4).get_string_from_ascii() == "RIFF" and bytes.slice(8, 12).get_string_from_ascii() == "WEBP":
-		err = image.load_webp_from_buffer(bytes)
-	if err == OK:
-		return ImageTexture.create_from_image(image)
-	return null
+	return MapMediaStream.request_texture(path)
 
 func _texture_file_has_supported_magic(path: String) -> bool:
 	if path.strip_edges().is_empty() or not FileAccess.file_exists(path):
@@ -3675,6 +3674,13 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 			return SphereMesh.new()
 		"Cylinder":
 			var cylinder := CylinderMesh.new()
+			# Match the normalized collision primitive (radius 0.5, height 1.0).
+			# Godot's CylinderMesh default height is larger than 1, which made
+			# scaled cylinders visibly extend past half of their collision shape.
+			cylinder.top_radius = 0.5
+			cylinder.bottom_radius = 0.5
+			cylinder.height = 1.0
+			cylinder.radial_segments = 32
 			cylinder.cap_top = true
 			cylinder.cap_bottom = true
 			return cylinder
@@ -3691,7 +3697,7 @@ func _create_mesh_for_shape(shape_name: String) -> Mesh:
 		"CornerWedge", "CornerWedgePart":
 			return RbxlWedgeMeshBuilder.build_corner_wedge(Vector3.ONE)
 		"Truss", "TrussPart":
-			return RbxlWedgeMeshBuilder.build_truss(Vector3.ONE)
+			return RbxlWedgeMeshBuilder.build_truss(Vector3(2.0, 12.0, 2.0), true)
 		_:
 			return BoxMesh.new()
 
@@ -3738,6 +3744,21 @@ func _attach_runtime_block_physics(
 ) -> CollisionShape3D:
 	if mesh_inst == null or map_parent == null:
 		return null
+	if mesh_inst.has_meta("roblox_ref"):
+		# Imported parts use the same owned-body adapter as Studio/Lua. Do not
+		# simulate a half-built hierarchy, or leave sibling bodies behind when
+		# a round model is destroyed or moved into storage.
+		var placeholder := StaticBody3D.new()
+		placeholder.name = "ImportedCollision"
+		placeholder.set_meta("bobux_runtime_generated", true)
+		placeholder.collision_layer = 0
+		placeholder.collision_mask = 0
+		var imported_shape := CollisionShape3D.new()
+		imported_shape.shape = _create_collision_for_shape(shape_type)
+		imported_shape.disabled = not can_collide
+		placeholder.add_child(imported_shape)
+		mesh_inst.add_child(placeholder)
+		return imported_shape
 	if shape_type in ["Cone", "Wedge", "WedgePart", "CornerWedge", "CornerWedgePart", "Truss", "TrussPart"]:
 		_ensure_mesh_materials_double_sided(mesh_inst)
 	if not _block_uses_dynamic_physics(block_data):
@@ -4590,7 +4611,7 @@ func _set_player_vehicle_mode(peer_id: int, in_vehicle: bool, exit_position: Vec
 		return
 	player_node.visible = true
 	player_node.global_position = exit_position
-	player_node.scale = Vector3(0.58, 0.58, 0.58) if in_vehicle else Vector3.ONE
+	player_node.scale = Vector3.ONE * float(player_node.get_meta("roblox_stud_scale", 1.0)) * (0.58 if in_vehicle else 1.0)
 	if not in_vehicle:
 		player_node.rotation = Vector3.ZERO
 		var visuals := player_node.get_node_or_null("Visuals") as Node3D
@@ -5117,6 +5138,7 @@ func _clear_room_runtime_map(room_id: String) -> void:
 	_clear_room_chaos_runtime(clean_room_id)
 	var map_root: Node3D = _room_runtime_map_roots.get(clean_room_id, null) as Node3D
 	if map_root != null and is_instance_valid(map_root):
+		ImportedPlaceNetwork.unregister_workspace(map_root)
 		for child in map_root.get_children():
 			child.free()
 	_room_runtime_fallback_spawns[clean_room_id] = []
@@ -5159,7 +5181,10 @@ func _free_room_runtime(room_id: String) -> void:
 	_clear_room_chaos_runtime(clean_room_id)
 	var room_root: Node3D = _room_runtime_roots.get(clean_room_id, null) as Node3D
 	if room_root != null and is_instance_valid(room_root) and not room_root.is_queued_for_deletion():
-		room_root.queue_free()
+		var workspace: Node = _room_runtime_map_roots.get(clean_room_id)
+		if is_instance_valid(workspace): ImportedPlaceNetwork.unregister_workspace(workspace)
+		LuaScriptEngine.stop_all_scripts(room_root)
+		ImportedPlaceNetwork.retire_tree(room_root)
 	_room_runtime_roots.erase(clean_room_id)
 	_room_runtime_map_roots.erase(clean_room_id)
 	_room_runtime_fallback_spawns.erase(clean_room_id)
@@ -5209,6 +5234,8 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 	_room_runtime_roblox_manifests[clean_room_id] = {}
 	_room_runtime_fallback_spawns[clean_room_id] = []
 	_room_runtime_teleports[clean_room_id] = {}
+	map_target.set_meta("roblox_manifest", {})
+	map_target.set_meta("bobux_map_asset_urls", {})
 	if clean_map_folder.is_empty():
 		_generate_default_ground_for_room(clean_room_id, map_target)
 		return {"ok": true, "room_id": clean_room_id, "map_folder": ""}
@@ -5223,6 +5250,9 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 	_room_runtime_player_settings[clean_room_id] = data.get("player_settings", _get_default_player_settings())
 	_room_runtime_mode_settings[clean_room_id] = data.get("mode_settings", _get_default_mode_settings())
 	_room_runtime_roblox_manifests[clean_room_id] = data.get("roblox_manifest", {}) if data.get("roblox_manifest", {}) is Dictionary else {}
+	map_target.set_meta("bobux_map_asset_urls", data.get("mode_asset_urls", {}) if data.get("mode_asset_urls", {}) is Dictionary else {})
+	map_target.set_meta("roblox_manifest", _room_runtime_roblox_manifests[clean_room_id].duplicate(false))
+	map_target.set_meta("roblox_stud_scale", _manifest_stud_scale(_room_runtime_roblox_manifests[clean_room_id]))
 	var blocks: Array = data.get("blocks", [])
 	var blocks_loaded: int = 0
 	for block_data in blocks:
@@ -5295,6 +5325,7 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 			mesh_inst.add_to_group(_get_room_spawn_group_name(clean_room_id))
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 		map_target.add_child(mesh_inst)
+		RbxlMaterialCache.sync_texture_scale(mesh_inst)
 		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
@@ -5519,6 +5550,35 @@ func _on_server_disconnected() -> void:
 	_hide_network_loading()
 	print("[Client] Server disconnected.")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	GameState.set_network_error("Соединение с сервером потеряно. Подключитесь к режиму ещё раз.")
+	GameState.clear_launch_mode()
+	call_deferred("_return_to_lobby_after_connection_failure")
+
+func _on_smart_play_reconnecting() -> void:
+	if GameState.launch_mode != GameState.LaunchMode.SMART_PLAY:
+		return
+	print("[Client] Rejoining the active experience after a transport interruption.")
+	_stop_host_keepalive()
+	_stop_scene_scripts()
+	if is_instance_valid(world):
+		ImportedPlaceNetwork.unregister_workspace(world)
+		for child in world.get_children():
+			if PERSISTENT_WORLD_CHILDREN.has(child.name):
+				continue
+			child.queue_free()
+	_reset_network_state()
+	if players != null:
+		for child in players.get_children():
+			if child is CharacterBody3D:
+				child.queue_free()
+	peer_colors.clear()
+	peer_usernames.clear()
+	peer_user_ids.clear()
+	peer_profiles.clear()
+	peer_avatar_visuals.clear()
+	if fallback_camera != null:
+		fallback_camera.current = true
+	_show_network_loading("Reconnecting...", "Rejoining the live disaster.", 0.28)
 
 @rpc("any_peer", "reliable")
 func _register_player_color(chosen_colors: Dictionary, chosen_username: String = "Player", chosen_user_id: String = "") -> void:
@@ -5608,6 +5668,15 @@ func _finalize_player_registration_async(sender_id: int, chosen_colors: Dictiona
 	if NetworkManager != null and NetworkManager.has_method("update_peer_room_profile"):
 		NetworkManager.update_peer_room_profile(sender_id, clean_user_id, peer_usernames[sender_id], authoritative_profile)
 	var room_state: Dictionary = NetworkManager.get_server_room_state(confirmed_room_id) if NetworkManager != null and NetworkManager.has_method("get_server_room_state") else {}
+	# The version was agreed during room auth. Build client and server worlds
+	# concurrently; previously the client sat idle for the entire server build.
+	_confirm_room_join.rpc_id(sender_id, {
+		"tool_damage_protocol": 1,
+		"imported_place_protocol": 1,
+		"map_id": str(room_state.get("map_id", GameState.get_selected_map_identifier())),
+		"map_name": str(room_state.get("map_name", GameState.get_selected_map_display_name())),
+		"cloud_version_id": str(room_state.get("cloud_version_id", ""))
+	})
 	var runtime_result: Dictionary = await _ensure_server_room_runtime(confirmed_room_id, room_state)
 	if not bool(runtime_result.get("ok", false)):
 		push_warning("[RoomHub] Could not prepare room runtime '%s': %s" % [confirmed_room_id, str(runtime_result.get("error", "unknown error"))])
@@ -5627,6 +5696,7 @@ func _finalize_player_registration_async(sender_id: int, chosen_colors: Dictiona
 	# The client does NOT load any map until it receives this RPC.
 	var confirm_payload: Dictionary = {
 		"tool_damage_protocol": 1,
+		"imported_place_protocol": 1,
 		"map_id": str(room_state.get("map_id", GameState.get_selected_map_identifier())),
 		"map_name": str(room_state.get("map_name", GameState.get_selected_map_display_name())),
 		"cloud_version_id": str(room_state.get("cloud_version_id", "")),
@@ -5871,6 +5941,9 @@ func _register_local_color_with_server(retry_count: int = 0) -> void:
 @rpc("authority", "call_local", "reliable")
 func _confirm_room_join(payload: Dictionary) -> void:
 	_server_supports_tool_damage = int(payload.get("tool_damage_protocol", 0)) >= 1
+	var authoritative_map_id: String = str(payload.get("map_id", "")).strip_edges()
+	if not authoritative_map_id.is_empty():
+		GameState.active_room_map_id = authoritative_map_id
 	if _map_loaded or _map_load_in_progress:
 		return
 	_map_load_in_progress = true
@@ -5889,8 +5962,18 @@ func _confirm_room_join(payload: Dictionary) -> void:
 		GameState.selected_map_folder = map_folder
 	elif not map_id.is_empty():
 		GameState.selected_map = map_id
-	_show_network_loading("Preparing World...", "Downloading and building the map.", 0.86)
+	_show_network_loading("Preparing World...", "First join may take a few minutes while this map is downloaded and cached. Keep Bobux open.", 0.86)
 	await _load_selected_map()
+	if not _map_roblox_manifest.is_empty() and ImportedPlaceNetwork.networked():
+		if int(payload.get("imported_place_protocol", 0)) < 1:
+			_reject_duplicate_session("This server needs the imported-place synchronization update. Please update the server and reconnect.")
+			return
+		var snapshot_deadline := Time.get_ticks_msec() + 90000
+		while is_instance_valid(world) and not bool(world.get_meta("bobux_replica_ready", false)):
+			if Time.get_ticks_msec() >= snapshot_deadline:
+				_reject_duplicate_session("The current room state could not be synchronized. Please reconnect.")
+				return
+			await get_tree().process_frame
 	for _settle_frame in range(2):
 		await get_tree().process_frame
 	for _physics_frame in range(2):
@@ -6004,6 +6087,7 @@ func _spawn_player_for_peer(peer_id: int) -> void:
 	spawn_data["username"] = peer_usernames.get(peer_id, "Player")
 	spawn_data["avatar_visuals"] = peer_avatar_visuals.get(peer_id, _get_current_avatar_visuals())
 	spawn_data["player_settings"] = _get_room_player_settings(room_id)
+	spawn_data["stud_scale"] = _manifest_stud_scale(_room_runtime_roblox_manifests.get(room_id, _map_roblox_manifest))
 	spawn_data["spawn_position"] = spawn_info.get("position", Vector3.ZERO)
 	spawn_data["spawn_points"] = spawn_info.get("points", [])
 	spawn_data["spawn_index"] = spawn_info.get("index", -1)
@@ -6027,6 +6111,7 @@ func _despawn_player_for_peer(peer_id: int) -> void:
 		return
 	if existing_player == _get_local_player():
 		return
+	LuaScriptEngine.unbind_network_player(existing_player)
 	existing_player.queue_free()
 
 func _spawn_custom(spawn_data: Dictionary) -> Node:
@@ -6037,6 +6122,8 @@ func _spawn_custom(spawn_data: Dictionary) -> Node:
 	var string_id: String = str(peer_id)
 	var chosen_colors: Dictionary = spawn_data.get("colors", _get_current_colors())
 	var player_instance: CharacterBody3D = PLAYER_SCENE.instantiate() as CharacterBody3D
+	var manifest: Dictionary = _room_runtime_roblox_manifests.get(spawn_room_id, _map_roblox_manifest)
+	player_instance.apply_world_stud_scale(float(spawn_data.get("stud_scale", _manifest_stud_scale(manifest))))
 	player_instance.name = string_id
 	player_instance.set_multiplayer_authority(peer_id, true)
 	var state_synchronizer: MultiplayerSynchronizer = player_instance.get_node_or_null("StateSynchronizer") as MultiplayerSynchronizer
@@ -6085,6 +6172,12 @@ func _spawn_custom(spawn_data: Dictionary) -> Node:
 		_pending_existing_peer_snapshots.erase(string_id)
 		
 	var runtime_local_peer_id: int = _get_runtime_local_peer_id()
+	if multiplayer.is_server() and ImportedPlaceNetwork.networked():
+		call_deferred("_bind_server_imported_character", player_instance.get_instance_id(), spawn_room_id, peer_id)
+	elif ImportedPlaceNetwork.networked():
+		# MultiplayerSpawner adds the returned node to the tree afterwards.
+		# Bind after _ready so authority and Humanoid proxies already exist.
+		ImportedPlaceNetwork.track_character.call_deferred(player_instance, world)
 	if runtime_local_peer_id > 0 and peer_id == runtime_local_peer_id:
 		if not _runtime_world_ready:
 			player_instance.visible = false
@@ -6111,10 +6204,33 @@ func _bind_runtime_local_character(character_instance_id: int) -> void:
 	if not (character_variant is Node) or not is_instance_valid(character_variant):
 		return
 	var character := character_variant as Node
+	if not _map_roblox_manifest.is_empty():
+		_apply_character_map_scale(character, _map_roblox_manifest)
 	if LuaScriptEngine != null and LuaScriptEngine.has_method("bind_local_player_character"):
 		LuaScriptEngine.bind_local_player_character(character)
 	_refresh_runtime_inventory()
 	_start_live_player_scripts(character)
+
+func _bind_server_imported_character(character_id: int, room_id: String, peer_id: int) -> void:
+	var character: Variant = instance_from_id(character_id)
+	var workspace: Variant = _room_runtime_map_roots.get(room_id)
+	if not is_instance_valid(workspace): workspace = world
+	if not is_instance_valid(character) or not is_instance_valid(workspace): return
+	character.set_meta("bobux_workspace_instance_id", workspace.get_instance_id())
+	LuaScriptEngine.bind_network_player_character(character, workspace, peer_id, str(peer_usernames.get(peer_id, character.get("display_name"))), str(peer_user_ids.get(peer_id, "")))
+
+func _on_imported_replica_ready(workspace: Node) -> void:
+	if workspace != world: return
+	var character := _get_local_player()
+	if is_instance_valid(character): _bind_runtime_local_character(character.get_instance_id())
+	await _refresh_runtime_roblox_ui(workspace.get_meta("roblox_manifest", {}), str(workspace.get_meta("room_id", "")))
+	_start_live_player_scripts(character)
+
+func _apply_character_map_scale(character: Node, manifest: Dictionary) -> void:
+	if not is_instance_valid(character) or not character.has_method("apply_world_stud_scale"): return
+	var value := _manifest_stud_scale(manifest)
+	if not is_equal_approx(float(character.get_meta("roblox_stud_scale", 1.0)), value):
+		character.apply_world_stud_scale(value)
 
 
 func _start_live_player_scripts(character: Node = null) -> void:
@@ -6126,6 +6242,11 @@ func _start_live_player_scripts(character: Node = null) -> void:
 		var source := str(script_node.get_meta("lua_source", script_node.get_meta("code", "")))
 		if not source.strip_edges().is_empty():
 			_queue_runtime_lua_script(script_node, source)
+
+func _manifest_stud_scale(manifest: Dictionary) -> float:
+	# Imported places before scale persistence always used half a world unit.
+	var legacy_default := 0.5 if str(manifest.get("format", "")) in ["xml", "binary", "rbxl", "rbxlx"] else 1.0
+	return clampf(float(manifest.get("stud_scale", legacy_default)), 0.25, 2.0)
 
 func _get_default_player_settings() -> Dictionary:
 	return {
@@ -6154,12 +6275,15 @@ func _apply_mode_settings(mode_settings: Dictionary) -> void:
 func _apply_map_music() -> void:
 	if _mode_music_player == null:
 		return
+	var old_toggle := get_node_or_null("ModeMusicToggle")
+	if old_toggle != null:
+		remove_child(old_toggle)
+		old_toggle.queue_free()
+	if bool(_map_mode_settings.get("music_toggle_enabled", false)) and not _is_dedicated_server_runtime():
+		var toggle := preload("res://scripts/ui/mode_music_toggle.gd").attach(self, _mode_music_player)
+		toggle.name = "ModeMusicToggle"
 	_playlist_files.clear()
-	var playlist_data: Array = _map_mode_settings.get("music_playlist", [])
-	if playlist_data.is_empty():
-		var legacy_music_file := str(_map_mode_settings.get("music_file", "")).strip_edges()
-		if not legacy_music_file.is_empty():
-			playlist_data = [legacy_music_file]
+	var playlist_data: Array = AudioFileLoader.imported_music_playlist(_map_mode_settings, GameState.selected_map_folder)
 	for file_variant in playlist_data:
 		var file_name := str(file_variant).strip_edges()
 		if not file_name.is_empty():
@@ -6343,6 +6467,8 @@ func _apply_roblox_environment_to_runtime_environment(env: Environment, settings
 	env.set("fog_enabled", bool(settings.get("fog_enabled", false)))
 	env.set("fog_light_color", _color_from_array(settings.get("fog_color", [0.78, 0.78, 0.78]), Color(0.78, 0.78, 0.78)))
 	env.set("fog_density", clampf(float(settings.get("fog_density", 0.0)), 0.0, 0.05))
+	preload("res://addons/roblox_runtime/roblox_environment_snapshot.gd").apply(env, get_node_or_null("World/Sun") as DirectionalLight3D, settings)
+
 
 func _apply_roblox_procedural_sky(env: Environment, sky_color: Color) -> void:
 	RobloxSkyMaterial.apply_to_environment(env, sky_color)
@@ -6504,11 +6630,29 @@ func _load_runtime_objects_into_map(raw_objects: Variant, map_target: Node3D, or
 	var loaded_refs: Dictionary = {}
 	if map_target == null or not (raw_objects is Array):
 		return loaded_refs
+	map_target.set_meta("bobux_runtime_asset_records", raw_objects)
+	# The manifest owns these instances and their full properties. Creating an
+	# empty legacy placeholder first makes the installer treat it as complete.
+	var manifest_refs := {}
+	var saved_manifest: Dictionary = map_target.get_meta("roblox_manifest", {})
+	for section in ["instances", "scripts", "gui", "tools", "storage_libraries"]:
+		for entry in saved_manifest.get(section, []):
+			if entry is Dictionary: manifest_refs[str(entry.get("ref", ""))] = true
 	var created_count := 0
 	for object_variant in raw_objects:
 		if not (object_variant is Dictionary):
 			continue
 		var data: Dictionary = object_variant
+		if manifest_refs.has(str(data.get("roblox_ref", ""))):
+			continue
+		if _restore_legacy_runtime_decal(data, map_target):
+			var decal_ref := str(data.get("roblox_ref", "")).strip_edges()
+			if not decal_ref.is_empty():
+				loaded_refs[decal_ref] = true
+			created_count += 1
+			if created_count % MAP_LOAD_RUNTIME_OBJECTS_PER_FRAME == 0:
+				await get_tree().process_frame
+			continue
 		var runtime_node := _create_runtime_object_from_map_data(data)
 		if runtime_node == null:
 			continue
@@ -6519,36 +6663,133 @@ func _load_runtime_objects_into_map(raw_objects: Variant, map_target: Node3D, or
 		var roblox_ref := str(data.get("roblox_ref", "")).strip_edges()
 		if not roblox_ref.is_empty():
 			loaded_refs[roblox_ref] = true
-		_start_runtime_lua_script_if_needed(runtime_node, data)
+			runtime_node.set_meta("roblox_ref", roblox_ref)
+		# Start only after the manifest has restored parents and dependencies.
 		created_count += 1
 		if created_count % MAP_LOAD_RUNTIME_OBJECTS_PER_FRAME == 0:
 			await get_tree().process_frame
 	return loaded_refs
+
+func _restore_legacy_runtime_decal(data: Dictionary, map_target: Node3D) -> bool:
+	var roblox_class := str(data.get("class", ""))
+	if roblox_class not in ["Decal", "Texture"] or not map_target.get_meta("roblox_manifest", {}).is_empty():
+		return false
+	var parent_ref := str(data.get("parent_ref", "")).strip_edges()
+	if parent_ref.is_empty():
+		return false
+	var parent_part := _find_runtime_part_by_roblox_ref(map_target, parent_ref)
+	if parent_part == null:
+		return false
+	var decal_data: Dictionary = data.duplicate(true)
+	var texture_path := _runtime_decal_texture_path(decal_data, map_target)
+	if texture_path.is_empty():
+		return false
+	decal_data["resolved_path"] = texture_path
+	var importer = preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+	return bool(importer._apply_decal_runtime_to_parent(parent_part, decal_data))
+
+func _find_runtime_part_by_roblox_ref(root: Node, ref: String) -> Node3D:
+	var pending: Array[Node] = root.get_children()
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		if node is Node3D and str(node.get_meta("roblox_ref", "")) == ref:
+			return node as Node3D
+		for child in node.get_children():
+			pending.append(child)
+	return null
+
+func _runtime_decal_texture_path(data: Dictionary, map_target: Node3D) -> String:
+	var map_folder := str(map_target.get_meta("bobux_map_asset_folder", "")).strip_edges()
+	for key in ["file", "resolved_path", "path"]:
+		var value := str(data.get(key, "")).strip_edges()
+		if value.is_empty():
+			continue
+		var candidate := value
+		if not value.begins_with("res://") and not value.begins_with("user://") and not value.is_absolute_path() and value.find(":") != 1:
+			candidate = map_folder.path_join(value.get_file()) if not map_folder.is_empty() else value
+		if MapMediaStream.can_stream(candidate):
+			return candidate
+		var file_name := value.get_file()
+		var asset_urls: Dictionary = map_target.get_meta("bobux_map_asset_urls", {})
+		var asset_url := str(asset_urls.get(value, asset_urls.get(file_name, ""))).strip_edges()
+		if not asset_url.is_empty() and not map_folder.is_empty():
+			return _queue_runtime_visual_asset_download(file_name, asset_url, map_folder)
+	var importer = preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+	var cached_path := str(importer._resolve_texture_content_to_local_path(data.get("texture", ""))).strip_edges()
+	if not cached_path.is_empty() and MapMediaStream.can_stream(cached_path):
+		return cached_path
+	return ""
+
+func _queue_runtime_visual_asset_download(file_name: String, asset_url: String, map_folder: String) -> String:
+	var clean_name := _sanitize_map_asset_file_name(file_name)
+	if clean_name.is_empty():
+		return ""
+	var target_path := map_folder.path_join(clean_name)
+	if FileAccess.file_exists(target_path):
+		return target_path
+	if CloudAPI == null or not CloudAPI.has_method("download_map_asset_file"):
+		return ""
+	var download_key := target_path.replace("\\", "/")
+	MapMediaStream.expect_file(target_path)
+	if not _pending_map_asset_downloads.has(download_key) and not _failed_map_asset_downloads.has(download_key):
+		_pending_map_asset_downloads[download_key] = true
+		call_deferred("_download_runtime_visual_asset", download_key, asset_url, target_path)
+	return target_path
+
+func _download_runtime_visual_asset(download_key: String, asset_url: String, target_path: String) -> void:
+	var result: Dictionary = await CloudAPI.download_map_asset_file(asset_url, target_path)
+	_pending_map_asset_downloads.erase(download_key)
+	if not bool(result.get("ok", false)):
+		_failed_map_asset_downloads[download_key] = Time.get_ticks_msec()
+		push_warning("[Main] Failed to download published visual asset '%s': %s" % [target_path.get_file(), str(result.get("error", "unknown error"))])
+		return
+	MapMediaStream.file_available(target_path)
 
 func _apply_roblox_manifest_to_runtime_root(map_target: Node3D, manifest_variant: Variant, loaded_runtime_refs: Dictionary,
 		origin_offset: Vector3, room_id: String) -> void:
 	if map_target == null or not (manifest_variant is Dictionary):
 		return
 	var manifest: Dictionary = manifest_variant
+	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").bind_runtime_assets(manifest, map_target.get_meta("bobux_runtime_asset_records", []))
+	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").resolve(manifest, str(map_target.get_meta("bobux_map_asset_folder", GameState.selected_map_folder)))
 	# The manifest can be tens of megabytes. A deep duplicate here used to double
 	# peak memory just before DataModel/GUI construction and was enough to crash
 	# large published places. The importer and runtime treat it as immutable.
 	map_target.set_meta("roblox_class", "Workspace")
+	ImportedPlaceNetwork.prepare(map_target, room_id)
 	map_target.set_meta("roblox_manifest", manifest.duplicate(false))
 	map_target.set_meta("roblox_asset_refs_count", (manifest.get("assets", []) as Array).size() if manifest.get("assets", []) is Array else 0)
 	map_target.set_meta("roblox_script_refs_count", (manifest.get("scripts", []) as Array).size() if manifest.get("scripts", []) is Array else 0)
 	map_target.set_meta("roblox_constraint_refs_count", (manifest.get("constraints", []) as Array).size() if manifest.get("constraints", []) is Array else 0)
 	await _install_roblox_manifest_data_model(manifest, map_target)
+	_prepare_imported_workspace_physics(map_target)
+	if not ImportedPlaceNetwork.replica_ready.is_connected(_on_imported_replica_ready):
+		ImportedPlaceNetwork.replica_ready.connect(_on_imported_replica_ready)
+	ImportedPlaceNetwork.register_workspace(map_target, room_id)
 	await _load_manifest_scripts_into_map(manifest, loaded_runtime_refs, map_target, origin_offset, room_id)
+	for runtime_node in map_target.get_children():
+		if runtime_node.is_in_group(RBXL_RUNTIME_OBJECT_GROUP) and not runtime_node.has_meta("bobux_script_runtime_id"):
+			_start_runtime_lua_script_if_needed(runtime_node, runtime_node.get_meta("runtime_object_data", {}))
 	await _refresh_runtime_roblox_ui(manifest, room_id)
 	var local_character := _get_local_player()
 	if is_instance_valid(local_character):
 		_bind_runtime_local_character(local_character.get_instance_id())
 
+func _prepare_imported_workspace_physics(workspace: Node3D) -> void:
+	if not workspace.has_meta("roblox_manifest"):
+		return
+	# Restore authored surface joints before gravity advances even one frame.
+	if str(workspace.get_meta("bobux_network_role", "")) != "client":
+		preload("res://addons/roblox_runtime/roblox_surface_joints.gd").make_joints(workspace)
+	for part in workspace.find_children("*", "MeshInstance3D", true, false):
+		if not preload("res://addons/roblox_runtime/roblox_spatial_query.gd").is_part(part) or not part.has_meta("roblox_ref") or bool(part.get_meta("bobux_deferred_geometry", false)):
+			continue
+		preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(part, true)
+
+
 func _install_roblox_manifest_data_model(manifest: Dictionary, context_node: Node) -> void:
 	if LuaScriptEngine == null:
 		return
-	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").resolve(manifest, str(context_node.get_meta("bobux_map_asset_folder", GameState.selected_map_folder)))
 	var result: Dictionary = {}
 	if LuaScriptEngine.has_method("install_roblox_manifest_async"):
 		result = await LuaScriptEngine.install_roblox_manifest_async(manifest, context_node, MAP_LOAD_MANIFEST_NODES_PER_FRAME)
@@ -6562,6 +6803,16 @@ func _install_roblox_manifest_data_model(manifest: Dictionary, context_node: Nod
 		if context_node is Node3D:
 			var terrain_restorer = RobloxTerrainEditorClass.new()
 			terrain_restorer.restore(null, context_node as Node3D)
+			var appearance_restorer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
+			appearance_restorer.scale_factor = _manifest_stud_scale(manifest)
+			var slice_started := Time.get_ticks_usec()
+			for part in context_node.find_children("*", "MeshInstance3D", true, false):
+				if not part.has_meta("roblox_ref") or bool(part.get_meta("bobux_deferred_geometry", false)): continue
+				if appearance_restorer.has_method("restore_part_children"):
+					appearance_restorer.restore_part_children(part)
+				if Time.get_ticks_usec() - slice_started > 3000:
+					await get_tree().process_frame
+					slice_started = Time.get_ticks_usec()
 		call_deferred("_refresh_runtime_inventory")
 
 func _refresh_runtime_roblox_ui(manifest: Dictionary, room_id: String) -> void:
@@ -6641,7 +6892,6 @@ func _ensure_runtime_roblox_gui_host(hud: CanvasLayer) -> Control:
 	host.offset_right = 0.0
 	host.offset_bottom = 0.0
 	host.clip_contents = true
-	host.size = get_viewport().get_visible_rect().size
 	return host
 
 func _load_manifest_scripts_into_map(manifest: Dictionary, loaded_runtime_refs: Dictionary, map_target: Node3D,
@@ -6653,8 +6903,6 @@ func _load_manifest_scripts_into_map(manifest: Dictionary, loaded_runtime_refs: 
 			continue
 		var script_data: Dictionary = script_variant
 		var ref := str(script_data.get("ref", "")).strip_edges()
-		if not ref.is_empty() and loaded_runtime_refs.has(ref):
-			continue
 		var roblox_class := str(script_data.get("class", "Script"))
 		if roblox_class != "Script" and roblox_class != "LocalScript":
 			continue
@@ -6672,6 +6920,9 @@ func _load_manifest_scripts_into_map(manifest: Dictionary, loaded_runtime_refs: 
 			runtime_node = Node.new()
 			runtime_node.name = _make_runtime_node_name(str(script_data.get("name", "")), roblox_class)
 			map_target.add_child(runtime_node)
+		# The installer may have upgraded a known archive script. Execute that
+		# canonical source, never overwrite it with the old saved runtime copy.
+		lua_source = str(runtime_node.get_meta("code", lua_source))
 		runtime_node.set_meta("room_id", room_id)
 		runtime_node.set_meta("roblox_class", roblox_class)
 		runtime_node.set_meta("roblox_ref", ref)
@@ -6747,13 +6998,9 @@ func _create_runtime_object_from_map_data(data: Dictionary) -> Node3D:
 			cam.fov = float(data.get("fov", 70.0))
 			runtime_node = cam
 		"Decal", "Texture":
-			var decal := Decal.new()
-			decal.size = _runtime_decal_size(data)
-			var texture := _runtime_object_texture(data)
-			if texture != null:
-				decal.texture_albedo = texture
-				decal.modulate.a = clampf(1.0 - float(data.get("transparency", 0.0)), 0.0, 1.0)
-			runtime_node = decal
+			# Its face quad is attached after the manifest restores the Part parent.
+			# Decal projectors are unsupported by Compatibility (desktop/mobile).
+			runtime_node = Node3D.new()
 		_:
 			runtime_node = Node3D.new()
 	runtime_node.name = _make_runtime_node_name(str(data.get("name", "")), roblox_class)
@@ -6761,6 +7008,10 @@ func _create_runtime_object_from_map_data(data: Dictionary) -> Node3D:
 	runtime_node.rotation_degrees = Vector3(float(data.get("rx", 0.0)), float(data.get("ry", 0.0)), float(data.get("rz", 0.0)))
 	runtime_node.set_meta("roblox_class", roblox_class)
 	runtime_node.set_meta("runtime_object_data", data.duplicate(true))
+	if runtime_node is GPUParticles3D:
+		runtime_node.set_meta("roblox_class", roblox_class)
+		runtime_node.set_meta("roblox_properties", data.get("properties", {"Enabled": data.get("enabled", true), "Rate": data.get("rate", 16)}))
+		preload("res://addons/roblox_runtime/roblox_particles.gd").configure(runtime_node)
 	if data.has("lua_source"):
 		runtime_node.set_meta("lua_source", str(data.get("lua_source", "")))
 	return runtime_node
@@ -6853,7 +7104,7 @@ func _runtime_object_texture(data: Dictionary) -> Texture2D:
 		var cached: Variant = _runtime_object_texture_cache.get(clean_path, null)
 		if cached is Texture2D:
 			return cached as Texture2D
-		if not FileAccess.file_exists(clean_path):
+		if not MapMediaStream.can_stream(clean_path):
 			continue
 		# Cloud map assets are written into user:// at runtime and therefore have
 		# no Godot import metadata. ResourceLoader reports those existing files as
@@ -7122,6 +7373,7 @@ func leave_game() -> void:
 		return
 	_leave_in_progress = true
 	_stop_scene_scripts()
+	if is_instance_valid(world): ImportedPlaceNetwork.unregister_workspace(world)
 	get_tree().paused = false
 	_set_gameplay_frozen(false)
 	if _game_menu_panel != null:
@@ -7153,6 +7405,7 @@ func leave_game() -> void:
 	GameState.clear_launch_mode()
 	GameState.selected_map_folder = "" # Clear selected map
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if is_instance_valid(world): ImportedPlaceNetwork.retire_tree(world)
 	_leave_in_progress = false
 	get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
 
@@ -7165,6 +7418,7 @@ func _stop_scene_scripts() -> void:
 func _exit_tree() -> void:
 	# Also cover scene changes caused by a failed connection or editor Stop.
 	_stop_scene_scripts()
+	if is_instance_valid(world): ImportedPlaceNetwork.unregister_workspace(world)
 
 func _on_leave_pressed() -> void:
 	await leave_game()
@@ -7373,6 +7627,8 @@ func _on_host_keepalive_timeout() -> void:
 	_dispatch_host_keepalive_probe(false)
 
 func _dispatch_host_keepalive_probe(immediate: bool) -> void:
+	if not NetworkManager.is_session_active():
+		return
 	var dispatched: bool = false
 	var keepalive_peer_id: int = _get_runtime_local_peer_id()
 	if keepalive_peer_id <= 0 and NetworkManager.has_method("get_unique_id"):

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://b1v8hbmm6eail"
+path="res://.godot/imported/Kid saying Ouch.mp3-abdf332273df56464e200247c86c0ed9.mp3str"
+
+[deps]
+
+source_file="res://RobloxAudioPack_2018/SFX/Kid saying Ouch.mp3"
+dest_files=["res://.godot/imported/Kid saying Ouch.mp3-abdf332273df56464e200247c86c0ed9.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

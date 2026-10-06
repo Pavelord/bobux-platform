@@ -48,7 +48,7 @@ func sync_now() -> void:
 				child.set_meta("roblox_ref", ref)
 			seen[ref] = true
 			var candidate: Variant = _views.get(ref)
-			var view: Control = candidate if is_instance_valid(candidate) else null
+			var view: Control = candidate if is_instance_valid(candidate) and not (candidate as Control).is_queued_for_deletion() else null
 			if view == null:
 				view = DataModel.create_instance(class_name_, str(child.name)) as Control
 				if view == null: continue
@@ -58,7 +58,10 @@ func sync_now() -> void:
 				_views[ref] = view
 				engine._bind_gui_controls_recursive(view, {ref: child})
 			elif view.get_parent() != visual_parent:
-				view.reparent(visual_parent, false)
+				if view.get_parent() == null:
+					visual_parent.add_child(view)
+				else:
+					view.reparent(visual_parent, false)
 			var props: Dictionary = child.get_meta("roblox_properties", {})
 			# Changes reach labels/frames as well as buttons. Layout is evaluated
 			# against the visible viewport, not the invisible DataModel hierarchy.
@@ -66,6 +69,8 @@ func sync_now() -> void:
 			if _styles.get(ref) != style_hash:
 				Gui._apply_udim2_layout(view, props)
 				Gui._apply_visual_style(view, class_name_, props)
+				if class_name_ in ["ImageLabel", "ImageButton"]:
+					Gui.sync_image(view, props, child)
 				_styles[ref] = style_hash
 			engine._sync_bound_gui_control(view, child)
 			view.mouse_filter = Control.MOUSE_FILTER_STOP if view is BaseButton or view is LineEdit else Control.MOUSE_FILTER_PASS

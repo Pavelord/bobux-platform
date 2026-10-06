@@ -1,11 +1,15 @@
 extends CharacterBody3D
 
 const AudioFileLoader = preload("res://addons/roblox_runtime/audio_file_loader.gd")
+const HUMANOID_CONFIG = preload("res://scripts/player/humanoid/humanoid_config.tres")
+const CharacterColliderModule = preload("res://scripts/player/humanoid/character_collider.gd")
+const GroundSensorModule = preload("res://scripts/player/humanoid/ground_sensor.gd")
+const ClimbSensorModule = preload("res://scripts/player/humanoid/climb_sensor.gd")
+const GroundControllerModule = preload("res://scripts/player/humanoid/ground_controller.gd")
+const AirControllerModule = preload("res://scripts/player/humanoid/air_controller.gd")
+const ClimbControllerModule = preload("res://scripts/player/humanoid/climb_controller.gd")
 
-const MOVE_SPEED: float = 16.0
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
-const SPRINT_MULTIPLIER: float = 1.25
-const JUMP_VELOCITY: float = 53.15
 const WALK_CYCLE_SPEED: float = 9.0
 const LIMB_SWING_ANGLE: float = 0.82
 const MOUSE_SENSITIVITY: float = 0.008
@@ -17,16 +21,6 @@ const CAMERA_INTERPOLATION_TELEPORT_THRESHOLD: float = 2.5
 const CAMERA_COLLISION_MIN_DISTANCE: float = 1.2
 const CAMERA_COLLISION_MARGIN: float = 0.28
 const CAMERA_COLLISION_RETURN_SPEED: float = 18.0
-const GROUND_ACCELERATION: float = 160.0
-const GROUND_DECELERATION: float = 125.0
-const AIR_ACCELERATION: float = 42.0
-const AIR_DECELERATION: float = 8.0
-const JUMP_GRAVITY: float = 196.2
-const JUMP_RELEASE_GRAVITY: float = 196.2
-const FALL_GRAVITY: float = 196.2
-const GRAVITY_FORCE: float = FALL_GRAVITY
-const MAX_FALL_SPEED: float = 240.0
-const FLOOR_STICK_VELOCITY: float = -2.2
 const FALL_RESPAWN_Y: float = -60.0
 const TELEPORT_COOLDOWN_MS: int = 450
 const SAFE_REPOSITION_LIFT: float = 0.42
@@ -96,45 +90,11 @@ const ENABLE_AVATAR_CLOTHING_DECALS: bool = true
 const PLAYER_COLLISION_LAYER: int = 2
 const WORLD_COLLISION_MASK: int = 1 | 4 | 32
 const PLAYER_AND_WORLD_COLLISION_MASK: int = WORLD_COLLISION_MASK | PLAYER_COLLISION_LAYER
-const FLOOR_SNAP_LENGTH: float = 0.68
-const COYOTE_TIME: float = 0.14
-const JUMP_BUFFER_TIME: float = 0.11
-const SLOPE_CLIMB_ASSIST: float = 0.48
-const SLOPE_MAX_UP_VELOCITY: float = 4.5
-const SLOPE_VERTICAL_ACCELERATION: float = 28.0
 const LOCAL_TURN_LERP_SPEED: float = 8.0
-const AUTO_STEP_HEIGHT: float = 1.15
-const AUTO_STEP_MAX_APPLIED_HEIGHT: float = 1.0
-const AUTO_STEP_FORWARD_DISTANCE: float = 0.55
-const AUTO_STEP_VERTICAL_SPEED: float = 17.0
-const AUTO_STEP_FORWARD_SPEED: float = 3.8
-const CLIMB_SPEED: float = 10.0
-const CLIMB_SIDE_SPEED: float = 6.5
-const CLIMB_SURFACE_PULL_SPEED: float = 2.4
-const CLIMB_PROBE_DISTANCE: float = 1.35
-const CLIMB_LOST_SURFACE_GRACE: float = 0.14
-const CLIMB_JUMP_OUT_SPEED: float = 8.5
-const CLIMB_JUMP_UP_FACTOR: float = 0.72
-const CLIMB_LEDGE_FORWARD_SPEED: float = 5.2
-const CLIMB_LEDGE_UP_SPEED: float = 3.4
-const LEDGE_PROBE_DISTANCE: float = 1.15
-const LEDGE_MANTLE_SPEED: float = 12.0
-const LEDGE_MANTLE_MAX_HEIGHT: float = 3.75
-const LEDGE_HANG_HAND_HEIGHT: float = 2.15
-const LEDGE_HANG_WALL_CLEARANCE: float = 0.54
-const LEDGE_HANG_SNAP_SPEED: float = 18.0
-const LEDGE_GRAB_WINDOW_SECONDS: float = 0.42
-const SWIM_SPEED: float = 15.0
-const SWIM_VERTICAL_SPEED: float = 10.0
-const SWIM_ACCELERATION: float = 52.0
-const SWIM_IDLE_SINK_SPEED: float = 0.7
 const SEAT_EXIT_COOLDOWN_MSEC: int = 900
 const SEAT_ATTACH_HEIGHT: float = 0.12
 const DEATH_RESPAWN_DELAY_SECONDS: float = 2.35
 const DEATH_FRAGMENT_LIFETIME_SECONDS: float = 3.0
-const PRIMARY_CAPSULE_RADIUS: float = 0.7
-const PRIMARY_CAPSULE_HEIGHT: float = 5.1
-const PRIMARY_CAPSULE_CENTER_Y: float = 2.55
 const HITBOX_FEET_PADDING: Vector3 = Vector3(0.01, 0.01, 0.01)
 const HITBOX_TORSO_PADDING: Vector3 = Vector3(0.01, 0.01, 0.01)
 const HITBOX_HEAD_PADDING: Vector3 = Vector3(0.01, 0.01, 0.01)
@@ -152,7 +112,7 @@ const UI_PREVIEW_TARGET_WIDTH: float = 3.1
 const UI_PREVIEW_TARGET_DEPTH: float = 2.6
 const UI_PREVIEW_CENTER_HEIGHT: float = 2.45
 const MAX_HEALTH: int = 100
-const DEATH_SOUND_PATH: String = "res://robloxdeathsound.mp3"
+const DEATH_SOUND_PATH: String = "res://RobloxAudioPack_2018/SFX/uuhhh.mp3"
 const REMOTE_POSITION_LERP_SPEED: float = 20.0
 const REMOTE_ROTATION_LERP_SPEED: float = 24.0
 const CHAT_BUBBLE_MAX_LENGTH: int = 200
@@ -175,8 +135,8 @@ const NETWORK_GROUNDED_Y_SNAP_STEP: float = 0.01
 const NETWORK_AIRBORNE_Y_SNAP_STEP: float = 0.022
 const NETWORK_VELOCITY_SNAP_STEP: float = 0.035
 const NETWORK_ROOT_ROTATION_SNAP_STEP: float = deg_to_rad(1.0)
-const UNSTUCK_MIN_SAFE_DISTANCE: float = 0.08
-const UNSTUCK_STATIONARY_SECONDS: float = 0.34
+## Kept in humanoid_config.tres with explicit TODO_MEASURE provenance.
+const UNSTUCK_STATIONARY_SECONDS: float = 0.18
 const MAX_UNAUTHORISED_FRAME_DISPLACEMENT: float = 12.0
 
 static var _avatar_decal_texture_cache: Dictionary = {}
@@ -228,9 +188,9 @@ enum CharacterState {
 @export var pants_texture_path: String = ""
 @export var equipped_avatar_items: Array = []
 
-@onready var gravity_force: float = GRAVITY_FORCE
+@onready var gravity_force: float = 0.0
 @onready var visuals: Node3D = $Visuals
-@onready var collision_body: CollisionShape3D = get_node_or_null("CollisionBody") as CollisionShape3D
+@onready var collision_humanoid_root_part: CollisionShape3D = get_node_or_null("CollisionHumanoidRootPart") as CollisionShape3D
 @onready var collision_left_leg: CollisionShape3D = get_node_or_null("CollisionLeftLeg") as CollisionShape3D
 @onready var collision_right_leg: CollisionShape3D = get_node_or_null("CollisionRightLeg") as CollisionShape3D
 @onready var collision_torso: CollisionShape3D = get_node_or_null("CollisionTorso") as CollisionShape3D
@@ -259,15 +219,15 @@ var is_shift_lock: bool = false
 var crosshair: ColorRect = null
 var respawn_position: Vector3 = Vector3.ZERO
 var _teleport_ready_at_msec: int = 0
-var move_speed: float = MOVE_SPEED
-var sprint_multiplier: float = SPRINT_MULTIPLIER
-var jump_velocity_setting: float = JUMP_VELOCITY
+var move_speed: float = 0.0
+var jump_velocity_setting: float = 0.0
 var _lua_move_target := Vector3.ZERO
 var _lua_move_deadline := 0
-var _logical_move_speed: float = MOVE_SPEED
-var _logical_jump_velocity: float = JUMP_VELOCITY
+var _logical_move_speed: float = 0.0
+var _logical_jump_velocity: float = 0.0
 var _is_respawning: bool = false
 var _death_audio_player: AudioStreamPlayer = null
+var _locomotion_audio_timer: float = 0.0
 var spawn_points: Array[Vector3] = []
 var _last_spawn_index: int = -1
 var _has_checkpoint: bool = false
@@ -295,6 +255,17 @@ var _default_collision_mask: int = 1
 var _last_chat_bubble_msec: int = 0
 var _character_state: int = CharacterState.IDLE
 var _roblox_humanoid_state: int = 8
+var _ground_sensor: RefCounted = GroundSensorModule.new()
+var _spawn_floor_recovery_frames := 3
+var _grounded_by_sensor: bool = false
+var _motion_on_floor: bool = false
+var _ground_hit_normal: Vector3 = Vector3.UP
+var _ground_hit_distance: float = INF
+var _motion_collisions: Array[KinematicCollision3D] = []
+var _motion_on_ceiling: bool = false
+var _last_trace_move_direction: Vector3 = Vector3.ZERO
+var _last_trace_jump: bool = false
+var _trace_state_override: String = ""
 var _lua_velocity_pending: bool = false
 var _coyote_time_left: float = 0.0
 var _jump_buffer_time_left: float = 0.0
@@ -302,20 +273,10 @@ var _last_sprinting_input: bool = false
 var _climbing_active: bool = false
 var _climb_surface: Node = null
 var _climb_normal: Vector3 = Vector3.ZERO
-var _climb_surface_lost_time: float = 0.0
-var _ledge_mantle_active: bool = false
-var _ledge_mantle_target: Vector3 = Vector3.ZERO
-var _ledge_mantle_lift_target: Vector3 = Vector3.ZERO
-var _ledge_mantle_phase: int = 0
-var _ledge_hang_active: bool = false
-var _ledge_grab_window_left: float = 0.0
-var _ledge_hang_position: Vector3 = Vector3.ZERO
-var _ledge_hang_normal: Vector3 = Vector3.ZERO
-var _ledge_hang_top_position: Vector3 = Vector3.ZERO
-var _ledge_hang_forward_released: bool = false
 var _swimming_active: bool = false
 var _water_volume: Node = null
 var _seated_part: Node3D = null
+var _seat_collision_body: PhysicsBody3D = null
 var _seat_exit_ready_at_msec: int = 0
 var _death_fragment_root: Node3D = null
 var _death_visual_active: bool = false
@@ -326,6 +287,8 @@ var _camera_anchor_previous_position: Vector3 = Vector3.ZERO
 var _camera_anchor_current_position: Vector3 = Vector3.ZERO
 var _camera_anchor_initialized: bool = false
 var _embedded_camera_dragging: bool = false
+var _camera_dragging := false
+var _camera_drag_origin := Vector2.ZERO
 var _last_physics_timestamp_us: int = 0
 var _physics_step_duration_us: int = 16667
 var _camera_desired_spring_length: float = 8.5
@@ -417,11 +380,12 @@ func _ready() -> void:
 			_apply_avatar_visuals_if_needed()
 		_apply_animation_pose()
 		return
+	_configure_humanoid_physics()
 	_configure_physics_motion()
-	apply_world_stud_scale(world_stud_scale)
-	_configure_camera_visual_stability()
 	if spring_arm != null:
 		_camera_desired_spring_length = spring_arm.spring_length
+	apply_world_stud_scale(world_stud_scale)
+	_configure_camera_visual_stability()
 	_default_collision_layer = collision_layer
 	_default_collision_mask = collision_mask
 	_ensure_chat_bubble_nodes()
@@ -481,6 +445,30 @@ func _exit_tree() -> void:
 		if mobile_runtime != null:
 			mobile_runtime.call("set_gameplay_touch_controls_enabled", false)
 
+func _configure_humanoid_physics() -> void:
+	for issue in HUMANOID_CONFIG.validate():
+		push_warning("Humanoid config: " + issue)
+	Engine.physics_ticks_per_second = HUMANOID_CONFIG.int_value("PhysicsFrequencyHz")
+	_logical_move_speed = HUMANOID_CONFIG.float_value("WalkSpeed")
+	_logical_jump_velocity = HUMANOID_CONFIG.float_value("JumpPower")
+	move_speed = _world_units(_logical_move_speed)
+	jump_velocity_setting = _world_units(_logical_jump_velocity)
+	gravity_force = _world_units(HUMANOID_CONFIG.float_value("Gravity"))
+	set_meta("humanoid_physics_config_source", "res://scripts/player/humanoid/humanoid_config.tres")
+
+func _input(event: InputEvent) -> void:
+	# Release must reach us even when the cursor ends over a GUI button.
+	if not _camera_dragging or not _is_local_authority_safe(): return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and not event.pressed:
+		_camera_dragging = false
+		if not is_first_person and not is_shift_lock:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			Input.warp_mouse(_camera_drag_origin)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion:
+		_apply_camera_rotation_delta(event.relative.x * MOUSE_SENSITIVITY, event.relative.y * MOUSE_SENSITIVITY)
+		get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if bool(get_meta("bobux_system_menu_open", false)): return
 	if _is_preview_instance():
@@ -497,7 +485,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 				if crosshair: crosshair.visible = true
 				var tween = create_tween()
-				tween.tween_property(spring_arm, "position:x", 1.5, 0.15)
+				tween.tween_property(spring_arm, "position:x", _world_units(1.5), 0.15)
 			else:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 				if crosshair: crosshair.visible = false
@@ -529,8 +517,11 @@ func _handle_camera_pointer_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if not is_first_person and not is_shift_lock: # Only RMB controls camera in 3rd person naturally
 				if event.pressed:
+					_camera_drag_origin = event.position
+					_camera_dragging = true
 					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 				else:
+					_camera_dragging = false
 					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			_set_camera_desired_spring_length(_camera_desired_spring_length - 1.0)
@@ -548,6 +539,7 @@ func _handle_camera_pointer_input(event: InputEvent) -> void:
 		_apply_camera_rotation_delta(mouse_event.relative.x * MOUSE_SENSITIVITY, mouse_event.relative.y * MOUSE_SENSITIVITY)
 
 func _physics_process(delta: float) -> void:
+	_trace_state_override = ""
 	_pose_delta = delta
 	if not _is_preview_instance():
 		_motion_time += delta
@@ -586,7 +578,7 @@ func _physics_process(delta: float) -> void:
 					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 					if crosshair: crosshair.visible = true
 					var tween = create_tween()
-					tween.tween_property(spring_arm, "position:x", 1.5, 0.15)
+					tween.tween_property(spring_arm, "position:x", _world_units(1.5), 0.15)
 				else:
 					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 					if crosshair: crosshair.visible = false
@@ -599,11 +591,19 @@ func _physics_process(delta: float) -> void:
 		_update_animation_state(delta)
 		_sync_authoritative_replication_state()
 	else:
-		if ENABLE_REMOTE_INTERPOLATION:
+		if multiplayer.is_server():
+			# Physics queries use the latest pose, not delayed spectator rendering.
+			global_position = network_position - network_position_origin
+			rotation = network_rotation
+			velocity = network_velocity
+			_sync_humanoid_runtime_properties(network_grounded)
+		elif ENABLE_REMOTE_INTERPOLATION:
 			_apply_remote_interpolation(delta)
 		else:
 			_remote_interp_initialized = false
 		_update_remote_animation_from_interpolation(delta)
+	if _is_local_authority_safe():
+		_update_locomotion_audio(delta)
 	_apply_avatar_color_if_needed()
 	_apply_avatar_visuals_if_needed()
 	_apply_animation_pose()
@@ -662,7 +662,7 @@ func _apply_remote_interpolation(delta: float) -> void:
 func _sync_authoritative_replication_state(force: bool = false) -> void:
 	if not force and not _is_local_authority_safe():
 		return
-	var grounded_now: bool = is_on_floor()
+	var grounded_now: bool = _sample_ground_sensor()
 	var published_position: Vector3 = global_position + network_position_origin
 	published_position.x = snappedf(published_position.x, NETWORK_POSITION_SNAP_STEP)
 	published_position.z = snappedf(published_position.z, NETWORK_POSITION_SNAP_STEP)
@@ -686,7 +686,7 @@ func _update_remote_animation_from_interpolation(delta: float) -> void:
 		return
 	if network_character_state == CharacterState.CLIMBING:
 		animation_airborne = false
-		animation_weight = clampf(absf(network_velocity.y) / maxf(_world_units(CLIMB_SPEED), 0.001), 0.25, 1.0)
+		animation_weight = clampf(absf(network_velocity.y) / maxf(move_speed * HUMANOID_CONFIG.float_value("ClimbController.MoveSpeedFactor"), 0.001), 0.25, 1.0)
 		animation_cycle = wrapf(animation_cycle + delta * WALK_CYCLE_SPEED * maxf(animation_weight, 0.45), 0.0, TAU)
 		return
 	animation_airborne = network_character_state == CharacterState.JUMPING or network_character_state == CharacterState.FALLING
@@ -803,75 +803,74 @@ func _estimate_remote_snapshot_velocity() -> Vector3:
 	return (latest_pos - previous_pos) / dt_seconds
 
 func _run_local_movement(delta: float) -> void:
+	if _spawn_floor_recovery_frames > 0:
+		_spawn_floor_recovery_frames -= 1
+		if not is_instance_valid(_seated_part): _ground_sensor.recover_spawn_overlap(self, HUMANOID_CONFIG)
 	_refresh_humanoid_jump_velocity()
 	_external_control_lock = maxf(_external_control_lock - delta, 0.0)
 	var scripted_velocity := _lua_velocity_pending
 	_lua_velocity_pending = false
-	var on_floor: bool = is_on_floor()
+	var on_floor: bool = _sample_ground_sensor()
 	_update_jump_timers(delta, on_floor)
-	var jump_pressed := Input.is_action_just_pressed("jump") or _consume_mobile_jump_pressed()
+	var trace_jump := bool(get_meta("bobux_trace_jump", false))
+	var jump_pressed := trace_jump or Input.is_action_just_pressed("jump") or _consume_mobile_jump_pressed()
 	var input_vector: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var mobile_input_vector: Vector2 = _get_mobile_move_vector()
 	if mobile_input_vector.length_squared() > input_vector.length_squared():
 		input_vector = mobile_input_vector
+	var camera_basis := Basis.from_euler(Vector3(0.0, camera_pivot.global_rotation.y, 0.0))
+	var trace_move: Variant = get_meta("bobux_trace_move_direction") if has_meta("bobux_trace_move_direction") else null
+	var trace_climb_axis := float(get_meta("bobux_trace_climb_axis", 0.0))
+	if trace_move is Vector3:
+		var requested_world_direction := Vector3(trace_move)
+		requested_world_direction.y = 0.0
+		var requested_local_direction := camera_basis.inverse() * requested_world_direction
+		input_vector = Vector2(requested_local_direction.x, requested_local_direction.z - trace_climb_axis)
+	var input_strength := clampf(input_vector.length(), 0.0, 1.0)
 	var humanoid := get_node_or_null("Humanoid")
 	if humanoid != null and bool(humanoid.get_meta("PlatformStand", false)):
 		_stop_climbing()
 		if jump_pressed and not _is_text_input_focused():
 			LuaScriptEngine.notify_jump_request(self)
 		if not scripted_velocity:
-			velocity.y = maxf(velocity.y - _get_current_gravity() * delta, -_world_units(MAX_FALL_SPEED))
-		floor_snap_length = 0.0
-		move_and_slide()
+			velocity.y = _air_vertical(delta)
+		_integrate_character_motion(delta)
+		_sample_ground_sensor()
 		_update_character_state(false)
 		return
-	if _update_seated_movement(jump_pressed):
+	if _update_seated_movement(jump_pressed, input_vector):
 		return
 	_update_swimming_contact()
 	if _swimming_active:
 		_run_swimming_movement(delta, input_vector, jump_pressed)
 		return
-	if _ledge_hang_active:
-		_update_ledge_hang(delta, input_vector, jump_pressed)
-		return
-	if _ledge_mantle_active:
-		_update_ledge_mantle(delta)
-		return
 	if _is_text_input_focused():
 		_stop_climbing()
 		if not on_floor:
-			velocity.y = maxf(velocity.y - _get_current_gravity() * delta, -_world_units(MAX_FALL_SPEED))
-		elif velocity.y < 0.0:
-			velocity.y = _world_units(FLOOR_STICK_VELOCITY)
-		velocity.x = move_toward(velocity.x, 0.0, _world_units(GROUND_DECELERATION) * delta)
-		velocity.z = move_toward(velocity.z, 0.0, _world_units(GROUND_DECELERATION) * delta)
-		move_and_slide()
-		if is_on_ceiling() and velocity.y > 0.0:
+			velocity.y = _air_vertical(delta)
+		else:
+			velocity.y = _ground_vertical(delta)
+		var stopped := GroundControllerModule.update_horizontal(velocity / world_stud_scale, Vector3.ZERO, 0.0, move_speed / world_stud_scale, delta, HUMANOID_CONFIG) * world_stud_scale
+		velocity.x = stopped.x
+		velocity.z = stopped.z
+		_integrate_character_motion(delta)
+		_sample_ground_sensor()
+		if _motion_on_ceiling and velocity.y > 0.0:
 			velocity.y = 0.0
 		_update_character_state(false)
 		return
 		
 	var current_speed: float = move_speed
-	var mobile_runtime = _get_mobile_runtime()
-	var is_mobile_platform: bool = mobile_runtime != null and bool(mobile_runtime.call("is_mobile_beta"))
-	if is_mobile_platform:
-		_last_sprinting_input = bool(mobile_runtime.call("is_sprint_enabled"))
-	else:
-		_last_sprinting_input = Input.is_physical_key_pressed(KEY_CTRL)
-	if _last_sprinting_input:
-		current_speed *= sprint_multiplier
+	_last_sprinting_input = false
 		
 	if jump_pressed:
-		_jump_buffer_time_left = JUMP_BUFFER_TIME
-		_ledge_grab_window_left = LEDGE_GRAB_WINDOW_SECONDS
+		_jump_buffer_time_left = HUMANOID_CONFIG.float_value("Input.JumpBufferTime")
 		LuaScriptEngine.notify_jump_request(self)
 	else:
-		_ledge_grab_window_left = maxf(_ledge_grab_window_left - delta, 0.0)
+		pass
 
 	var local_input_direction: Vector3 = Vector3(input_vector.x, 0.0, input_vector.y)
-	
-	var cam_basis: Basis = Basis.from_euler(Vector3(0, camera_pivot.rotation.y, 0))
-	var world_move_direction: Vector3 = cam_basis * local_input_direction
+	var world_move_direction: Vector3 = camera_basis * local_input_direction
 	world_move_direction.y = 0.0
 	if _lua_move_deadline > 0:
 		if input_vector.length_squared() > 0.01:
@@ -884,6 +883,11 @@ func _run_local_movement(delta: float) -> void:
 				LuaScriptEngine.fire_roblox_instance_event(get_node("Humanoid"), "MoveToFinished", [offset.length() <= _world_units(1.0)])
 			else:
 				world_move_direction = offset.normalized()
+				input_strength = 1.0
+	if trace_move is Vector3:
+		world_move_direction = Vector3(trace_move)
+		world_move_direction.y = 0.0
+		input_strength = clampf(world_move_direction.length(), 0.0, 1.0)
 	
 	if is_shift_lock or is_first_person:
 		visuals.rotation.y = camera_pivot.rotation.y + PI
@@ -898,77 +902,57 @@ func _run_local_movement(delta: float) -> void:
 		var nearby_seat := _find_seat_below()
 		if nearby_seat != null:
 			_enter_seat(nearby_seat)
-			_update_seated_movement(false)
-			return
-	if not on_floor and world_move_direction.length_squared() > 0.001 and _try_begin_ledge_hang(world_move_direction, jump_pressed or _ledge_grab_window_left > 0.0):
-		_update_ledge_hang(delta, input_vector, false)
+			if is_instance_valid(_seated_part):
+				_update_seated_movement(false, input_vector)
+				return
+	if _update_climbing_movement(delta, input_vector, world_move_direction, camera_basis, jump_pressed):
 		return
-
-	if _update_climbing_movement(delta, input_vector, world_move_direction, cam_basis, jump_pressed):
-		return
-		
-	var desired_horizontal_velocity: Vector3 = world_move_direction * current_speed
-	var slope_assist_y: float = 0.0
-	if on_floor and world_move_direction.length_squared() > 0.001:
-		var floor_normal: Vector3 = get_floor_normal()
-		if floor_normal.dot(Vector3.UP) > 0.08 and floor_normal.dot(Vector3.UP) < 0.995:
-			var slope_velocity: Vector3 = (world_move_direction * current_speed).slide(floor_normal)
-			if slope_velocity.length_squared() > 0.001:
-				desired_horizontal_velocity = Vector3(slope_velocity.x, 0.0, slope_velocity.z)
-				slope_assist_y = clampf(
-					slope_velocity.y * SLOPE_CLIMB_ASSIST,
-					-_world_units(SLOPE_MAX_UP_VELOCITY),
-					_world_units(SLOPE_MAX_UP_VELOCITY)
-				)
-	var horizontal_velocity: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
+	var horizontal_velocity: Vector3
 	if _external_control_lock > 0.0 or scripted_velocity:
-		pass # Preserve authored impulses before returning control to locomotion.
-	elif world_move_direction.length_squared() > 0.001:
-		var accel: float = _world_units(GROUND_ACCELERATION if on_floor else AIR_ACCELERATION)
-		horizontal_velocity = horizontal_velocity.move_toward(desired_horizontal_velocity, accel * delta)
+		horizontal_velocity = Vector3(velocity.x, 0.0, velocity.z)
+	elif on_floor:
+		horizontal_velocity = GroundControllerModule.update_horizontal(velocity / world_stud_scale, world_move_direction, input_strength, current_speed / world_stud_scale, delta, HUMANOID_CONFIG) * world_stud_scale
 	else:
-		var decel: float = _world_units(GROUND_DECELERATION if on_floor else AIR_DECELERATION)
-		horizontal_velocity = horizontal_velocity.move_toward(Vector3.ZERO, decel * delta)
+		horizontal_velocity = AirControllerModule.update_horizontal(velocity / world_stud_scale, world_move_direction, input_strength, current_speed / world_stud_scale, delta, HUMANOID_CONFIG) * world_stud_scale
 	velocity.x = horizontal_velocity.x
 	velocity.z = horizontal_velocity.z
 	
 	if scripted_velocity:
-		pass # An authored assembly impulse survives the default vertical controller.
+		pass
 	elif on_floor:
-		if slope_assist_y > 0.0:
-			velocity.y = move_toward(maxf(velocity.y, 0.0), slope_assist_y, _world_units(SLOPE_VERTICAL_ACCELERATION) * delta)
-		elif velocity.y < 0.0:
-			velocity.y = _world_units(FLOOR_STICK_VELOCITY)
 		if _should_consume_buffered_jump(on_floor):
-			velocity.y = jump_velocity_setting - _get_current_gravity() * delta * 0.5
+			velocity.y = jump_velocity_setting
 			_jump_buffer_time_left = 0.0
 			_coyote_time_left = 0.0
 			on_floor = false
+		else:
+			velocity.y = _ground_vertical(delta)
 	else:
 		if _should_consume_buffered_jump(on_floor):
-			velocity.y = jump_velocity_setting - _get_current_gravity() * delta * 0.5
+			velocity.y = jump_velocity_setting
 			_jump_buffer_time_left = 0.0
 			_coyote_time_left = 0.0
 		else:
-			velocity.y = maxf(velocity.y - _get_current_gravity() * delta, -_world_units(MAX_FALL_SPEED))
-	# Keep floor snap active except during upward jump to prevent
-	# getting stuck on ledges or teleporting off edges.
-	if velocity.y > 0.5:
-		floor_snap_length = 0.0
-	else:
-		floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+			velocity.y = _air_vertical(delta)
+	floor_snap_length = 0.0
 	_last_vertical_speed = velocity.y
-	move_and_slide()
-	if not on_floor and is_on_floor():
+	_integrate_character_motion(delta)
+	if not on_floor and _sample_ground_sensor():
 		_landing_compression = clampf(-_last_vertical_speed / _world_units(450.0), 0.0, 0.12)
-	_try_auto_step_up(world_move_direction, delta, on_floor)
-	if is_on_ceiling() and velocity.y > 0.0:
+	if on_floor and not jump_pressed:
+		_try_auto_step_up(world_move_direction, delta, on_floor)
+	_sample_ground_sensor()
+	if _motion_on_ceiling and velocity.y > 0.0:
 		velocity.y = 0.0
 	_update_character_state(_last_sprinting_input)
+	_last_trace_move_direction = Vector3(trace_move) if trace_move is Vector3 else Vector3.ZERO
+	_last_trace_move_direction.y = trace_climb_axis
+	_last_trace_jump = jump_pressed
+	set_meta("bobux_trace_jump", false)
 
 func _update_jump_timers(delta: float, on_floor: bool) -> void:
 	if on_floor:
-		_coyote_time_left = COYOTE_TIME
+		_coyote_time_left = HUMANOID_CONFIG.float_value("Input.CoyoteTime")
 	else:
 		_coyote_time_left = maxf(_coyote_time_left - delta, 0.0)
 	_jump_buffer_time_left = maxf(_jump_buffer_time_left - delta, 0.0)
@@ -988,9 +972,9 @@ func _update_character_state(is_sprinting: bool) -> void:
 		next_state = CharacterState.SEATED
 	elif _swimming_active:
 		next_state = CharacterState.SWIMMING
-	elif _climbing_active or _ledge_hang_active or _ledge_mantle_active:
+	elif _climbing_active:
 		next_state = CharacterState.CLIMBING
-	elif not is_on_floor():
+	elif not _sample_ground_sensor():
 		next_state = CharacterState.JUMPING if velocity.y > 0.0 else CharacterState.FALLING
 	elif horizontal_speed > 0.35:
 		next_state = CharacterState.RUNNING if is_sprinting else CharacterState.WALKING
@@ -999,9 +983,22 @@ func _update_character_state(is_sprinting: bool) -> void:
 func _set_character_state(next_state: int) -> void:
 	if _character_state == next_state:
 		return
+	var previous_state := _character_state
 	var was_airborne := _character_state in [CharacterState.JUMPING, CharacterState.FALLING]
 	_character_state = next_state
+	if next_state in [CharacterState.JUMPING, CharacterState.FALLING, CharacterState.SEATED, CharacterState.DEAD]:
+		RobloxAudioPack.stop_footstep(self)
+	if next_state == CharacterState.JUMPING:
+		RobloxAudioPack.play_character("action_jump.mp3", self, -7.0, randf_range(0.97, 1.03))
+	elif next_state == CharacterState.FALLING and previous_state == CharacterState.JUMPING:
+		RobloxAudioPack.play_character("action_falling.mp3", self, -14.0)
+	elif was_airborne and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING]:
+		RobloxAudioPack.play_character("action_jump_land.mp3", self, -8.0, randf_range(0.97, 1.03))
+	elif next_state == CharacterState.SWIMMING and previous_state != CharacterState.SWIMMING:
+		RobloxAudioPack.play_character("impact_water.mp3", self, -5.0)
+	_locomotion_audio_timer = 0.12 if was_airborne and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING] else 0.0
 	if was_airborne and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING]:
+		_trace_state_override = "Landed"
 		_publish_humanoid_state(7) # Landed precedes the next running state.
 	var state_ids := {"Running": 8, "RunningNoPhysics": 8, "Jumping": 3, "Freefall": 5, "Seated": 13, "Climbing": 12, "Swimming": 4, "Dead": 15}
 	_publish_humanoid_state(int(state_ids.get(_character_state_name(next_state), 8)))
@@ -1010,12 +1007,62 @@ func _set_character_state(next_state: int) -> void:
 		humanoid.set_meta("HumanoidState", _character_state_name(next_state))
 		humanoid.set_meta("MoveDirection", Vector3(velocity.x, 0.0, velocity.z).normalized() if Vector2(velocity.x, velocity.z).length_squared() > 0.001 else Vector3.ZERO)
 
+func _update_locomotion_audio(delta: float) -> void:
+	_locomotion_audio_timer = maxf(_locomotion_audio_timer - delta, 0.0)
+	var interval := 0.0
+	if _character_state == CharacterState.WALKING or _character_state == CharacterState.RUNNING:
+		if Vector2(velocity.x, velocity.z).length() > 0.35:
+			interval = 0.38 if _character_state == CharacterState.RUNNING else 0.52
+	elif _character_state == CharacterState.CLIMBING:
+		interval = 0.48
+	elif _character_state == CharacterState.SWIMMING and Vector2(velocity.x, velocity.z).length() + absf(velocity.y) > 0.35:
+		interval = 0.78
+	if interval <= 0.0 or _locomotion_audio_timer > 0.0:
+		return
+	_locomotion_audio_timer = interval
+	var material := "Climbable" if _character_state == CharacterState.CLIMBING else _resolve_humanoid_floor_material(_sample_ground_sensor())
+	RobloxAudioPack.play_footstep(material, self, -11.0 if _character_state != CharacterState.RUNNING else -9.0)
+
 func get_runtime_humanoid_state() -> int:
 	return _roblox_humanoid_state
 
+func get_trace_move_direction() -> Vector3:
+	return _last_trace_move_direction
+
+func get_trace_jump() -> bool:
+	return _last_trace_jump
+
+func get_trace_state_name() -> String:
+	return _trace_state_override if not _trace_state_override.is_empty() else _character_state_name(_character_state)
+
+func get_trace_support_part() -> Object:
+	return _ground_sensor.get("hit_part")
+
+func reset_trace_state() -> void:
+	_previous_physics_position = global_position
+	_last_safe_position = global_position
+	respawn_position = global_position
+	_stuck_timer = 0.0
+	_trace_state_override = ""
+	_last_trace_move_direction = Vector3.ZERO
+	_last_trace_jump = false
+	_stop_climbing()
+	_swimming_active = false
+	_jump_buffer_time_left = 0.0
+	_coyote_time_left = 0.0
+	_motion_on_floor = false
+	_grounded_by_sensor = false
+	_set_character_state(CharacterState.IDLE)
+
 func set_lua_linear_velocity(value: Vector3) -> void:
+	if ImportedPlaceNetwork.send_character_command(self, "set_lua_linear_velocity", value):
+		velocity = value
+		return
 	velocity = value
 	_lua_velocity_pending = true
+	# Forces arrive between physics ticks; do not cancel their momentum on the
+	# immediately following input frame.
+	_external_control_lock = maxf(_external_control_lock, 0.15)
 	if value.y > 0.0:
 		floor_snap_length = 0.0
 		_jump_buffer_time_left = 0.0
@@ -1057,218 +1104,37 @@ func move_to(destination: Vector3) -> void:
 
 func apply_external_impulse(delta_velocity: Vector3) -> void:
 	if not delta_velocity.is_finite() or current_health <= 0 or _is_preview_instance(): return
+	if ImportedPlaceNetwork.send_character_command(self, "apply_external_impulse", delta_velocity): return
 	set_lua_linear_velocity(velocity + delta_velocity)
 	_external_control_lock = 0.25
 
 func _update_climbing_movement(delta: float, input_vector: Vector2, world_move_direction: Vector3, camera_basis: Basis, jump_pressed: bool) -> bool:
-	var probe_direction := -_climb_normal if _climbing_active and _climb_normal.length_squared() > 0.1 else world_move_direction
-	var climb_hit := _probe_climbable_surface(probe_direction)
+	var probe_direction := -_climb_normal if _climbing_active else world_move_direction
+	var climb_hit := ClimbSensorModule.probe(self, probe_direction, HUMANOID_CONFIG)
 	if _climbing_active:
 		if jump_pressed:
-			_detach_from_climb(true)
-			floor_snap_length = 0.0
-			move_and_slide()
-			_update_character_state(false)
-			return true
+			_stop_climbing()
+			velocity.y = jump_velocity_setting
+			return false
 		if climb_hit.is_empty():
-			_climb_surface_lost_time += delta
-			if _climb_surface_lost_time > CLIMB_LOST_SURFACE_GRACE:
-				var was_moving_up := input_vector.y < -0.1
-				var release_normal := _climb_normal
-				_stop_climbing()
-				if was_moving_up and release_normal.length_squared() > 0.1:
-					velocity = (
-						-release_normal * _world_units(CLIMB_LEDGE_FORWARD_SPEED)
-						+ Vector3.UP * _world_units(CLIMB_LEDGE_UP_SPEED)
-					)
-					floor_snap_length = 0.0
-					move_and_slide()
-					_update_character_state(false)
-					return true
-				return false
+			_stop_climbing()
+			return false
 		else:
 			_accept_climb_hit(climb_hit)
-	elif not climb_hit.is_empty() and input_vector.y < -0.08 and jump_pressed:
+	elif not climb_hit.is_empty():
 		var hit_normal: Vector3 = Vector3(climb_hit.get("normal", Vector3.ZERO))
 		if world_move_direction.length_squared() > 0.001 and world_move_direction.dot(-hit_normal) > 0.08:
 			_accept_climb_hit(climb_hit)
 
 	if not _climbing_active:
 		return false
-	var camera_right := camera_basis * Vector3.RIGHT
-	camera_right.y = 0.0
-	camera_right = camera_right.slide(_climb_normal)
-	if camera_right.length_squared() <= 0.001:
-		camera_right = Vector3.UP.cross(_climb_normal)
-	if camera_right.length_squared() > 0.001:
-		camera_right = camera_right.normalized()
 	var vertical_input := clampf(-input_vector.y, -1.0, 1.0)
-	var side_input := clampf(input_vector.x, -1.0, 1.0)
-	velocity = (
-		Vector3.UP * vertical_input * _world_units(CLIMB_SPEED)
-		+ camera_right * side_input * _world_units(CLIMB_SIDE_SPEED)
-		- _climb_normal * _world_units(CLIMB_SURFACE_PULL_SPEED)
-	)
+	velocity = ClimbControllerModule.velocity_for(velocity / world_stud_scale, _climb_surface, _climb_normal, vertical_input, _logical_move_speed, delta, HUMANOID_CONFIG) * world_stud_scale
 	floor_snap_length = 0.0
-	move_and_slide()
+	_integrate_character_motion(delta)
+	_sample_ground_sensor()
 	_set_character_state(CharacterState.CLIMBING)
 	return true
-
-func _try_begin_ledge_hang(direction: Vector3, jump_pressed: bool) -> bool:
-	if _ledge_hang_active or _ledge_mantle_active or _climbing_active or _swimming_active or _seated_part != null:
-		return false
-	# Walking into a wall may hold the ledge, but climbing onto it must be an
-	# explicit jump/up action instead of an automatic teleport over the edge.
-	if not jump_pressed:
-		return false
-	if get_world_3d() == null or collision_body == null or collision_body.shape == null:
-		return false
-	var flat_direction := Vector3(direction.x, 0.0, direction.z)
-	if flat_direction.length_squared() <= 0.001:
-		return false
-	flat_direction = flat_direction.normalized()
-	var space := get_world_3d().direct_space_state
-	# Probe at the lower hands, not at the legs. A ledge is held only when the
-	# avatar can actually reach its rim; standing contact remains foot-only.
-	var low_origin := global_position + Vector3.UP * _world_units(2.05)
-	var low_query := PhysicsRayQueryParameters3D.create(low_origin, low_origin + flat_direction * _world_units(LEDGE_PROBE_DISTANCE))
-	low_query.exclude = [get_rid()]
-	low_query.collision_mask = _get_player_and_world_collision_mask()
-	var low_hit := space.intersect_ray(low_query)
-	if low_hit.is_empty() or _node_has_special_role(low_hit.get("collider"), ["roblox_water"], ["Water"]):
-		return false
-	var upper_origin := global_position + Vector3.UP * _world_units(4.45)
-	var upper_query := PhysicsRayQueryParameters3D.create(upper_origin, upper_origin + flat_direction * _world_units(LEDGE_PROBE_DISTANCE))
-	upper_query.exclude = [get_rid()]
-	upper_query.collision_mask = _get_player_and_world_collision_mask()
-	if not space.intersect_ray(upper_query).is_empty():
-		return false
-	var down_origin := (
-		global_position
-		+ flat_direction * _world_units(LEDGE_PROBE_DISTANCE + 0.38)
-		+ Vector3.UP * _world_units(5.15)
-	)
-	var down_query := PhysicsRayQueryParameters3D.create(down_origin, down_origin + Vector3.DOWN * _world_units(5.0))
-	down_query.exclude = [get_rid()]
-	down_query.collision_mask = _get_player_and_world_collision_mask()
-	var top_hit := space.intersect_ray(down_query)
-	if top_hit.is_empty():
-		return false
-	var top_position: Vector3 = top_hit.get("position", global_position)
-	var ledge_height := top_position.y - global_position.y
-	if ledge_height < _world_units(1.55) or ledge_height > _world_units(LEDGE_MANTLE_MAX_HEIGHT):
-		return false
-	var top_normal: Vector3 = top_hit.get("normal", Vector3.UP)
-	if top_normal.dot(Vector3.UP) < 0.72:
-		return false
-	var wall_normal: Vector3 = Vector3(low_hit.get("normal", -flat_direction))
-	wall_normal.y = 0.0
-	if wall_normal.length_squared() <= 0.001:
-		wall_normal = -flat_direction
-	wall_normal = wall_normal.normalized()
-	_ledge_hang_normal = wall_normal
-	_ledge_hang_top_position = top_position
-	var wall_position: Vector3 = low_hit.get("position", global_position + flat_direction * _world_units(LEDGE_PROBE_DISTANCE))
-	var base_hang_position := Vector3(
-		wall_position.x,
-		top_position.y - _world_units(LEDGE_HANG_HAND_HEIGHT),
-		wall_position.z
-	)
-	var found_clear_hang := false
-	for clearance_step in [0.0, 0.12, 0.24, 0.38, 0.55]:
-		var candidate := base_hang_position + wall_normal * _world_units(LEDGE_HANG_WALL_CLEARANCE + clearance_step)
-		if not _is_body_overlapping_world_at(candidate):
-			_ledge_hang_position = candidate
-			found_clear_hang = true
-			break
-	if not found_clear_hang:
-		return false
-	_ledge_hang_active = true
-	_ledge_hang_forward_released = false
-	_ledge_grab_window_left = 0.0
-	_stop_climbing()
-	velocity = Vector3.ZERO
-	floor_snap_length = 0.0
-	# This is a deliberate grab snap to a volume-tested position, not a network
-	# teleport. Recording it prevents the unstuck guard from undoing the grab.
-	global_position = _ledge_hang_position
-	_previous_physics_position = global_position
-	_set_character_state(CharacterState.CLIMBING)
-	return true
-
-func _update_ledge_hang(delta: float, input_vector: Vector2, jump_pressed: bool) -> void:
-	if not _ledge_hang_active:
-		return
-	if input_vector.y > 0.35:
-		_release_ledge_hang(false)
-		return
-	if input_vector.y >= -0.12:
-		_ledge_hang_forward_released = true
-	if jump_pressed or input_vector.y < -0.35:
-		_ledge_mantle_target = (
-			Vector3(_ledge_hang_top_position.x, _ledge_hang_top_position.y + _world_units(0.08), _ledge_hang_top_position.z)
-			- _ledge_hang_normal * _world_units(0.42)
-		)
-		_ledge_mantle_lift_target = Vector3(
-			global_position.x,
-			_ledge_mantle_target.y + _world_units(0.12),
-			global_position.z
-		)
-		if _is_body_overlapping_world_at(_ledge_mantle_lift_target) or _is_body_overlapping_world_at(_ledge_mantle_target):
-			_release_ledge_hang(false)
-			return
-		_ledge_hang_active = false
-		_ledge_hang_forward_released = false
-		_ledge_mantle_active = true
-		_ledge_mantle_phase = 0
-		return
-	var hang_delta := _ledge_hang_position - global_position
-	if hang_delta.length() > _world_units(0.02):
-		var hang_motion := hang_delta.limit_length(_world_units(LEDGE_HANG_SNAP_SPEED) * delta)
-		move_and_collide(hang_motion)
-	velocity = Vector3.ZERO
-	floor_snap_length = 0.0
-	_set_character_state(CharacterState.CLIMBING)
-
-func _release_ledge_hang(push_away: bool) -> void:
-	var release_normal := _ledge_hang_normal
-	_ledge_hang_active = false
-	_ledge_hang_forward_released = false
-	_ledge_grab_window_left = 0.0
-	_ledge_hang_normal = Vector3.ZERO
-	_ledge_hang_top_position = Vector3.ZERO
-	if push_away:
-		velocity = release_normal * _world_units(CLIMB_JUMP_OUT_SPEED * 0.55) + Vector3.UP * jump_velocity_setting * 0.7
-	else:
-		velocity = Vector3.DOWN * _world_units(0.5)
-	floor_snap_length = 0.0
-
-func _update_ledge_mantle(delta: float) -> void:
-	if not _ledge_mantle_active:
-		return
-	var phase_target := _ledge_mantle_lift_target if _ledge_mantle_phase == 0 else _ledge_mantle_target
-	var distance := global_position.distance_to(phase_target)
-	if distance <= _world_units(0.08):
-		global_position = phase_target
-		_previous_physics_position = global_position
-		if _ledge_mantle_phase == 0:
-			_ledge_mantle_phase = 1
-		else:
-			_ledge_mantle_active = false
-			_ledge_mantle_phase = 0
-			velocity = Vector3.ZERO
-			floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
-			_update_character_state(false)
-		return
-	var mantle_motion := (phase_target - global_position).limit_length(_world_units(LEDGE_MANTLE_SPEED) * delta)
-	var mantle_collision := move_and_collide(mantle_motion)
-	if mantle_collision != null and mantle_collision.get_travel().length() <= _world_units(0.005):
-		_release_ledge_hang(false)
-		_ledge_mantle_active = false
-		_ledge_mantle_phase = 0
-		return
-	velocity = Vector3.ZERO
-	_set_character_state(CharacterState.CLIMBING)
 
 func _update_swimming_contact() -> void:
 	var water := _find_overlapping_special_node(["roblox_water"], ["Water"], ["TerrainWater", "Water"])
@@ -1276,18 +1142,14 @@ func _update_swimming_contact() -> void:
 	_water_volume = water
 	if _swimming_active:
 		_stop_climbing()
-		_ledge_hang_active = false
-		_ledge_hang_forward_released = false
-		_ledge_mantle_active = false
-		_ledge_mantle_phase = 0
 		motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 		floor_snap_length = 0.0
 	elif motion_mode != CharacterBody3D.MOTION_MODE_GROUNDED:
 		motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
-		floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+		floor_snap_length = 0.0
 
 func _run_swimming_movement(delta: float, input_vector: Vector2, jump_pressed: bool) -> void:
-	var camera_basis := Basis.from_euler(Vector3(0.0, camera_pivot.rotation.y, 0.0))
+	var camera_basis := Basis.from_euler(Vector3(0.0, camera_pivot.global_rotation.y, 0.0))
 	var direction := camera_basis * Vector3(input_vector.x, 0.0, input_vector.y)
 	direction.y = 0.0
 	if direction.length_squared() > 0.001:
@@ -1295,29 +1157,45 @@ func _run_swimming_movement(delta: float, input_vector: Vector2, jump_pressed: b
 		var target_angle := atan2(direction.x, direction.z)
 		visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, clampf(delta * LOCAL_TURN_LERP_SPEED, 0.0, 1.0))
 	var vertical_input := 1.0 if Input.is_action_pressed("jump") or jump_pressed else -0.08
-	var target_velocity := direction * _world_units(SWIM_SPEED)
+	var target_velocity := direction * _world_units(HUMANOID_CONFIG.float_value("Swimming.Speed"))
 	target_velocity.y = (
-		_world_units(SWIM_VERTICAL_SPEED) * vertical_input
+		_world_units(HUMANOID_CONFIG.float_value("Swimming.VerticalSpeed")) * vertical_input
 		if vertical_input > 0.0
-		else -_world_units(SWIM_IDLE_SINK_SPEED)
+		else -_world_units(HUMANOID_CONFIG.float_value("Swimming.IdleSinkSpeed"))
 	)
-	velocity = velocity.move_toward(target_velocity, _world_units(SWIM_ACCELERATION) * delta)
-	move_and_slide()
+	velocity = velocity.move_toward(target_velocity, _world_units(HUMANOID_CONFIG.float_value("Swimming.Acceleration")) * delta)
+	_integrate_character_motion(delta)
 	_set_character_state(CharacterState.SWIMMING)
 
+func _seat_from_contact(collider: Variant, shape_index: int) -> Node3D:
+	if not is_instance_valid(collider): return null
+	var part: Node = LuaScriptEngine.BobuxInstance.wrap(self)._part_from_raycast_collider(collider, shape_index)
+	var candidate := _special_ancestor(part, [], ["Seat", "VehicleSeat"], [])
+	if not candidate is Node3D or bool(candidate.get_meta("Disabled", candidate.get_meta("disabled", false))): return null
+	var occupant: Variant = candidate.get_meta("Occupant") if candidate.has_meta("Occupant") else null
+	if is_instance_valid(occupant) and occupant.get_parent() != self: return null
+	return candidate as Node3D
+
 func _find_seat_below() -> Node3D:
-	if get_world_3d() == null:
-		return null
-	var origin := global_position + Vector3.UP * _world_units(1.2)
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + Vector3.DOWN * _world_units(2.0))
-	query.exclude = [get_rid()]
-	query.collision_mask = _get_player_and_world_collision_mask()
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	var seat_node := _special_ancestor(hit.get("collider"), [], ["Seat", "VehicleSeat"], [])
-	return seat_node as Node3D if seat_node is Node3D else null
+	if get_world_3d() == null: return null
+	# A foot can land on the edge while the centre ray misses the cushion.
+	# Resolve the actual shape of a welded assembly, not its chassis owner.
+	for contact in _motion_collisions:
+		if contact.get_normal().dot(Vector3.UP) < 0.5: continue
+		var seat := _seat_from_contact(contact.get_collider(), contact.get_collider_shape_index())
+		if seat != null: return seat
+	for offset in [Vector3.ZERO, Vector3(0.45,0,0), Vector3(-0.45,0,0), Vector3(0,0,0.35), Vector3(0,0,-0.35)]:
+		var origin: Vector3 = global_position + (Vector3.UP * 1.2 + offset) * _world_units(1.0)
+		var query := PhysicsRayQueryParameters3D.create(origin, origin + Vector3.DOWN * _world_units(2.0))
+		query.exclude = [get_rid()]
+		query.collision_mask = _get_player_and_world_collision_mask()
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		var seat := _seat_from_contact(hit.get("collider"), int(hit.get("shape", -1)))
+		if seat != null: return seat
+	return null
 
 func _enter_seat(seat: Node3D) -> void:
-	if seat == null or bool(seat.get_meta("Disabled", false)):
+	if seat == null or _seated_part == seat or bool(seat.get_meta("Disabled", seat.get_meta("disabled", false))):
 		return
 	var occupant: Variant = seat.get_meta("Occupant") if seat.has_meta("Occupant") else null
 	if is_instance_valid(occupant) and occupant.get_parent() != self: return
@@ -1327,28 +1205,63 @@ func _enter_seat(seat: Node3D) -> void:
 	elif bool(seat.get_meta("attribute_BobuxAircraft", false)):
 		preload("res://addons/roblox_runtime/roblox_aircraft_motor.gd").ensure(seat)
 	_seated_part = seat
+	_seat_collision_body = preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(seat)
+	if is_instance_valid(_seat_collision_body):
+		add_collision_exception_with(_seat_collision_body)
+		_seat_collision_body.add_collision_exception_with(self)
 	_stop_climbing()
-	_ledge_hang_active = false
-	_ledge_hang_forward_released = false
-	_ledge_mantle_active = false
-	_ledge_mantle_phase = 0
 	velocity = Vector3.ZERO
 	var humanoid := _ensure_humanoid_api_node()
 	humanoid.set_meta("Sit", true)
 	humanoid.set_meta("SeatPart", seat)
 	seat.set_meta("Occupant", humanoid)
+	var weld := Node.new()
+	weld.name = "SeatWeld"
+	weld.set_meta("roblox_class", "Weld")
+	weld.set_meta("bobux_seat_weld", true)
+	weld.set_meta("Part0", seat)
+	weld.set_meta("Part1", get_node_or_null("Torso"))
+	weld.set_meta("C0", LuaScriptEngine.BobuxCFrame.new(Transform3D(Basis.IDENTITY, Vector3(0, absf(seat.scale.y) / _world_units(2.0) + 1.5, 0))))
+	LuaScriptEngine.BobuxInstance.wrap(seat) # Install the ChildAdded/Removed bridge before parenting.
+	seat.add_child(weld)
+	_seat_property_changed(seat, "Occupant")
+	_seat_property_changed(humanoid, "Sit")
+	_seat_property_changed(humanoid, "SeatPart")
+	LuaScriptEngine.fire_roblox_instance_event(humanoid, "Seated", [true, seat])
 	_set_character_state(CharacterState.SEATED)
 
-func _update_seated_movement(jump_pressed: bool) -> bool:
-	if _seated_part == null or not is_instance_valid(_seated_part) or not _seated_part.is_inside_tree():
+func _seat_property_changed(target: Node, property_name: String) -> void:
+	LuaScriptEngine.fire_roblox_instance_event(target, "PropertyChanged_" + property_name, [])
+	LuaScriptEngine.fire_roblox_instance_event(target, "Changed", [property_name])
+
+func _set_seat_input(seat: Node, input_vector: Vector2) -> void:
+	if str(seat.get_meta("roblox_class", "")) != "VehicleSeat": return
+	var values := {"ThrottleFloat": -input_vector.y, "SteerFloat": input_vector.x, "Throttle": int(signf(-input_vector.y)), "Steer": int(signf(input_vector.x))}
+	for key in values:
+		if seat.get_meta(key, 0) != values[key]:
+			seat.set_meta(key, values[key])
+			_seat_property_changed(seat, key)
+
+func _update_seated_movement(jump_pressed: bool, input_vector: Vector2 = Vector2.ZERO) -> bool:
+	# Do not restart the exit cooldown on every ordinary walking frame.
+	if _seated_part == null: return false
+	if not is_instance_valid(_seated_part) or not _seated_part.is_inside_tree():
 		_leave_seat(false)
 		return false
 	if jump_pressed:
 		_leave_seat(true)
 		return false
+	_set_seat_input(_seated_part, Vector2.ZERO if _is_text_input_focused() else input_vector)
 	var up := _seated_part.global_basis.y.normalized()
 	var seat_half_height := maxf(absf(_seated_part.scale.y) * 0.5, _world_units(0.2))
-	global_position = _seated_part.global_position + up * (seat_half_height + _world_units(SEAT_ATTACH_HEIGHT))
+	var target_position := _seated_part.global_position + up * (seat_half_height + _world_units(SEAT_ATTACH_HEIGHT))
+	var weld := _seated_part.get_node_or_null("SeatWeld")
+	if weld != null and get_node_or_null("Torso") != null:
+		var wrapper = LuaScriptEngine.BobuxInstance.wrap(_seated_part)
+		var weld_wrapper = LuaScriptEngine.BobuxInstance.wrap(weld)
+		var target_frame: Transform3D = wrapper._get(&"CFrame").transform * weld_wrapper._get(&"C0").transform * weld_wrapper._get(&"C1").transform.affine_inverse()
+		target_position = wrapper._roblox_point_to_godot(target_frame.origin) - global_basis * get_node("Torso").position
+	global_position = target_position
 	rotation.y = _seated_part.global_rotation.y
 	visuals.rotation.y = 0
 	velocity = Vector3.ZERO
@@ -1357,32 +1270,59 @@ func _update_seated_movement(jump_pressed: bool) -> bool:
 	return true
 
 func _leave_seat(apply_jump: bool) -> void:
+	# Walking directions are world-space; the seat temporarily rotates the
+	# character root. Preserve the camera's view while returning to an upright
+	# root, otherwise W and the foot collision remain rotated by the vehicle.
+	var camera_frame := camera_pivot.global_transform if camera_pivot != null else Transform3D.IDENTITY
+	var facing := visuals.global_rotation.y if visuals != null else global_rotation.y
+	rotation = Vector3.ZERO
+	if camera_pivot != null: camera_pivot.global_transform = camera_frame
+	if visuals != null: visuals.global_rotation.y = facing
+	if is_instance_valid(_seat_collision_body):
+		remove_collision_exception_with(_seat_collision_body)
+		_seat_collision_body.remove_collision_exception_with(self)
+	_seat_collision_body = null
+	var was_seated := is_instance_valid(_seated_part)
 	if _seated_part != null and is_instance_valid(_seated_part):
+		_set_seat_input(_seated_part, Vector2.ZERO)
 		_seated_part.set_meta("Occupant", null)
+		_seat_property_changed(_seated_part, "Occupant")
+		var weld := _seated_part.get_node_or_null("SeatWeld")
+		if weld != null:
+			_seated_part.remove_child(weld)
+			weld.queue_free()
 	_seated_part = null
 	_seat_exit_ready_at_msec = Time.get_ticks_msec() + SEAT_EXIT_COOLDOWN_MSEC
 	var humanoid := _ensure_humanoid_api_node()
 	humanoid.set_meta("Sit", false)
 	humanoid.set_meta("SeatPart", null)
-	floor_snap_length = 0.0 if apply_jump else _world_units(FLOOR_SNAP_LENGTH)
+	if was_seated:
+		_seat_property_changed(humanoid, "Sit")
+		_seat_property_changed(humanoid, "SeatPart")
+		LuaScriptEngine.fire_roblox_instance_event(humanoid, "Seated", [false, null])
+	floor_snap_length = 0.0 if apply_jump else 0.0
 	if apply_jump:
 		velocity = Vector3.UP * jump_velocity_setting
+	_reset_all_physics_interpolation()
 
 func _find_overlapping_special_node(groups: Array[String], classes: Array[String], material_names: Array[String]) -> Node:
-	if get_world_3d() == null or collision_body == null or collision_body.shape == null:
+	if get_world_3d() == null:
 		return null
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = collision_body.shape
-	query.transform = collision_body.global_transform
-	query.margin = 0.08
-	query.collision_mask = 0x7FFFFFFF
-	query.collide_with_areas = true
-	query.collide_with_bodies = true
-	query.exclude = [get_rid()]
-	for result in get_world_3d().direct_space_state.intersect_shape(query, 32):
-		var node := _special_ancestor(result.get("collider"), groups, classes, material_names)
-		if node != null:
-			return node
+	for collision_shape in [collision_humanoid_root_part, collision_left_leg, collision_right_leg, collision_torso, collision_head, collision_left_arm, collision_right_arm]:
+		if collision_shape == null or collision_shape.disabled or collision_shape.shape == null:
+			continue
+		var query := PhysicsShapeQueryParameters3D.new()
+		query.shape = collision_shape.shape
+		query.transform = collision_shape.global_transform
+		query.margin = 0.08
+		query.collision_mask = 0x7FFFFFFF
+		query.collide_with_areas = true
+		query.collide_with_bodies = true
+		query.exclude = [get_rid()]
+		for result in get_world_3d().direct_space_state.intersect_shape(query, 32):
+			var node := _special_ancestor(result.get("collider"), groups, classes, material_names)
+			if node != null:
+				return node
 	return null
 
 func _node_has_special_role(value: Variant, groups: Array[String], classes: Array[String]) -> bool:
@@ -1403,82 +1343,20 @@ func _special_ancestor(value: Variant, groups: Array[String], classes: Array[Str
 		cursor = cursor.get_parent()
 	return null
 
-func _probe_climbable_surface(direction: Vector3) -> Dictionary:
-	if direction.length_squared() <= 0.001 or get_world_3d() == null or not is_inside_tree():
-		return {}
-	var flat_direction := Vector3(direction.x, 0.0, direction.z)
-	if flat_direction.length_squared() <= 0.001:
-		return {}
-	flat_direction = flat_direction.normalized()
-	var query_mask := _get_world_collision_mask()
-	var side_direction := Vector3.UP.cross(flat_direction).normalized()
-	# Several narrow rays keep imported TrussPart meshes climbable even when a
-	# ray happens to pass through a decorative opening in their exact mesh.
-	for probe_height in [1.1, 2.15, 3.2, 4.15]:
-		for side_offset in [-0.34, 0.0, 0.34]:
-			var origin := (
-				global_position
-				+ Vector3.UP * _world_units(float(probe_height))
-				+ side_direction * _world_units(float(side_offset))
-			)
-			var query := PhysicsRayQueryParameters3D.create(
-				origin,
-				origin + flat_direction * _world_units(CLIMB_PROBE_DISTANCE)
-			)
-			query.exclude = [get_rid()]
-			query.collision_mask = query_mask
-			query.collide_with_bodies = true
-			query.collide_with_areas = true
-			var hit := get_world_3d().direct_space_state.intersect_ray(query)
-			if not hit.is_empty() and _is_climbable_collider(hit.get("collider")):
-				return hit
-	return {}
-
-func _is_climbable_collider(collider: Variant) -> bool:
-	var cursor := collider as Node if collider is Node else null
-	while cursor != null:
-		if cursor.is_in_group("roblox_climbable"):
-			return true
-		var roblox_class := str(cursor.get_meta("roblox_class", ""))
-		var shape_type := str(cursor.get_meta("shape_type", ""))
-		var semantic_name := str(cursor.get_meta("block_name", cursor.name)).to_lower()
-		if (
-			roblox_class == "TrussPart"
-			or shape_type == "Truss"
-			or "truss" in semantic_name
-			or "ladder" in semantic_name
-			or bool(cursor.get_meta("climbable", false))
-			or bool(cursor.get_meta("Climbable", false))
-		):
-			return true
-		cursor = cursor.get_parent()
-	return false
-
 func _accept_climb_hit(hit: Dictionary) -> void:
 	_climbing_active = true
-	_climb_surface = hit.get("collider") as Node if hit.get("collider") is Node else null
+	_climb_surface = hit.get("truss_part", hit.get("collider")) as Node if hit.get("truss_part", hit.get("collider")) is Node else null
 	_climb_normal = Vector3(hit.get("normal", Vector3.ZERO)).normalized()
 	_climb_normal.y = 0.0
 	if _climb_normal.length_squared() > 0.001:
 		_climb_normal = _climb_normal.normalized()
-	_climb_surface_lost_time = 0.0
 	_coyote_time_left = 0.0
 	_jump_buffer_time_left = 0.0
-
-func _detach_from_climb(push_out: bool) -> void:
-	var release_normal := _climb_normal
-	_stop_climbing()
-	if push_out and release_normal.length_squared() > 0.1:
-		velocity = (
-			release_normal * _world_units(CLIMB_JUMP_OUT_SPEED)
-			+ Vector3.UP * jump_velocity_setting * CLIMB_JUMP_UP_FACTOR
-		)
 
 func _stop_climbing() -> void:
 	_climbing_active = false
 	_climb_surface = null
 	_climb_normal = Vector3.ZERO
-	_climb_surface_lost_time = 0.0
 
 func _character_state_name(state: int) -> String:
 	match state:
@@ -1500,69 +1378,74 @@ func _character_state_name(state: int) -> String:
 			return "RunningNoPhysics" if state == CharacterState.IDLE else "None"
 
 func _try_auto_step_up(move_direction: Vector3, delta: float, was_on_floor: bool) -> bool:
-	if not was_on_floor or move_direction.length_squared() < 0.001 or not is_on_floor():
-		return false
-	var direction := move_direction.normalized()
-	if not _has_forward_step_obstacle(direction):
-		return false
+	return GroundControllerModule.try_step(self, move_direction, delta, was_on_floor, _motion_collisions, HUMANOID_CONFIG)
 
-	var base_transform := global_transform
-	# Sweep upward as well: testing only the elevated forward position lets
-	# the capsule clip through low ceilings while stepping onto small stairs.
-	if test_move(base_transform, Vector3.UP * _world_units(AUTO_STEP_HEIGHT)):
-		return false
-	var lifted_transform := base_transform.translated(Vector3.UP * _world_units(AUTO_STEP_HEIGHT))
-	var forward_motion := direction * _world_units(AUTO_STEP_FORWARD_DISTANCE)
-	if test_move(lifted_transform, forward_motion):
-		return false
+# The solver/config use studs. These adapters only support saved pre-migration
+# maps whose entire world was authored at 0.5 Godot units per stud.
+func _air_vertical(delta: float) -> float:
+	return AirControllerModule.update_vertical(velocity.y / world_stud_scale, delta, HUMANOID_CONFIG) * world_stud_scale
 
-	var probe_transform := lifted_transform.translated(forward_motion)
-	var down_collision := KinematicCollision3D.new()
-	var down_motion := Vector3.DOWN * _world_units(AUTO_STEP_HEIGHT + FLOOR_SNAP_LENGTH + 0.1)
-	if not test_move(probe_transform, down_motion, down_collision):
-		return false
+func _ground_vertical(delta: float) -> float:
+	return GroundControllerModule.update_vertical(velocity.y / world_stud_scale, _ground_hit_distance, _ground_sensor.get("hit_part") != null, delta, HUMANOID_CONFIG) * world_stud_scale
 
-	var landing_normal: Vector3 = down_collision.get_normal()
-	if landing_normal.dot(Vector3.UP) < 0.74:
-		return false
+func _sample_ground_sensor() -> bool:
+	_ground_sensor.call("sense", self, HUMANOID_CONFIG)
+	_ground_hit_distance = float(_ground_sensor.get("hit_distance"))
+	_ground_hit_normal = Vector3(_ground_sensor.get("hit_normal"))
+	_grounded_by_sensor = bool(_ground_sensor.call("is_grounded", HUMANOID_CONFIG))
+	return _grounded_by_sensor and velocity.y <= _world_units(HUMANOID_CONFIG.float_value("GroundController.GroundTolerance")) * Engine.physics_ticks_per_second
 
-	var target_position: Vector3 = probe_transform.origin + down_collision.get_travel()
-	var step_height: float = target_position.y - global_position.y
-	if step_height <= _world_units(0.03) or step_height > _world_units(AUTO_STEP_MAX_APPLIED_HEIGHT) + safe_margin * 2.0:
-		return false
-
-	var horizontal_position := Vector2(global_position.x, global_position.z)
-	var target_horizontal_position := Vector2(target_position.x, target_position.z)
-	var stepped_horizontal := horizontal_position.move_toward(
-		target_horizontal_position,
-		_world_units(AUTO_STEP_FORWARD_SPEED) * delta
-	)
-	# Lift above the riser before moving forward. Interpolating diagonally into
-	# the step made the intermediate capsule intersect the very obstacle it was
-	# meant to clear, so nearly every useful stair was rejected as an overlap.
-	var stepped_position := Vector3(stepped_horizontal.x, target_position.y + _world_units(0.012), stepped_horizontal.y)
-	if _is_body_overlapping_world_at(stepped_position):
-		return false
-	move_and_collide(Vector3.UP * (stepped_position.y - global_position.y))
-	move_and_collide(Vector3(stepped_position.x - global_position.x, 0.0, stepped_position.z - global_position.z))
-	velocity.y = maxf(velocity.y, _world_units(FLOOR_STICK_VELOCITY))
-	return true
-
-func _has_forward_step_obstacle(direction: Vector3) -> bool:
-	for i in range(get_slide_collision_count()):
-		var collision := get_slide_collision(i)
+func _integrate_character_motion(delta: float) -> void:
+	_motion_collisions.clear()
+	_motion_on_ceiling = false
+	_motion_on_floor = false
+	var remaining := velocity * delta
+	var lower_hit: Dictionary = _ground_sensor.sweep_lower_body(self, remaining, HUMANOID_CONFIG, _grounded_by_sensor and velocity.y <= 0.0)
+	if not lower_hit.is_empty():
+		remaining = lower_hit.motion
+		if velocity.dot(lower_hit.normal) < 0.0: velocity = velocity.slide(lower_hit.normal)
+	var landing: Dictionary = _ground_sensor.sweep_landing(self, remaining, HUMANOID_CONFIG)
+	if not landing.is_empty():
+		remaining.y *= float(landing.fraction)
+		velocity.y = 0.0
+		_motion_on_floor = true
+	# R6 legs are queryable even when their CanCollide is false. Sweep the
+	# full support footprint so a fast landing cannot bury feet below the floor.
+	_sample_ground_sensor()
+	if velocity.y <= 0.0 and is_finite(_ground_hit_distance):
+		var gap := maxf(0.0, _ground_hit_distance - HUMANOID_CONFIG.float_value("GroundController.GroundOffset")) * world_stud_scale
+		if -remaining.y >= gap:
+			remaining.y = -gap
+			velocity.y = 0.0
+	var iteration_limit := HUMANOID_CONFIG.int_value("Motion.MaxCollisionIterations")
+	var max_slope_dot := cos(deg_to_rad(HUMANOID_CONFIG.float_value("MaxSlopeAngle")))
+	for _iteration in range(iteration_limit):
+		if remaining.length_squared() <= 0.0000000001:
+			break
+		var collision := move_and_collide(remaining, false, safe_margin)
 		if collision == null:
-			continue
+			break
+		_motion_collisions.append(collision)
 		var normal := collision.get_normal()
-		if absf(normal.y) < 0.45 and normal.dot(direction) < -0.25:
-			return true
-	return false
+		if normal.dot(Vector3.UP) < 0.0:
+			_motion_on_ceiling = true
+		if normal.dot(Vector3.UP) >= max_slope_dot:
+			_motion_on_floor = true
+		if velocity.dot(normal) < 0.0:
+			velocity = velocity.slide(normal)
+		remaining = collision.get_remainder().slide(normal)
+	if _motion_on_floor and velocity.y < 0.0:
+		velocity.y = 0.0
+	_sample_ground_sensor()
+	_motion_on_floor = _motion_on_floor or _grounded_by_sensor
 
 func _update_safe_position_and_unstuck(delta: float) -> void:
 	if _is_preview_instance() or _is_network_gameplay_frozen():
 		_previous_physics_position = global_position
 		return
-	if _ledge_hang_active or _ledge_mantle_active:
+	if is_instance_valid(_seated_part):
+		# A seat weld intentionally places the avatar collision boxes inside the vehicle.
+		# Walking overlap recovery must never fight that attachment.
 		_previous_physics_position = global_position
 		_stuck_timer = 0.0
 		return
@@ -1575,7 +1458,7 @@ func _update_safe_position_and_unstuck(delta: float) -> void:
 		return
 
 	var overlaps_world: bool = _is_body_overlapping_world()
-	if is_on_floor() and not overlaps_world and (not _has_safe_position or moved_distance > _world_units(UNSTUCK_MIN_SAFE_DISTANCE)):
+	if _sample_ground_sensor() and not overlaps_world and (not _has_safe_position or moved_distance > _world_units(HUMANOID_CONFIG.float_value("Motion.UnstuckMinSafeDistance"))):
 		_last_safe_position = global_position
 		_has_safe_position = true
 
@@ -1594,8 +1477,10 @@ func _recover_world_overlap() -> bool:
 	var candidates: Array[Vector3] = []
 	if _has_safe_position and global_position.distance_to(_last_safe_position) < _world_units(12.0):
 		candidates.append(_last_safe_position + Vector3.UP * _world_units(SAFE_REPOSITION_LIFT))
+	if _is_vector3_finite(respawn_position) and (_has_checkpoint or respawn_position != Vector3.ZERO):
+		candidates.append(respawn_position + Vector3.UP * _world_units(SAFE_REPOSITION_LIFT))
 	# A moved/resized part may engulf a stationary or newly spawned character.
-	# Find a clear capsule volume even when no previous safe position exists.
+	# Find a clear body-and-feet volume even when no previous safe position exists.
 	for distance in [0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 32.0]:
 		for direction in [Vector3.UP, Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK, Vector3(1, 0, 1).normalized(), Vector3(-1, 0, 1).normalized(), Vector3(1, 0, -1).normalized(), Vector3(-1, 0, -1).normalized()]:
 			candidates.append(global_position + direction * _world_units(distance))
@@ -1616,44 +1501,42 @@ func _is_body_overlapping_world() -> bool:
 
 
 func _is_body_overlapping_world_at(target_root_position: Vector3) -> bool:
-	if collision_body == null or collision_body.shape == null or get_world_3d() == null:
+	if get_world_3d() == null:
 		return false
-	var query_shape: Shape3D = collision_body.shape.duplicate() as Shape3D
-	if query_shape is CapsuleShape3D:
-		var capsule := query_shape as CapsuleShape3D
-		capsule.radius = maxf(capsule.radius - 0.04, 0.05)
-		capsule.height = maxf(capsule.height - 0.08, 0.1)
-	elif query_shape is BoxShape3D:
-		var box := query_shape as BoxShape3D
-		box.size = Vector3(
-			maxf(box.size.x - 0.06, 0.05),
-			maxf(box.size.y - 0.06, 0.05),
-			maxf(box.size.z - 0.06, 0.05)
-		)
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = query_shape
-	query.transform = collision_body.global_transform
-	query.transform.origin += target_root_position - global_position
-	query.collision_mask = _get_world_collision_mask()
-	query.margin = 0.0
-	query.exclude = [get_rid()]
-	var collisions := get_world_3d().direct_space_state.intersect_shape(query, 1)
-	return not collisions.is_empty()
+	var shapes: Array[CollisionShape3D] = []
+	for collision_shape in [collision_humanoid_root_part, collision_left_leg, collision_right_leg, collision_torso, collision_head, collision_left_arm, collision_right_arm]:
+		if collision_shape != null and not collision_shape.disabled and collision_shape.shape != null:
+			shapes.append(collision_shape)
+	for collision_shape in shapes:
+		var query_shape: Shape3D = collision_shape.shape.duplicate() as Shape3D
+		if query_shape is BoxShape3D:
+			var box := query_shape as BoxShape3D
+			box.size = Vector3(maxf(box.size.x - 0.04, 0.05), maxf(box.size.y - 0.04, 0.05), maxf(box.size.z - 0.04, 0.05))
+		var query := PhysicsShapeQueryParameters3D.new()
+		query.shape = query_shape
+		query.transform = collision_shape.global_transform
+		query.transform.origin += target_root_position - global_position
+		query.collision_mask = _get_world_collision_mask()
+		query.margin = 0.0
+		query.exclude = [get_rid()]
+		if not get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty():
+			return true
+	return false
 
 func _smooth_camera_follow(_delta: float) -> void:
 	if camera_pivot == null:
 		return
 	if camera_pivot.top_level:
 		return
-	camera_pivot.position = Vector3(0.0, CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT, 0.0)
+	camera_pivot.position = Vector3(0.0, _world_units(CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT), 0.0)
 
 func _update_local_camera_rig_render_phase(_delta: float) -> void:
 	if camera_pivot == null:
 		return
-	var camera_height := CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT
+	var camera_height := _world_units(CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT)
 	if camera_pivot.top_level:
 		var render_origin := _get_local_camera_render_anchor_position()
-		if render_origin.distance_to(global_position) > CAMERA_INTERPOLATION_TELEPORT_THRESHOLD:
+		if render_origin.distance_to(global_position) > _world_units(CAMERA_INTERPOLATION_TELEPORT_THRESHOLD):
 			render_origin = global_position
 			_reset_local_camera_anchor(global_position)
 		camera_pivot.global_position = render_origin + Vector3(0.0, camera_height, 0.0)
@@ -1665,7 +1548,7 @@ func _update_local_camera_rig_render_phase(_delta: float) -> void:
 func _set_camera_desired_spring_length(value: float) -> void:
 	_camera_desired_spring_length = clampf(value, 0.0, 20.0)
 	if spring_arm != null and _camera_desired_spring_length < 0.5:
-		spring_arm.spring_length = _camera_desired_spring_length
+		spring_arm.spring_length = _world_units(_camera_desired_spring_length)
 
 func _update_camera_collision_distance(delta: float) -> void:
 	if spring_arm == null:
@@ -1673,10 +1556,10 @@ func _update_camera_collision_distance(delta: float) -> void:
 	if camera_pivot == null:
 		return
 	if _camera_desired_spring_length <= 0.05 or is_first_person:
-		spring_arm.spring_length = _camera_desired_spring_length
+		spring_arm.spring_length = _world_units(_camera_desired_spring_length)
 		return
-	var adjusted_length := _camera_desired_spring_length
 	var desired_world_length := _world_units(_camera_desired_spring_length)
+	var adjusted_length := desired_world_length
 	var world := get_world_3d()
 	if world != null and is_inside_tree():
 		var origin := camera_pivot.global_position
@@ -1694,7 +1577,7 @@ func _update_camera_collision_distance(delta: float) -> void:
 				_world_units(CAMERA_COLLISION_MIN_DISTANCE),
 				origin.distance_to(hit_position) - _world_units(CAMERA_COLLISION_MARGIN)
 			)
-			adjusted_length = adjusted_world_length / maxf(world_stud_scale, 0.0001)
+			adjusted_length = minf(desired_world_length, adjusted_world_length)
 	if delta <= 0.0 or adjusted_length < spring_arm.spring_length:
 		spring_arm.spring_length = adjusted_length
 	else:
@@ -1761,15 +1644,15 @@ func _update_animation_state(delta: float) -> void:
 		animation_airborne = false
 		return
 	if _character_state == CharacterState.SWIMMING:
-		animation_weight = clampf(velocity.length() / SWIM_SPEED, 0.25, 1.0)
+		animation_weight = clampf(velocity.length() / maxf(HUMANOID_CONFIG.float_value("Swimming.Speed"), 0.0001), 0.25, 1.0)
 		animation_airborne = false
 		animation_cycle = wrapf(animation_cycle + delta * WALK_CYCLE_SPEED * 0.6, 0.0, TAU)
 		return
-	if _climbing_active or _ledge_hang_active or _ledge_mantle_active:
+	if _climbing_active:
 		animation_weight = clampf(
 			maxf(
-				absf(velocity.y) / maxf(_world_units(CLIMB_SPEED), 0.001),
-				Vector2(velocity.x, velocity.z).length() / maxf(_world_units(CLIMB_SIDE_SPEED), 0.001)
+				absf(velocity.y) / maxf(move_speed * HUMANOID_CONFIG.float_value("ClimbController.MoveSpeedFactor"), 0.001),
+				Vector2(velocity.x, velocity.z).length() / maxf(move_speed * HUMANOID_CONFIG.float_value("ClimbController.MoveSpeedFactor"), 0.001)
 			),
 			0.25,
 			1.0
@@ -1779,7 +1662,7 @@ func _update_animation_state(delta: float) -> void:
 		return
 	var horizontal_speed: float = Vector2(velocity.x, velocity.z).length()
 	animation_weight = move_toward(animation_weight, clampf(horizontal_speed / maxf(move_speed, 0.001), 0.0, 1.0), delta * 8.0)
-	animation_airborne = not is_on_floor()
+	animation_airborne = not _sample_ground_sensor()
 	if animation_weight > 0.05 and not animation_airborne:
 		animation_cycle = wrapf(animation_cycle + delta * WALK_CYCLE_SPEED * maxf(animation_weight, 0.35), 0.0, TAU)
 	else:
@@ -3303,6 +3186,8 @@ func _ensure_humanoid_api_node() -> Node:
 	humanoid.set_meta("MaxHealth", float(MAX_HEALTH))
 	humanoid.set_meta("WalkSpeed", _logical_move_speed)
 	humanoid.set_meta("JumpPower", _logical_jump_velocity)
+	humanoid.set_meta("HipHeight", HUMANOID_CONFIG.float_value("HipHeight"))
+	humanoid.set_meta("CollisionType", str(HUMANOID_CONFIG.value("CollisionType")))
 	humanoid.set_meta("AutoRotate", true)
 	humanoid.set_meta("RigType", "R6")
 	humanoid.set_meta("HumanoidState", _character_state_name(_character_state))
@@ -3319,14 +3204,15 @@ func ensure_roblox_character_contract() -> void:
 	set_meta("roblox_class", "Model")
 	set_meta("PrimaryPart", "HumanoidRootPart")
 	var humanoid := _ensure_humanoid_api_node()
+	var root_height := HUMANOID_CONFIG.float_value("Trace.HRPHeightAboveBodyOrigin")
 	var proxy_specs := {
-		"HumanoidRootPart": {"position": Vector3(0.0, 2.3, 0.0), "size": Vector3(2.0, 2.0, 1.0), "transparency": 1.0},
-		"Torso": {"position": Vector3(0.0, 3.0, 0.0), "size": Vector3(2.0, 2.0, 1.0), "transparency": 0.0},
-		"Head": {"position": Vector3(0.0, 4.6, 0.0), "size": Vector3(1.2, 1.2, 1.2), "transparency": 0.0},
-		"Left Arm": {"position": Vector3(-1.5, 3.0, 0.0), "size": Vector3(1.0, 2.0, 1.0), "transparency": 0.0},
-		"Right Arm": {"position": Vector3(1.5, 3.0, 0.0), "size": Vector3(1.0, 2.0, 1.0), "transparency": 0.0},
-		"Left Leg": {"position": Vector3(-0.5, 1.0, 0.0), "size": Vector3(1.0, 2.0, 1.0), "transparency": 0.0},
-		"Right Leg": {"position": Vector3(0.5, 1.0, 0.0), "size": Vector3(1.0, 2.0, 1.0), "transparency": 0.0},
+		"HumanoidRootPart": {"config": "R6.HumanoidRootPart", "transparency": 1.0},
+		"Torso": {"config": "R6.Torso", "transparency": 0.0},
+		"Head": {"config": "R6.Head", "transparency": 0.0},
+		"Left Arm": {"config": "R6.Left Arm", "transparency": 0.0},
+		"Right Arm": {"config": "R6.Right Arm", "transparency": 0.0},
+		"Left Leg": {"config": "R6.Left Leg", "transparency": 0.0},
+		"Right Leg": {"config": "R6.Right Leg", "transparency": 0.0},
 	}
 	var proxies: Dictionary = {}
 	for proxy_name_variant in proxy_specs.keys():
@@ -3337,19 +3223,22 @@ func ensure_roblox_character_contract() -> void:
 			proxy.name = proxy_name
 			add_child(proxy, true)
 		var spec: Dictionary = proxy_specs[proxy_name_variant]
-		proxy.position = spec.get("position", Vector3.ZERO)
+		var config_prefix := str(spec["config"])
+		var size: Vector3 = HUMANOID_CONFIG.value(config_prefix + ".Size")
+		var relative_position: Vector3 = HUMANOID_CONFIG.value(config_prefix + ".RelativePosition")
+		proxy.position = (Vector3.UP * root_height + relative_position) * world_stud_scale
 		proxy.set_meta("roblox_class", "Part")
 		proxy.set_meta("bobux_character_part_proxy", true)
 		proxy.set_meta("bobux_character_body_instance_id", get_instance_id())
 		proxy.set_meta("bobux_runtime_generated", true)
-		proxy.set_meta("Size", spec.get("size", Vector3.ONE))
-		proxy.set_meta("CanCollide", proxy_name != "HumanoidRootPart")
+		proxy.set_meta("Size", size)
+		proxy.set_meta("CanCollide", bool(HUMANOID_CONFIG.value(config_prefix + ".CanCollide")))
 		proxy.set_meta("Transparency", float(spec.get("transparency", 0.0)))
 		proxy.set_meta("Anchored", false)
 		proxy.set_meta("roblox_properties", {
 			"Name": proxy_name,
-			"Size": spec.get("size", Vector3.ONE),
-			"CanCollide": proxy_name != "HumanoidRootPart",
+			"Size": size,
+			"CanCollide": bool(HUMANOID_CONFIG.value(config_prefix + ".CanCollide")),
 			"Transparency": float(spec.get("transparency", 0.0)),
 			"Anchored": false,
 		})
@@ -3409,21 +3298,17 @@ func _sync_humanoid_runtime_properties(grounded_now: bool) -> void:
 func _resolve_humanoid_floor_material(grounded_now: bool) -> String:
 	if _swimming_active:
 		return "Water"
-	if _climbing_active or _ledge_hang_active or _ledge_mantle_active:
+	if _climbing_active:
 		return "Climbable"
 	if not grounded_now:
 		return "Air"
 	# Resolve the actual surface under the body. Imported maps and native Studio
 	# maps expose the same metadata, so scripts and footsteps see one material API.
-	for collision_index in range(get_slide_collision_count() - 1, -1, -1):
-		var collision := get_slide_collision(collision_index)
-		if collision == null or collision.get_normal().dot(Vector3.UP) < 0.35:
-			continue
-		var collider_variant: Variant = collision.get_collider()
-		if collider_variant is Node:
-			var material_name := _material_name_from_collider(collider_variant as Node)
-			if not material_name.is_empty():
-				return material_name
+	var sensed_part: Variant = _ground_sensor.get("hit_part")
+	if sensed_part is Node:
+		var material_name := _material_name_from_collider(sensed_part as Node)
+		if not material_name.is_empty():
+			return material_name
 	return "Plastic"
 
 func _material_name_from_collider(collider: Node) -> String:
@@ -3517,15 +3402,19 @@ func get_max_health() -> int:
 
 func apply_world_stud_scale(value: float) -> void:
 	world_stud_scale = clampf(value, 0.25, 2.0)
-	scale = Vector3.ONE * world_stud_scale
-	gravity_force = _world_units(GRAVITY_FORCE)
+	if visuals != null:
+		visuals.scale = Vector3.ONE * world_stud_scale
+	gravity_force = _world_units(HUMANOID_CONFIG.float_value("Gravity"))
 	move_speed = _world_units(_logical_move_speed)
 	jump_velocity_setting = _world_units(_logical_jump_velocity)
-	safe_margin = maxf(_world_units(0.035), 0.006)
-	floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+	safe_margin = _world_units(HUMANOID_CONFIG.float_value("Motion.SafeMargin"))
+	floor_snap_length = 0.0
 	set_meta("roblox_stud_scale", world_stud_scale)
 	if is_inside_tree():
+		_fit_primary_collision_shape()
+		ensure_roblox_character_contract()
 		_reset_all_physics_interpolation()
+		_update_local_camera_rig_render_phase(0.0)
 
 func get_humanoid_walk_speed() -> float:
 	return _logical_move_speed
@@ -3546,27 +3435,31 @@ func _refresh_humanoid_jump_velocity() -> void:
 	if humanoid == null or bool(humanoid.get_meta("UseJumpPower", true)):
 		jump_velocity_setting = _world_units(_logical_jump_velocity)
 	else:
-		var height := maxf(0.0, float(humanoid.get_meta("JumpHeight", 7.2)))
+		var height := maxf(0.0, float(humanoid.get_meta("JumpHeight", HUMANOID_CONFIG.value("Humanoid.JumpHeight"))))
 		jump_velocity_setting = sqrt(2.0 * _get_current_gravity() * _world_units(height))
 
 func apply_movement_settings(settings: Dictionary) -> void:
 	settings = preload("res://scripts/player/movement_settings.gd").normalize(settings)
 	var merged_settings := {
-		"move_speed": MOVE_SPEED,
-		"sprint_multiplier": SPRINT_MULTIPLIER,
-		"jump_velocity": JUMP_VELOCITY
+		"move_speed": HUMANOID_CONFIG.float_value("WalkSpeed"),
+		"jump_velocity": HUMANOID_CONFIG.float_value("JumpPower")
 	}
 	for key in settings.keys():
 		merged_settings[key] = settings[key]
 
-	set_humanoid_walk_speed(maxf(1.0, float(merged_settings.get("move_speed", MOVE_SPEED))))
-	sprint_multiplier = maxf(1.0, float(merged_settings.get("sprint_multiplier", SPRINT_MULTIPLIER)))
-	set_humanoid_jump_power(maxf(1.0, float(merged_settings.get("jump_velocity", JUMP_VELOCITY))))
+	set_humanoid_walk_speed(maxf(1.0, float(merged_settings.get("move_speed", HUMANOID_CONFIG.float_value("WalkSpeed")))))
+	set_humanoid_jump_power(maxf(1.0, float(merged_settings.get("jump_velocity", HUMANOID_CONFIG.float_value("JumpPower")))))
 
 func set_health(value: float) -> void:
+	if ImportedPlaceNetwork.send_character_command(self, "set_health", value):
+		current_health = clampi(roundi(value), 0, get_max_health())
+		return
 	if _is_preview_instance() or not _is_local_authority_safe() or _is_respawning or _is_network_gameplay_frozen():
 		return
+	var previous := current_health
 	current_health = clampi(roundi(value), 0, get_max_health())
+	if previous != current_health:
+		LuaScriptEngine.fire_roblox_instance_event(_ensure_humanoid_api_node(), "HealthChanged", [current_health])
 	if current_health <= 0:
 		_handle_death_and_respawn()
 
@@ -3592,6 +3485,8 @@ func can_use_teleport() -> bool:
 	return Time.get_ticks_msec() >= _teleport_ready_at_msec
 
 func set_lua_position(target_position: Vector3) -> void:
+	_spawn_floor_recovery_frames = 3
+	ImportedPlaceNetwork.send_character_command(self, "set_lua_position", target_position)
 	# Authored CFrame/Position writes are intentional teleports. The unstuck
 	# displacement check must not rewind them on the next physics frame.
 	_stop_climbing()
@@ -3660,12 +3555,11 @@ func _handle_void_fall() -> void:
 	_handle_death_and_respawn()
 
 func _begin_respawn_request() -> int:
+	if not _is_respawning:
+		current_health = 0
+		LuaScriptEngine.fire_roblox_instance_event(_ensure_humanoid_api_node(), "Died", [])
 	_is_respawning = true
 	_stop_climbing()
-	_ledge_hang_active = false
-	_ledge_hang_forward_released = false
-	_ledge_mantle_active = false
-	_ledge_mantle_phase = 0
 	_swimming_active = false
 	_water_volume = null
 	if _seated_part != null:
@@ -3698,7 +3592,7 @@ func _force_local_respawn_recovery() -> void:
 	respawn_position = respawn_base if _is_vector3_finite(respawn_base) else respawn_target
 	global_position = respawn_target
 	velocity = Vector3.ZERO
-	floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+	floor_snap_length = 0.0
 	current_health = MAX_HEALTH
 	_is_respawning = false
 	_awaiting_authoritative_respawn = false
@@ -3728,7 +3622,7 @@ func apply_authoritative_respawn_position(target_position: Vector3, treat_as_che
 	_has_checkpoint = treat_as_checkpoint
 	global_position = _get_safe_reposition_target(target_position)
 	velocity = Vector3.ZERO
-	floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+	floor_snap_length = 0.0
 	current_health = MAX_HEALTH
 	_is_respawning = false
 	_awaiting_authoritative_respawn = false
@@ -3794,6 +3688,8 @@ func _cleanup_death_fragments_later(fragment_root: Node) -> void:
 		fragment_root.queue_free()
 
 func _restore_after_respawn() -> void:
+	RobloxAudioPack.play_character("action_get_up.mp3", self, -8.0)
+	LuaScriptEngine.notify_character_respawned(self)
 	_external_control_lock = 0.0
 	if visuals != null:
 		visuals.rotation.x = 0.0
@@ -3853,20 +3749,17 @@ func _emit_studio_playtest_touch_events() -> void:
 	if not _is_studio_playtest_instance() or LuaScriptEngine == null or not LuaScriptEngine.has_method("notify_part_touched"):
 		return
 	var current_contacts: Dictionary = {}
-	set_meta("bobux_touch_collision_count", get_slide_collision_count())
+	set_meta("bobux_touch_collision_count", _motion_collisions.size())
 	var hit_proxy: Node = get_node_or_null("HumanoidRootPart")
 	if hit_proxy == null:
 		hit_proxy = self
-	for collision_index in range(get_slide_collision_count()):
-		var collision := get_slide_collision(collision_index)
-		if collision == null:
-			continue
+	for collision in _motion_collisions:
 		var collider_variant := collision.get_collider()
 		if not (collider_variant is Node):
 			continue
 		var collider := collider_variant as Node
 		var touched_part := collider
-		if collider.name in ["CollisionBody", "SelectionBody"] and collider.get_parent() != null:
+		if collider.name in ["CollisionHumanoidRootPart", "SelectionBody"] and collider.get_parent() != null:
 			touched_part = collider.get_parent()
 		if not touched_part.is_in_group("studio_parts"):
 			continue
@@ -3878,10 +3771,13 @@ func _emit_studio_playtest_touch_events() -> void:
 	_studio_touching_parts = current_contacts
 
 func _play_death_sound() -> void:
-	if _death_audio_player == null or _death_audio_player.stream == null:
-		return
-	_death_audio_player.stop()
-	_death_audio_player.play()
+	if _death_audio_player != null:
+		_death_audio_player.stop()
+		_death_audio_player.stream = AudioFileLoader.load_stream(DEATH_SOUND_PATH, true)
+		if _death_audio_player.stream != null:
+			_death_audio_player.play()
+	else:
+		RobloxAudioPack.play_character("uuhhh.mp3", self, -3.0)
 
 func _get_next_spawn_position() -> Vector3:
 	if is_inside_tree():
@@ -3977,10 +3873,6 @@ func _apply_cached_custom_character_limbs(limb_meshes: Array) -> void:
 
 func _fit_collision_shapes_to_visuals() -> void:
 	_fit_primary_collision_shape()
-	# Animated limb shapes must never drive CharacterBody movement. Following the
-	# walk pose made feet lift the root and allowed hands/head to support the avatar.
-	# The stable root capsule is the locomotion collider; limb meshes remain the
-	# source for visuals and explicit hit tests.
 
 func _fit_convex_collision_to_mesh(collision_shape: CollisionShape3D, mesh_instance: MeshInstance3D) -> void:
 	if collision_shape == null or mesh_instance == null or mesh_instance.mesh == null:
@@ -4004,15 +3896,7 @@ func _sync_collision_shape_to_mesh(collision_shape: CollisionShape3D, mesh_insta
 	collision_shape.transform = global_transform.affine_inverse() * mesh_instance.global_transform
 
 func _fit_primary_collision_shape() -> void:
-	if collision_body == null:
-		return
-	var capsule := collision_body.shape.duplicate() as CapsuleShape3D
-	if capsule == null:
-		return
-	collision_body.shape = capsule
-	capsule.radius = PRIMARY_CAPSULE_RADIUS
-	capsule.height = PRIMARY_CAPSULE_HEIGHT
-	collision_body.position = Vector3(0.0, PRIMARY_CAPSULE_CENTER_Y, 0.0)
+	CharacterColliderModule.configure(self, HUMANOID_CONFIG)
 
 func _disable_arm_collision_shapes() -> void:
 	if collision_left_arm != null:
@@ -4057,8 +3941,8 @@ func _configure_collision_profile() -> void:
 	if _is_preview_instance():
 		_set_collision_enabled(false)
 		return
-	# A stable root collider mirrors Roblox humanoid locomotion: animated arms,
-	# head and legs cannot lift the character or become accidental footholds.
+	# The R6 part boxes mirror Roblox Humanoid collisions;
+	# animated limbs cannot lift the character or become accidental footholds.
 	# Queries both the world and player layer; interpolated remote avatars are
 	# blocker-only (layer 2, mask 0), so they can be bumped into without running
 	# their own collision response against stale client-side world positions.
@@ -4074,11 +3958,10 @@ func _configure_collision_profile() -> void:
 func _set_collision_enabled(enabled: bool) -> void:
 	collision_layer = PLAYER_COLLISION_LAYER if enabled else 0
 	collision_mask = _get_player_and_world_collision_mask() if enabled else 0
-	if collision_body != null:
-		collision_body.disabled = not enabled
-	for collision_shape in [collision_left_leg, collision_right_leg, collision_torso, collision_head, collision_left_arm, collision_right_arm]:
+	for collision_shape in [collision_humanoid_root_part, collision_left_leg, collision_right_leg, collision_torso, collision_head, collision_left_arm, collision_right_arm]:
 		if collision_shape != null:
-			collision_shape.disabled = true
+			var part_can_collide := bool(collision_shape.get_meta("humanoid_config_can_collide", false))
+			collision_shape.disabled = not enabled or _is_preview_instance() or not part_can_collide
 
 func _combine_mesh_bounds(mesh_nodes: Array) -> AABB:
 	var merged_bounds := AABB()
@@ -4231,7 +4114,7 @@ func _is_peer_visible_for_room(peer_id: int) -> bool:
 	return peer_room == network_room_id
 
 func _should_filter_visibility_by_room() -> bool:
-	return multiplayer != null and multiplayer.is_server()
+	return multiplayer != null and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED and multiplayer.is_server()
 
 func _use_conservative_websocket_replication() -> bool:
 	if NetworkManager == null or not NetworkManager.has_method("get_active_transport_label"):
@@ -4514,15 +4397,12 @@ func _resolve_existing_file_path(path: String) -> String:
 
 func _configure_physics_motion() -> void:
 	motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
-	# A small recovery margin keeps the capsule stable around cylinders and
-	# spheres; the old 0.1 margin could repeatedly push it between adjacent
-	# curved surfaces and feel like the character was stuck.
-	safe_margin = maxf(_world_units(0.035), 0.006)
-	floor_snap_length = _world_units(FLOOR_SNAP_LENGTH)
+	safe_margin = _world_units(HUMANOID_CONFIG.float_value("Motion.SafeMargin"))
+	floor_snap_length = 0.0
 	floor_stop_on_slope = true
 	floor_constant_speed = true
 	floor_block_on_wall = true
-	floor_max_angle = deg_to_rad(55.0)
+	floor_max_angle = deg_to_rad(HUMANOID_CONFIG.float_value("MaxSlopeAngle"))
 	wall_min_slide_angle = deg_to_rad(14.0)
 	slide_on_ceiling = true
 	max_slides = 14
@@ -4559,7 +4439,7 @@ func _reset_camera_rig_interpolation() -> void:
 		player_camera.reset_physics_interpolation()
 
 func _world_units(value: float) -> float:
-	return value * maxf(world_stud_scale, 0.0001)
+	return value * world_stud_scale
 
 func _get_world_collision_mask() -> int:
 	if _is_studio_playtest_instance():

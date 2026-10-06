@@ -1,13 +1,13 @@
 {
-  "build": 30,
-  "version": "0.1.29-mobile",
+  "version": "0.1.36-mobile",
+  "build": 37,
   "android": {
-    "sha256": "73FF0C4FC4F9A2A9B364F1CC8F7F37FD587CFE7A244C36D7CF1FABC84DEC87B1",
-    "notes": "Bobux AI Studio now reliably creates structured parts, effects, models and scripts.",
-    "versioned_apk_url": "http://109.71.245.162/mobile/Bobux-Android-0.1.29-mobile-build30.apk",
+    "version": "0.1.36-mobile",
+    "build": 37,
     "apk_url": "http://109.71.245.162/mobile/Bobux-Android.apk",
+    "versioned_apk_url": "http://109.71.245.162/mobile/Bobux-Android-0.1.36-mobile-build37.apk",
+    "sha256": "F74AA6837962CFAEF2E32C0DC5534BC3DC863B45CED14D2150A6B960E12C8E2A",
     "required": true,
-    "version": "0.1.29-mobile",
-    "build": 30
+    "notes": "A new Bobux mobile beta is available. Download it to keep playing with PC friends."
   }
 }

@@ -35,13 +35,24 @@ static func configure(sound: Node) -> Node:
 			if stream is AudioStreamWAV: stream.loop_mode = AudioStreamWAV.LOOP_FORWARD if looped else AudioStreamWAV.LOOP_DISABLED
 			elif stream is AudioStreamOggVorbis or stream is AudioStreamMP3: stream.loop = looped
 			streams[key] = stream
-	player.stream = streams.get(key, null)
+	var stream: AudioStream = streams.get(key, null)
+	if player.stream != stream: player.stream = stream
+	var finished_callback := _finished.bind(sound.get_instance_id())
+	if not player.finished.is_connected(finished_callback): player.finished.connect(finished_callback)
 	player.volume_db = linear_to_db(maxf(float(sound.get_meta("Volume", props.get("Volume", 0.5))), 0.0001))
 	player.pitch_scale = clampf(float(sound.get_meta("PlaybackSpeed", sound.get_meta("Pitch", props.get("PlaybackSpeed", props.get("Pitch", 1.0))))), 0.01, 8.0)
 	if player is AudioStreamPlayer3D:
 		player.unit_size = float(sound.get_meta("RollOffMinDistance", props.get("RollOffMinDistance", 10.0))) * 0.5
 		player.max_distance = float(sound.get_meta("RollOffMaxDistance", props.get("RollOffMaxDistance", 10000.0))) * 0.5
 	return player
+
+static func _finished(sound_id: int) -> void:
+	var sound: Variant = instance_from_id(sound_id)
+	if not is_instance_valid(sound): return
+	sound.set_meta("Playing", false)
+	if sound.is_inside_tree():
+		var engine: Node = sound.get_tree().root.get_node_or_null("LuaScriptEngine")
+		if engine != null: engine.fire_roblox_instance_event(sound, "Ended")
 
 static func play(sound: Node) -> void:
 	var player := configure(sound)

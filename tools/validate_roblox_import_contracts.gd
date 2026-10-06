@@ -40,6 +40,8 @@ func.OnServerInvoke = function(sender, a, b, c)
     return a + c
 end
 assert(func:InvokeServer(2, nil, 5) == 7, 'invoke response')
+local unsetFunc = Instance.new('RemoteFunction', workspace)
+assert(unsetFunc:InvokeServer('no callback') == nil, 'unset invoke callback returns nil')
 local model = Instance.new('Model', workspace)
 assert(not model:IsA('BasePart'), 'Model is not BasePart')
 local part = Instance.new('Part', model)

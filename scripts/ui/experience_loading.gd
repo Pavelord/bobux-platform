@@ -1,5 +1,10 @@
 extends ColorRect
 
+# Keep the selected cover across Lobby -> Main. A scene change must not turn
+# the same loading screen into a blank card or start a second image download.
+static var _cover_name := ""
+static var _cover_reference := ""
+static var _cover_texture: Texture2D
 var card := Panel.new()
 var experience := Label.new()
 var title := Label.new()
@@ -60,6 +65,7 @@ func _ready() -> void:
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	subtitle.add_theme_color_override("font_color", Color("b5b5b5"))
 	box.add_child(subtitle)
+	subtitle.visible = false
 	for label in [transport, transport_badge]:
 		label.visible = false
 		add_child(label)
@@ -97,12 +103,20 @@ func _refresh_selected() -> void:
 
 func set_experience(display_name: String, metadata: Dictionary, folder := "") -> void:
 	experience.text = display_name if not display_name.is_empty() else "Bobux"
+	title.text = "Joining experience..."
 	var reference := ""
 	for key in ["thumbnail", "icon_path", "thumbnail_url", "thumbnail_path"]:
 		reference = str(metadata.get(key, "")).strip_edges()
 		if not reference.is_empty(): break
 	if reference.is_empty() and not folder.is_empty() and FileAccess.file_exists(folder.path_join("icon.png")):
 		reference = folder.path_join("icon.png")
+	if reference.is_empty() and display_name == _cover_name:
+		reference = _cover_reference
+	if reference == _cover_reference and _cover_texture != null:
+		_preview_key = reference
+		preview.texture = _cover_texture
+		preview.visible = true
+		return
 	if reference == _preview_key: return
 	_preview_key = reference
 	_preview_generation += 1
@@ -130,6 +144,7 @@ func set_experience(display_name: String, metadata: Dictionary, folder := "") ->
 		if resource is Texture2D:
 			preview.texture = resource
 			preview.visible = true
+			_remember_cover(display_name, reference)
 		return
 	elif FileAccess.file_exists(reference):
 		bytes = FileAccess.get_file_as_bytes(reference)
@@ -145,3 +160,9 @@ func set_experience(display_name: String, metadata: Dictionary, folder := "") ->
 	if error == OK and generation == _preview_generation:
 		preview.texture = ImageTexture.create_from_image(image)
 		preview.visible = true
+		_remember_cover(display_name, reference)
+
+func _remember_cover(display_name: String, reference: String) -> void:
+	_cover_name = display_name
+	_cover_reference = reference
+	_cover_texture = preview.texture

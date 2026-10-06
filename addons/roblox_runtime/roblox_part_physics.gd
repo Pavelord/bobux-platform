@@ -1,5 +1,7 @@
 extends Node
 
+const QUERIES = preload("res://addons/roblox_runtime/roblox_spatial_query.gd")
+
 # Keeps Roblox Instance identity on the authored mesh while Godot owns the body.
 var part: MeshInstance3D
 var body: RigidBody3D
@@ -55,19 +57,33 @@ func _ready() -> void:
 func sync_from_part() -> void:
 	if not is_instance_valid(body):
 		return
+	if not part.global_transform.is_finite() or absf(part.global_basis.determinant()) < 0.000000000001:
+		body.freeze = true
+		body.collision_layer = 0
+		body.collision_mask = 0
+		return
 	body.global_transform = Transform3D(part.global_basis.orthonormalized(), part.global_position)
 	var box := BoxShape3D.new()
-	box.size = (part.get_aabb().size * part.global_basis.get_scale().abs()).max(Vector3.ONE * 0.01)
-	shape.shape = box
+	box.size = (QUERIES.bounds(part).size * part.global_basis.get_scale().abs()).max(Vector3.ONE * 0.01)
+	shape.shape = QUERIES.collision_shape(part)
 	if str(part.get_meta("shape_type", "")) in ["Sphere", "Ball"]:
 		var sphere := SphereShape3D.new()
 		sphere.radius = box.size.x * 0.5
 		shape.shape = sphere
-	shape.position = part.get_aabb().get_center() * part.global_basis.get_scale()
+	shape.position = QUERIES.bounds(part).get_center() * part.global_basis.get_scale()
 	refresh_properties()
 
 func refresh_properties() -> void:
-	body.freeze = bool(part.get_meta("anchored", false))
+	body.freeze = bool(part.get_meta("anchored", part.get_meta("roblox_properties", {}).get("Anchored", true)))
+	var cursor_role: Node = part
+	while cursor_role != null:
+		if str(cursor_role.get_meta("bobux_network_role", "")) == "client":
+			set_physics_process(false)
+			body.freeze = true
+			body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+			body.contact_monitor = false
+			break
+		cursor_role = cursor_role.get_parent()
 	var collide := bool(part.get_meta("can_collide", true))
 	body.collision_layer = 1 if collide else (16 if bool(part.get_meta("CanQuery", true)) else 0)
 	body.collision_mask = (1 | 2 | 4 | 64) if collide else 0
@@ -88,9 +104,10 @@ func refresh_properties() -> void:
 func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(part) or not is_instance_valid(body):
 		return
-	if not body.freeze:
+	if not body.freeze and not body.sleeping:
 		var old_scale := part.global_basis.get_scale()
-		part.global_transform = Transform3D(body.global_basis.scaled(old_scale), body.global_position)
+		part.global_transform = Transform3D(body.global_basis.scaled_local(old_scale), body.global_position)
+		QUERIES.invalidate(part)
 		# CanCollide=false does not disable Roblox Touched. Sweep the travelled
 		# segment so fast projectiles cannot tunnel through the island.
 		if not bool(part.get_meta("can_collide", true)) and bool(part.get_meta("CanTouch", true)) and last_position.distance_squared_to(body.global_position) > 0.00001:
@@ -102,6 +119,7 @@ func _physics_process(_delta: float) -> void:
 
 func _on_body_entered(hit: Node) -> void:
 	if not is_instance_valid(hit) or touch_ids.has(hit.get_instance_id()): return
+	if not get_tree().root.get_node("LuaScriptEngine").has_roblox_instance_event_listeners(part, "Touched"): return
 	touch_ids[hit.get_instance_id()] = true
 	_deliver_touch.call_deferred(hit.get_instance_id())
 
@@ -112,7 +130,7 @@ func _deliver_touch(id: int, shape_index: int = -1) -> void:
 	if is_instance_valid(part) and bool(part.get_meta("CanTouch", true)):
 		var engine := get_tree().root.get_node_or_null("LuaScriptEngine")
 		if engine != null:
-			var instance = engine.BobuxInstance.new(part)
+			var instance = engine.BobuxInstance.wrap(part)
 			var target: Node = instance._part_from_raycast_collider(hit, shape_index)
 			if target != null:
 				engine.fire_roblox_instance_event(part, "Touched", [target])

@@ -14,7 +14,7 @@ const ACTIVE_SERVERS_ENDPOINT: String = "/rest/v1/active_servers"
 const HEARTBEAT_STATUS_PATH: String = "res://heartbeat_status.json"
 const CLOSE_REQUEST_NOTIFICATION: int = 1006
 const PREDELETE_NOTIFICATION: int = 1
-const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-05-28-1"
+const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-10-06-1"
 
 var _heartbeat_timer: Timer = null
 var _heartbeat_in_flight: bool = false

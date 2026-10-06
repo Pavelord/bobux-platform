@@ -30,6 +30,9 @@ func _run() -> void:
 
 	var source := """
 local dataStores = game:GetService("DataStoreService")
+local workspaceService = game:FindService("Workspace")
+local existingDataStores = game:FindService("DataStoreService")
+local missingService = game:FindService("NoSuchService")
 local scores = dataStores:GetDataStore("Compatibility")
 scores:SetAsync("score", 4)
 local updated = scores:UpdateAsync("score", function(value)
@@ -60,7 +63,9 @@ script.Parent.Parent.Value = (
     updated == 7 and page[1].value == 12 and #tagged == 1 and
     collection:HasTag(script.Parent.Target, "Enemy") and ancestor ~= nil and
     pivot ~= nil and coreDisabled and randomValue == 5 and now > 0 and
-    purchaseEvent ~= nil and promptEvent ~= nil
+    purchaseEvent ~= nil and promptEvent ~= nil and
+    workspaceService == workspace and existingDataStores == dataStores and
+    missingService == nil and game:FindService("TweenService") ~= nil
 )
 """
 	engine.reset_runtime_diagnostics()

@@ -203,7 +203,14 @@ func activate_equipped_tool() -> bool:
 	var tool := candidate as Node
 	if tool == null or not is_instance_valid(tool) or not _lua_engine.has_method("activate_local_tool"):
 		return false
-	return bool(_lua_engine.call("activate_local_tool", tool, _context_node))
+	var activated := bool(_lua_engine.call("activate_local_tool", tool, _context_node))
+	if activated:
+		var tool_name := str(tool.get_meta("ToolTip", tool.name)).to_lower()
+		if "sword" in tool_name or "blade" in tool_name:
+			RobloxAudioPack.play_character("swordlunge.mp3", _context_node as Node3D, -5.0)
+		elif "slingshot" in tool_name or "sling shot" in tool_name:
+			RobloxAudioPack.play_character("Rubber band sling shot.mp3", _context_node as Node3D, -5.0)
+	return activated
 
 
 func _build_interface() -> void:

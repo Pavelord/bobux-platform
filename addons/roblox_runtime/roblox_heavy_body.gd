@@ -26,6 +26,7 @@ static func configure(body: RigidBody3D, stud_scale: float) -> void:
 			copy.transform = child.transform
 			copy.disabled = child.disabled
 			surface.add_child(copy)
+			child.set_meta("bobux_player_shape_id", copy.get_instance_id())
 	body.collision_layer = 64
 	body.collision_mask = 1 | 4 | 64
 	body.add_child(surface)

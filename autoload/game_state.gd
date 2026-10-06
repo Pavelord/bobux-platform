@@ -33,6 +33,7 @@ var address: String = "127.0.0.1"
 var port: int = DEFAULT_PORT
 var selected_map: String = ""
 var selected_map_folder: String = "" # Path to user://maps/[map_name]/ for user-created maps
+var active_room_map_id: String = "" # Authoritative published map ID supplied by the room server.
 var last_network_error: String = ""
 var target_server_info: Dictionary = {}
 var network_gameplay_frozen: bool = false
@@ -53,6 +54,7 @@ var avatar_equipped_items: Array = []
 
 func configure_host(next_port: int, colors: Dictionary) -> void: # This function records the values needed to start the main scene in host mode.
 	launch_mode = LaunchMode.HOST
+	active_room_map_id = ""
 	address = "127.0.0.1"
 	port = next_port
 	target_server_info = {}
@@ -61,6 +63,7 @@ func configure_host(next_port: int, colors: Dictionary) -> void: # This function
 
 func configure_join(next_address: String, next_port: int, colors: Dictionary) -> void: # This function records the values needed to start the main scene in join mode.
 	launch_mode = LaunchMode.JOIN
+	active_room_map_id = ""
 	address = next_address
 	port = next_port
 	target_server_info = {}
@@ -69,6 +72,7 @@ func configure_join(next_address: String, next_port: int, colors: Dictionary) ->
 
 func configure_target_join(server_info: Dictionary, colors: Dictionary) -> void:
 	launch_mode = LaunchMode.TARGET_JOIN
+	active_room_map_id = ""
 	target_server_info = server_info.duplicate(true)
 	address = str(server_info.get("server_url", server_info.get("ip", "127.0.0.1"))).strip_edges()
 	port = int(server_info.get("port", DEFAULT_PORT))
@@ -77,6 +81,7 @@ func configure_target_join(server_info: Dictionary, colors: Dictionary) -> void:
 
 func configure_smart_play(colors: Dictionary, map_info: Dictionary = {}) -> void:
 	launch_mode = LaunchMode.SMART_PLAY
+	active_room_map_id = ""
 	address = "127.0.0.1"
 	port = DEFAULT_PORT
 	# Propagate cloud map identity so the network layer uses the correct UUID
@@ -96,6 +101,7 @@ func configure_smart_play(colors: Dictionary, map_info: Dictionary = {}) -> void
 
 func configure_dedicated_server(next_port: int = 7860, map_name: String = "") -> void:
 	launch_mode = LaunchMode.HOST
+	active_room_map_id = ""
 	address = "127.0.0.1"
 	port = next_port
 	var clean_map_name: String = map_name.strip_edges()
@@ -109,6 +115,7 @@ func clear_launch_mode() -> void: # This function resets the launch state after 
 	target_server_info = {}
 	network_gameplay_frozen = false
 	dedicated_server_mode = false
+	active_room_map_id = ""
 
 func set_network_error(message: String) -> void:
 	last_network_error = message.strip_edges()
@@ -160,18 +167,43 @@ func get_selected_map_display_name() -> String:
 	var metadata: Dictionary = get_selected_map_metadata()
 	var meta_name: String = str(metadata.get("name", "")).strip_edges()
 	if not meta_name.is_empty():
-		return meta_name
+		return canonicalize_experience_name(meta_name)
 	var folder_name: String = selected_map_folder.get_file().strip_edges()
 	if not folder_name.is_empty() and not _looks_like_generated_map_identifier(folder_name):
-		return folder_name
+		return canonicalize_experience_name(folder_name)
 	var clean_selected_map: String = selected_map.strip_edges()
 	if clean_selected_map.to_lower() == "classic":
 		return "Classic"
 	if not clean_selected_map.is_empty() and not _looks_like_generated_map_identifier(clean_selected_map):
-		return clean_selected_map
+		return canonicalize_experience_name(clean_selected_map)
 	return "Untitled Experience"
 
+func canonicalize_experience_name(value: String) -> String:
+	var clean_value := value.strip_edges()
+	if clean_value.is_empty():
+		return clean_value
+	var normalizer := RegEx.new()
+	if normalizer.compile("[^a-z0-9]+") != OK:
+		return clean_value
+	var normalized := normalizer.sub(clean_value.to_lower(), " ", true).strip_edges()
+	var has_natural := false
+	var has_disaster := false
+	var has_survival := false
+	for token in normalized.split(" ", false):
+		if token in ["natural", "narural"]:
+			has_natural = true
+		elif token in ["disaster", "disasters", "sisaster"]:
+			has_disaster = true
+		elif token == "survival":
+			has_survival = true
+	if has_natural and has_disaster and has_survival:
+		return "Natural Disaster Survival"
+	return clean_value
+
 func get_selected_map_identifier() -> String:
+	var room_map_id: String = active_room_map_id.strip_edges()
+	if not room_map_id.is_empty():
+		return room_map_id
 	var metadata: Dictionary = get_selected_map_metadata()
 	for key in ["cloud_map_id", "map_id", "id"]:
 		var meta_id: String = str(metadata.get(key, "")).strip_edges()

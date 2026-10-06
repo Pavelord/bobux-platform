@@ -1,12 +1,16 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene format=3 uid="uid://7oio61b0c18g"]
 
-[ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player_script"]
+[ext_resource type="Script" uid="uid://cgd5l0mg5qj7u" path="res://scripts/player/player.gd" id="1_player_script"]
+
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_HumanoidRootPart"]
+size = Vector3(2, 2, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Feet"]
-size = Vector3(1.0, 2.0, 1.0)
+size = Vector3(1, 2, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_RightLegCollision"]
-size = Vector3(1.0, 2.0, 1.0)
+size = Vector3(1, 2, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_TorsoCollision"]
 size = Vector3(1.78, 1.9, 0.82)
@@ -20,121 +24,110 @@ size = Vector3(0.82, 1.9, 0.78)
 [sub_resource type="BoxShape3D" id="BoxShape3D_RightArmCollision"]
 size = Vector3(0.82, 1.9, 0.78)
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_Primary"]
-radius = 0.7
-height = 5.1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_Head"]
-top_radius = 0.6
-bottom_radius = 0.6
-height = 1.2
-radial_segments = 16
-
 [sub_resource type="BoxMesh" id="BoxMesh_Torso"]
-size = Vector3(2.0, 2.0, 1.0)
+size = Vector3(2, 2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Head"]
+size = Vector3(1, 1, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_Arm"]
-size = Vector3(1.0, 2.0, 1.0)
+size = Vector3(1, 2, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_Leg"]
-size = Vector3(1.0, 2.0, 1.0)
+size = Vector3(1, 2, 1)
 
-[node name="Player" type="CharacterBody3D"]
-safe_margin = 0.006
+[node name="Player" type="CharacterBody3D" unique_id=339569247]
 floor_snap_length = 0.16
+safe_margin = 0.006
 script = ExtResource("1_player_script")
 
-[node name="CollisionBody" type="CollisionShape3D" parent="."]
-position = Vector3(0, 2.55, 0)
-shape = SubResource("CapsuleShape3D_Primary")
+[node name="CollisionHumanoidRootPart" type="CollisionShape3D" parent="." unique_id=661567321]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
+shape = SubResource("BoxShape3D_HumanoidRootPart")
+disabled = true
 
-[node name="CollisionLeftLeg" type="CollisionShape3D" parent="."]
-position = Vector3(0.5, 1.0, 0)
+[node name="CollisionLeftLeg" type="CollisionShape3D" parent="." unique_id=1966955034]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 1, 0)
 shape = SubResource("BoxShape3D_Feet")
 disabled = true
 
-[node name="CollisionRightLeg" type="CollisionShape3D" parent="."]
-position = Vector3(-0.5, 1.0, 0)
+[node name="CollisionRightLeg" type="CollisionShape3D" parent="." unique_id=2106353191]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1, 0)
 shape = SubResource("BoxShape3D_RightLegCollision")
 disabled = true
 
-[node name="CollisionTorso" type="CollisionShape3D" parent="."]
-position = Vector3(0, 2.95, 0)
+[node name="CollisionTorso" type="CollisionShape3D" parent="." unique_id=1069532298]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.95, 0)
 shape = SubResource("BoxShape3D_TorsoCollision")
 disabled = true
 
-[node name="CollisionHead" type="CollisionShape3D" parent="."]
-position = Vector3(0, 4.6, 0)
+[node name="CollisionHead" type="CollisionShape3D" parent="." unique_id=1593732911]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, 0)
 shape = SubResource("BoxShape3D_HeadCollision")
 disabled = true
 
-[node name="CollisionLeftArm" type="CollisionShape3D" parent="."]
-position = Vector3(1.5, 3.0, 0)
+[node name="CollisionLeftArm" type="CollisionShape3D" parent="." unique_id=667571713]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 3, 0)
 shape = SubResource("BoxShape3D_LeftArmCollision")
 disabled = true
 
-[node name="CollisionRightArm" type="CollisionShape3D" parent="."]
-position = Vector3(-1.5, 3.0, 0)
+[node name="CollisionRightArm" type="CollisionShape3D" parent="." unique_id=1076055155]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 3, 0)
 shape = SubResource("BoxShape3D_RightArmCollision")
 disabled = true
 
-[node name="Visuals" type="Node3D" parent="."]
+[node name="Visuals" type="Node3D" parent="." unique_id=680479439]
 
-[node name="Torso" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 3.0, 0)
+[node name="Torso" type="MeshInstance3D" parent="Visuals" unique_id=707697894]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
 mesh = SubResource("BoxMesh_Torso")
 
-[node name="Head" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 4.6, 0)
-mesh = SubResource("CylinderMesh_Head")
+[node name="Head" type="MeshInstance3D" parent="Visuals" unique_id=1124006119]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, 0)
+mesh = SubResource("BoxMesh_Head")
 
-[node name="LeftArmPivot" type="Node3D" parent="Visuals"]
-position = Vector3(1.5, 3.5, 0)
+[node name="LeftArmPivot" type="Node3D" parent="Visuals" unique_id=333961068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 3.5, 0)
 
-[node name="LeftArm" type="MeshInstance3D" parent="Visuals/LeftArmPivot"]
-position = Vector3(0, -0.5, 0)
+[node name="LeftArm" type="MeshInstance3D" parent="Visuals/LeftArmPivot" unique_id=844294962]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 mesh = SubResource("BoxMesh_Arm")
 
-[node name="RightArmPivot" type="Node3D" parent="Visuals"]
-position = Vector3(-1.5, 3.5, 0)
+[node name="RightArmPivot" type="Node3D" parent="Visuals" unique_id=1993236174]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 3.5, 0)
 
-[node name="RightArm" type="MeshInstance3D" parent="Visuals/RightArmPivot"]
-position = Vector3(0, -0.5, 0)
+[node name="RightArm" type="MeshInstance3D" parent="Visuals/RightArmPivot" unique_id=25891034]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 mesh = SubResource("BoxMesh_Arm")
 
-[node name="LeftLegPivot" type="Node3D" parent="Visuals"]
-position = Vector3(0.5, 2.0, 0)
+[node name="LeftLegPivot" type="Node3D" parent="Visuals" unique_id=1430294073]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2, 0)
 
-[node name="LeftLeg" type="MeshInstance3D" parent="Visuals/LeftLegPivot"]
-position = Vector3(0, -1.0, 0)
+[node name="LeftLeg" type="MeshInstance3D" parent="Visuals/LeftLegPivot" unique_id=282972176]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 mesh = SubResource("BoxMesh_Leg")
 
-[node name="RightLegPivot" type="Node3D" parent="Visuals"]
-position = Vector3(-0.5, 2.0, 0)
+[node name="RightLegPivot" type="Node3D" parent="Visuals" unique_id=1592203264]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 2, 0)
 
-[node name="RightLeg" type="MeshInstance3D" parent="Visuals/RightLegPivot"]
-position = Vector3(0, -1.0, 0)
+[node name="RightLeg" type="MeshInstance3D" parent="Visuals/RightLegPivot" unique_id=1290350690]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 mesh = SubResource("BoxMesh_Leg")
 
-[node name="CameraPivot" type="Node3D" parent="."]
-position = Vector3(0, 4.0, 0)
-rotation = Vector3(-0.35, 0, 0)
-
-[node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot"]
-spring_length = 8.5
-collision_mask = 0
-
-[node name="Camera3D" type="Camera3D" parent="CameraPivot/SpringArm3D"]
-current = false
-fov = 75.0
-
-[node name="StateSynchronizer" type="MultiplayerSynchronizer" parent="."]
-root_path = NodePath("..")
-
-[node name="NameLabel" type="Label3D" parent="Visuals"]
-position = Vector3(0, 5.8, 0)
+[node name="NameLabel" type="Label3D" parent="Visuals" unique_id=168072559]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8, 0)
 pixel_size = 0.02
-font_size = 32
-outline_size = 6
-text = "Player"
 billboard = 1
+text = "Player"
+outline_size = 6
+
+[node name="CameraPivot" type="Node3D" parent="." unique_id=73815590]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, 0.3428978, 0, -0.3428978, 0.9393727, 0, 4, 0)
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot" unique_id=1153580977]
+collision_mask = 0
+spring_length = 8.5
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot/SpringArm3D" unique_id=4737533]
+
+[node name="StateSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=448616173]

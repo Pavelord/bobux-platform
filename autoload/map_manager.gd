@@ -27,6 +27,7 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 			if clean_cloud_version_id.is_empty():
 				clean_cloud_version_id = selected_cloud_version_id
 
+	var assets_prepared := false
 	var is_builtin_map: bool = clean_map_id.is_empty() or clean_map_id == "classic" or clean_map_id == "untitled"
 	if selected_folder.is_empty() and not clean_map_id.is_empty() and not is_builtin_map:
 		selected_folder = CloudAPI.get_cached_map_folder(clean_map_id, clean_cloud_version_id)
@@ -42,12 +43,19 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 				if not bool(download_result.get("ok", false)):
 					return _map_load_failure(clean_map_id, "Could not download the server map: %s" % str(download_result.get("error", "unknown")))
 				else:
+					assets_prepared = true
 					selected_folder = str(download_result.get("folder", "")).strip_edges()
 					if clean_cloud_version_id.is_empty():
 						clean_cloud_version_id = str(download_result.get("cloud_version_id", clean_cloud_version_id)).strip_edges()
 
 	if not is_builtin_map and (selected_folder.is_empty() or not FileAccess.file_exists(selected_folder.path_join("map_data.json"))):
 		return _map_load_failure(clean_map_id, "The downloaded server map is missing map_data.json.")
+	# An earlier connection may have ended while optional images were streaming.
+	# Recheck every selected cache, including the already-selected local folder.
+	if not assets_prepared and not selected_folder.is_empty() and not is_builtin_map:
+		var assets: Dictionary = await CloudAPI._ensure_cached_map_visual_assets(selected_folder, clean_cloud_version_id, null, true)
+		if not bool(assets.get("ok", false)):
+			return _map_load_failure(clean_map_id, "The map geometry could not be downloaded. Please reconnect.")
 	if clean_map_name.is_empty() and not selected_folder.is_empty():
 		var cached_meta: Dictionary = _read_local_map_metadata(selected_folder)
 		clean_map_name = str(cached_meta.get("name", "")).strip_edges()

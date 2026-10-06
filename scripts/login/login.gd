@@ -9,10 +9,12 @@ var login_button: Button = null
 var signup_button: Button = null
 var status_label: Label = null
 var _auto_login_in_flight: bool = false
+var _session_cover: Control
 
 func _ready() -> void:
 	_disable_mobile_gameplay_controls()
 	_build_login_screen()
+	_show_session_cover()
 	var mobile_runtime: Node = get_node_or_null("/root/MobileRuntime")
 	if mobile_runtime != null and mobile_runtime.has_method("check_for_updates"):
 		mobile_runtime.call_deferred("check_for_updates", true)
@@ -50,9 +52,39 @@ func _try_restore_saved_session(remembered_username: String) -> void:
 			_go_to_lobby()
 			return
 
+	if CloudAPI.has_authenticated_session() and int(auth_result.get("status", 0)) not in [400, 401, 403]:
+		# Stay on the neutral startup screen during a temporary outage.
+		_auto_login_in_flight = false
+		await get_tree().create_timer(3.0).timeout
+		if is_inside_tree(): _try_restore_saved_session(remembered_username)
+		return
+	if is_instance_valid(_session_cover): _session_cover.queue_free()
 	status_label.text = "Sign in to continue."
 	status_label.add_theme_color_override("font_color", Color(0.42, 0.42, 0.42, 1.0))
 	_auto_login_in_flight = false
+
+func _show_session_cover() -> void:
+	_session_cover = ColorRect.new()
+	_session_cover.color = Color("eef1f4")
+	_session_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_session_cover)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_session_cover.add_child(center)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 20)
+	center.add_child(column)
+	var logo := TextureRect.new()
+	logo.texture = _load_image_texture(LOGO_TEXTURE_PATH)
+	logo.custom_minimum_size = Vector2(240, 90)
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	column.add_child(logo)
+	var caption := Label.new()
+	caption.text = "Подключаемся к Bobux…"
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.add_theme_color_override("font_color", Color("526174"))
+	column.add_child(caption)
 
 func _build_login_screen() -> void:
 	for child in get_children():

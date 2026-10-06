@@ -12,6 +12,7 @@ signal transport_progress_updated(phase: String, progress: float)
 signal room_summaries_updated(summaries: Array)
 signal room_peer_profiles_updated(profiles_by_peer: Dictionary)
 signal room_emptied(server_key: String, room_id: String)
+signal smart_play_reconnecting()
 
 # PRACTICE SCREENSHOT: Multiplayer network module - tracks WebSocket state, room membership, reconnects and peer events.
 const MAX_CLIENTS: int = 10
@@ -23,7 +24,7 @@ const MAX_CONNECT_ATTEMPTS: int = 4
 const SERVER_WAKEUP_TIMEOUT_SECONDS: float = 70.0
 const SERVER_WAKEUP_POLL_SECONDS: float = 3.0
 const SERVER_WAKEUP_HTTP_TIMEOUT_SECONDS: float = 8.0
-const ROOM_AUTH_TIMEOUT_SECONDS: float = 8.0
+const ROOM_AUTH_TIMEOUT_SECONDS: float = 30.0
 const LEAVE_ACK_TIMEOUT_SECONDS: float = 1.5
 const JOIN_RATE_LIMIT_MSEC: int = 2000
 const JOIN_RATE_LIMIT_MAX_VIOLATIONS: int = 3
@@ -31,11 +32,17 @@ const MAX_RPC_PAYLOAD_SIZE: int = 16384
 const DEFAULT_WS_PATH: String = "/ws"
 const DEFAULT_DEDICATED_WS_URL: String = "ws://109.71.245.162/ws"
 const DEFAULT_DEDICATED_HOST: String = "109.71.245.162"
-const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-05-28-1"
+const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-10-06-1"
 const DEFAULT_ROOM_MAP_NAME: String = "Untitled Experience"
 const DEFAULT_ROOM_MAP_ID: String = "untitled"
 const MANUAL_NETWORK_POLL_RATE_HZ: float = 90.0
 const SERVER_PEER_KEEPALIVE_GRACE_SECONDS: float = 8.0
+const SERVER_JOIN_HANDSHAKE_TIMEOUT_SECONDS: float = 1800.0
+const SERVER_JOIN_HANDSHAKE_SOFT_TIMEOUT_SECONDS: float = 900.0
+const SERVER_PENDING_JOIN_KEEPALIVE_GRACE_SECONDS: float = 45.0
+const CLIENT_PENDING_JOIN_KEEPALIVE_INTERVAL_SECONDS: float = 10.0
+const SMART_PLAY_MAX_RECOVERY_ATTEMPTS: int = 8
+const SMART_PLAY_RECOVERY_BUDGET_RESET_SECONDS: float = 60.0
 const GLOBAL_SESSION_LOCK_FRESHNESS_SECONDS: int = 15
 const DUPLICATE_SESSION_REJECTION_MESSAGE: String = "Этот аккаунт уже находится в игре."
 # Best-effort transport-level WebSocket heartbeat.
@@ -60,10 +67,12 @@ var _pending_public_port: int = 0
 var _pending_attempt: int = 0
 var _connected_once_for_attempt: bool = false
 var _connect_timeout_timer: Timer = null
+var _pending_join_keepalive_timer: Timer = null
 var _pending_auth_payload: Dictionary = {}
 var _peer_room_ids: Dictionary = {}
 var _server_rooms: Dictionary = {}
 var _room_join_confirmed: bool = false
+var _server_supports_pending_join_keepalive: bool = false
 var _cached_room_summaries: Array = []
 var _cached_room_peer_profiles: Dictionary = {}
 var _peer_last_join_msec: Dictionary = {}
@@ -72,12 +81,19 @@ var _pending_server_room_joins: Dictionary = {}
 var _explicit_join_rejection_message: String = ""
 var _reconcile_timer: Timer = null
 var _peer_last_keepalive_msec: Dictionary = {}
+var _peer_keepalive_warning_msec: Dictionary = {}
 var _leave_ack_received: bool = false
 var _leave_ack_room_id: String = ""
 var _client_attempt_serial: int = 0
 var _client_wakeup_serial: int = 0
 var _manual_network_poll_accumulator: float = 0.0
 var _debug_last_server_poll_log_msec: int = 0
+var _smart_play_flow_active: bool = false
+var _smart_play_recovery_in_progress: bool = false
+var _smart_play_recovery_attempts: int = 0
+var _smart_play_flow_serial: int = 0
+var _smart_play_stability_serial: int = 0
+var _smart_play_failed_room_ids: Dictionary = {}
 
 func _multiplayer_api() -> MultiplayerAPI:
 	if not is_inside_tree():
@@ -222,6 +238,7 @@ func record_server_peer_keepalive(peer_id: int) -> void:
 	if not is_host() or peer_id <= 0:
 		return
 	_peer_last_keepalive_msec[peer_id] = Time.get_ticks_msec()
+	_peer_keepalive_warning_msec.erase(peer_id)
 
 func _server_peer_keepalive_age_msec(peer_id: int, now_msec: int = 0) -> int:
 	if peer_id <= 0:
@@ -270,7 +287,16 @@ func _reconcile_server_room_members() -> void:
 		for peer_id in get_room_member_peer_ids(room_id):
 			var transport_live: bool = _is_server_peer_currently_connected(peer_id)
 			var keepalive_stale: bool = _is_server_peer_keepalive_stale(peer_id, now_msec)
-			if transport_live and not keepalive_stale:
+			# Luau and physics spikes can delay app heartbeats while the WebSocket
+			# transport is still healthy. Only the transport may evict a joined peer.
+			if transport_live:
+				if keepalive_stale:
+					var last_warning_msec: int = int(_peer_keepalive_warning_msec.get(peer_id, 0))
+					if last_warning_msec == 0 or now_msec - last_warning_msec >= 30000:
+						print("[RoomHub] Peer %d heartbeat is delayed, but its transport is still connected; keeping it in room '%s'." % [peer_id, room_id])
+						_peer_keepalive_warning_msec[peer_id] = now_msec
+				else:
+					_peer_keepalive_warning_msec.erase(peer_id)
 				continue
 			if stale_peer_ids.has(peer_id):
 				continue
@@ -293,6 +319,7 @@ func _reconcile_server_room_members() -> void:
 			_peer_last_join_msec.erase(stale_peer_id)
 			_peer_join_violations.erase(stale_peer_id)
 			_peer_last_keepalive_msec.erase(stale_peer_id)
+			_peer_keepalive_warning_msec.erase(stale_peer_id)
 			_force_disconnect_scene_peer(stale_peer_id)
 			player_disconnected.emit(stale_peer_id)
 			if not pending_room_id.is_empty():
@@ -305,18 +332,31 @@ func _reconcile_server_room_members() -> void:
 		var pending_peer_id: int = int(pending_peer_variant)
 		if pending_peer_id <= 0:
 			continue
-		if not _is_server_peer_currently_connected(pending_peer_id) or _is_server_peer_keepalive_stale(pending_peer_id, now_msec):
+		var pending_data: Dictionary = _pending_server_room_joins.get(pending_peer_id, {}) if _pending_server_room_joins.get(pending_peer_id, {}) is Dictionary else {}
+		var pending_started_msec: int = int(pending_data.get("created_msec", 0))
+		var pending_age_msec: int = maxi(now_msec - pending_started_msec, 0) if pending_started_msec > 0 else 0
+		var pending_keepalive_age_msec: int = _server_peer_keepalive_age_msec(pending_peer_id, now_msec)
+		var pending_hard_expired: bool = pending_age_msec >= int(SERVER_JOIN_HANDSHAKE_TIMEOUT_SECONDS * 1000.0)
+		var pending_soft_expired: bool = pending_age_msec >= int(SERVER_JOIN_HANDSHAKE_SOFT_TIMEOUT_SECONDS * 1000.0) and (pending_keepalive_age_msec <= 0 or pending_keepalive_age_msec >= int(SERVER_PENDING_JOIN_KEEPALIVE_GRACE_SECONDS * 1000.0))
+		var pending_expired: bool = pending_hard_expired or pending_soft_expired
+		if not _is_server_peer_currently_connected(pending_peer_id) or pending_expired:
 			stale_pending_peers.append(pending_peer_id)
 	for stale_pending_id in stale_pending_peers:
 		var pending_reason: String = "transport_disconnected"
-		var pending_keepalive_age_msec: int = _server_peer_keepalive_age_msec(stale_pending_id, now_msec)
-		if pending_keepalive_age_msec >= int(SERVER_PEER_KEEPALIVE_GRACE_SECONDS * 1000.0):
-			pending_reason = "keepalive_stalled_%dms" % pending_keepalive_age_msec
-		print("[RoomHub] Reaping stale pending join for peer %d (%s)." % [stale_pending_id, pending_reason])
 		var pending_data: Dictionary = _pending_server_room_joins.get(stale_pending_id, {}) if _pending_server_room_joins.get(stale_pending_id, {}) is Dictionary else {}
+		var pending_started_msec: int = int(pending_data.get("created_msec", 0))
+		var pending_age_msec: int = maxi(now_msec - pending_started_msec, 0) if pending_started_msec > 0 else 0
+		var pending_keepalive_age_msec: int = _server_peer_keepalive_age_msec(stale_pending_id, now_msec)
+		var pending_hard_expired: bool = pending_age_msec >= int(SERVER_JOIN_HANDSHAKE_TIMEOUT_SECONDS * 1000.0)
+		var pending_soft_expired: bool = pending_age_msec >= int(SERVER_JOIN_HANDSHAKE_SOFT_TIMEOUT_SECONDS * 1000.0) and (pending_keepalive_age_msec <= 0 or pending_keepalive_age_msec >= int(SERVER_PENDING_JOIN_KEEPALIVE_GRACE_SECONDS * 1000.0))
+		var pending_expired: bool = pending_hard_expired or pending_soft_expired
+		if pending_started_msec > 0 and pending_expired:
+			pending_reason = "join_handshake_timeout_%dms_keepalive_age_%dms" % [pending_age_msec, pending_keepalive_age_msec]
+		print("[RoomHub] Reaping stale pending join for peer %d (%s)." % [stale_pending_id, pending_reason])
 		var pending_room_id: String = str(pending_data.get("room_id", "")).strip_edges()
 		_pending_server_room_joins.erase(stale_pending_id)
 		_peer_last_keepalive_msec.erase(stale_pending_id)
+		_peer_keepalive_warning_msec.erase(stale_pending_id)
 		_force_disconnect_scene_peer(stale_pending_id)
 		if not pending_room_id.is_empty():
 			affected_rooms[pending_room_id] = true
@@ -596,6 +636,32 @@ func _ensure_timers() -> void:
 		_connect_timeout_timer.one_shot = true
 		_connect_timeout_timer.timeout.connect(_on_connection_timeout)
 		add_child(_connect_timeout_timer)
+	if _pending_join_keepalive_timer == null:
+		_pending_join_keepalive_timer = Timer.new()
+		_pending_join_keepalive_timer.name = "PendingRoomJoinKeepaliveTimer"
+		_pending_join_keepalive_timer.one_shot = false
+		_pending_join_keepalive_timer.wait_time = CLIENT_PENDING_JOIN_KEEPALIVE_INTERVAL_SECONDS
+		_pending_join_keepalive_timer.timeout.connect(_send_pending_room_join_keepalive)
+		add_child(_pending_join_keepalive_timer)
+
+func _start_pending_room_join_keepalive() -> void:
+	_ensure_timers()
+	if _pending_join_keepalive_timer != null and not _room_join_confirmed:
+		_pending_join_keepalive_timer.start()
+		_send_pending_room_join_keepalive()
+
+func _stop_pending_room_join_keepalive() -> void:
+	if _pending_join_keepalive_timer != null:
+		_pending_join_keepalive_timer.stop()
+
+func _send_pending_room_join_keepalive() -> void:
+	if _room_join_confirmed or not _server_supports_pending_join_keepalive or _pending_ws_url.is_empty() or not is_session_active():
+		_stop_pending_room_join_keepalive()
+		return
+	var api: MultiplayerAPI = _multiplayer_api()
+	if api == null or api.is_server() or not api.get_peers().has(1):
+		return
+	_request_pending_room_join_keepalive.rpc_id(1)
 
 func _ensure_reconcile_timer() -> void:
 	if _reconcile_timer != null:
@@ -619,23 +685,57 @@ func prepare_for_lobby() -> void:
 	disconnect_from_session()
 
 func connect_or_host() -> void:
+	disconnect_from_session()
+	_smart_play_flow_active = true
+	_smart_play_recovery_in_progress = false
+	_smart_play_recovery_attempts = 0
+	_smart_play_failed_room_ids.clear()
+	_smart_play_flow_serial += 1
+	await _discover_or_host_smart_play()
+
+func _discover_or_host_smart_play() -> void:
+	if not _smart_play_flow_active:
+		return
 	transport_status_changed.emit("Looking for a live dedicated room...")
 	transport_progress_updated.emit("discover", 0.2)
 	var preferred_map_filter: String = _guess_runtime_map_id()
 	if preferred_map_filter.is_empty():
 		preferred_map_filter = _guess_runtime_map_name()
 	var active_result: Dictionary = await CloudAPI.fetch_active_servers(preferred_map_filter, 24)
+	if not _smart_play_flow_active:
+		return
 	var rows: Array = CloudAPI._extract_array_payload(active_result.get("data", [])) if bool(active_result.get("ok", false)) else []
 	var candidate: Dictionary = _select_joinable_room_candidate(rows)
+	# Older publishes may have created a second map ID from a one-character
+	# title typo. The exact PostgREST query above cannot return that alias, so
+	# only fetch the broader active list when the exact lookup found no room.
+	if candidate.is_empty() and not preferred_map_filter.is_empty():
+		var all_active_result: Dictionary = await CloudAPI.fetch_active_servers("", 64)
+		if not _smart_play_flow_active:
+			return
+		active_result = all_active_result
+		if bool(active_result.get("ok", false)):
+			rows = CloudAPI._extract_array_payload(active_result.get("data", []))
+			candidate = _select_joinable_room_candidate(rows)
+	if not bool(active_result.get("ok", false)):
+		var lookup_error: String = str(active_result.get("error", "service unavailable")).strip_edges()
+		var lookup_message := "Could not refresh the active room list: %s" % lookup_error
+		if _queue_smart_play_recovery(lookup_message, false):
+			return
 	if not candidate.is_empty():
+		var candidate_room_id := str(candidate.get("room_id", "")).strip_edges()
+		if not candidate_room_id.is_empty():
+			_smart_play_failed_room_ids[candidate_room_id] = true
 		join_targeted_room(candidate)
+		return
+	if not _smart_play_flow_active:
 		return
 	transport_status_changed.emit("No compatible live room found. Creating a new dedicated room...")
 	transport_progress_updated.emit("create", 0.35)
 	host_game(GameState.DEFAULT_PORT, rows)
 
 func host_game(_port: int, existing_mode_rows: Array = []) -> Error:
-	disconnect_from_session()
+	disconnect_from_session(_smart_play_flow_active)
 	last_connection_error = ""
 	if _is_dedicated_server_runtime():
 		return _host_dedicated_server(_get_dedicated_bind_port(_port))
@@ -688,7 +788,7 @@ func join_game(ip: String, port: int) -> Error:
 	return _start_client_attempt(_build_ws_url(ip, port))
 
 func join_targeted_room(server_info: Dictionary) -> Error:
-	disconnect_from_session()
+	disconnect_from_session(_smart_play_flow_active)
 	last_connection_error = ""
 	_current_server_info = server_info.duplicate(true)
 	_active_room_id = str(_current_server_info.get("room_id", "")).strip_edges()
@@ -738,13 +838,26 @@ func measure_server_latency(ip: String, port: int, timeout_seconds: float = 1.5)
 	return INF
 
 func disconnect_from_session_async() -> void:
+	_smart_play_flow_active = false
+	_smart_play_recovery_in_progress = false
+	_smart_play_recovery_attempts = 0
+	_smart_play_failed_room_ids.clear()
+	_smart_play_flow_serial += 1
 	_stop_connection_timeout()
+	_stop_pending_room_join_keepalive()
 	_stop_reconcile_timer()
 	await _send_leave_notice_if_needed_async()
 	_teardown_session_peer()
 
-func disconnect_from_session() -> void:
+func disconnect_from_session(preserve_smart_play_flow: bool = false) -> void:
+	if not preserve_smart_play_flow:
+		_smart_play_flow_active = false
+		_smart_play_recovery_in_progress = false
+		_smart_play_recovery_attempts = 0
+		_smart_play_failed_room_ids.clear()
+		_smart_play_flow_serial += 1
 	_stop_connection_timeout()
+	_stop_pending_room_join_keepalive()
 	_stop_reconcile_timer()
 	_send_leave_notice_if_needed()
 	_teardown_session_peer()
@@ -767,6 +880,7 @@ func _teardown_session_peer() -> void:
 	_pending_attempt = 0
 	_connected_once_for_attempt = false
 	_room_join_confirmed = false
+	_server_supports_pending_join_keepalive = false
 	_explicit_join_rejection_message = ""
 	_pending_auth_payload = {}
 	current_port = 0
@@ -780,6 +894,7 @@ func _teardown_session_peer() -> void:
 	_peer_last_join_msec.clear()
 	_peer_join_violations.clear()
 	_peer_last_keepalive_msec.clear()
+	_peer_keepalive_warning_msec.clear()
 	_pending_server_room_joins.clear()
 	_leave_ack_received = false
 	_leave_ack_room_id = ""
@@ -801,9 +916,9 @@ func _send_leave_notice_if_needed() -> void:
 	if not _room_join_confirmed or _active_room_id.is_empty():
 		return
 	var api: MultiplayerAPI = _multiplayer_api()
-	if api == null or api.multiplayer_peer == null:
+	if api == null or not is_session_active():
 		return
-	var local_peer_id: int = api.get_unique_id()
+	var local_peer_id: int = get_unique_id()
 	if local_peer_id <= 0:
 		return
 	_request_room_leave.rpc_id(1, {
@@ -818,9 +933,9 @@ func _send_leave_notice_if_needed_async() -> void:
 	if not _room_join_confirmed or _active_room_id.is_empty():
 		return
 	var api: MultiplayerAPI = _multiplayer_api()
-	if api == null or api.multiplayer_peer == null:
+	if api == null or not is_session_active():
 		return
-	var local_peer_id: int = api.get_unique_id()
+	var local_peer_id: int = get_unique_id()
 	if local_peer_id <= 0:
 		return
 	_leave_ack_received = false
@@ -850,15 +965,15 @@ func _finalize_peer_shutdown_async(expected_peer: MultiplayerPeer) -> void:
 
 func is_host() -> bool:
 	var api: MultiplayerAPI = _multiplayer_api()
-	return _hosting and api != null and api.is_server()
+	return _hosting and is_session_active() and api.is_server()
 
 func is_session_active() -> bool:
 	var api: MultiplayerAPI = _multiplayer_api()
-	return api != null and api.multiplayer_peer != null
+	return api != null and api.multiplayer_peer != null and api.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 func get_unique_id() -> int:
 	var api: MultiplayerAPI = _multiplayer_api()
-	if api == null or api.multiplayer_peer == null:
+	if not is_session_active():
 		return 0
 	return api.get_unique_id()
 
@@ -1075,6 +1190,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_peer_last_join_msec.erase(peer_id)
 	_peer_join_violations.erase(peer_id)
 	_peer_last_keepalive_msec.erase(peer_id)
+	_peer_keepalive_warning_msec.erase(peer_id)
 	player_disconnected.emit(peer_id)
 	# Safety net: reconcile all rooms on the next frame to catch any other
 	# stale peers whose disconnect callback was lost by the transport layer.
@@ -1093,6 +1209,7 @@ func server_evict_peer(peer_id: int) -> void:
 	_peer_last_join_msec.erase(peer_id)
 	_peer_join_violations.erase(peer_id)
 	_peer_last_keepalive_msec.erase(peer_id)
+	_peer_keepalive_warning_msec.erase(peer_id)
 	if not disconnected_room_id.is_empty():
 		_broadcast_room_summaries(disconnected_room_id)
 		_broadcast_room_peer_profiles(disconnected_room_id)
@@ -1118,6 +1235,7 @@ func _after_client_connected_async() -> void:
 
 func _on_connection_failed_native() -> void:
 	_stop_connection_timeout()
+	_stop_pending_room_join_keepalive()
 	var failed_api: MultiplayerAPI = _multiplayer_api()
 	var failed_status: MultiplayerPeer.ConnectionStatus = failed_api.multiplayer_peer.get_connection_status() if failed_api != null and failed_api.multiplayer_peer != null else MultiplayerPeer.CONNECTION_DISCONNECTED
 	print("[ClientNetwork] connection_failed on attempt #%d connected_once=%s room_join_confirmed=%s status=%d pending_url=%s" % [_client_attempt_serial, str(_connected_once_for_attempt), str(_room_join_confirmed), int(failed_status), _pending_ws_url])
@@ -1140,6 +1258,7 @@ func _on_connection_failed_native() -> void:
 
 func _on_server_disconnected_native() -> void:
 	_stop_connection_timeout()
+	_stop_pending_room_join_keepalive()
 	var disconnected_api: MultiplayerAPI = _multiplayer_api()
 	var disconnected_status: MultiplayerPeer.ConnectionStatus = disconnected_api.multiplayer_peer.get_connection_status() if disconnected_api != null and disconnected_api.multiplayer_peer != null else MultiplayerPeer.CONNECTION_DISCONNECTED
 	print("[ClientNetwork] server_disconnected on attempt #%d connected_once=%s room_join_confirmed=%s status=%d pending_url=%s" % [_client_attempt_serial, str(_connected_once_for_attempt), str(_room_join_confirmed), int(disconnected_status), _pending_ws_url])
@@ -1150,6 +1269,9 @@ func _on_server_disconnected_native() -> void:
 	if not _explicit_join_rejection_message.is_empty():
 		_explicit_join_rejection_message = ""
 		return
+	if _room_join_confirmed and _smart_play_flow_active:
+		if _queue_smart_play_recovery("The dedicated room connection was lost.", true):
+			return
 	if (not _connected_once_for_attempt or not _room_join_confirmed) and _pending_attempt < MAX_CONNECT_ATTEMPTS:
 		_pending_attempt += 1
 		# AUDIT FIX MEDIUM-6: Exponential backoff.
@@ -1162,6 +1284,9 @@ func _on_server_disconnected_native() -> void:
 		_room_join_confirmed = false
 		_begin_client_attempt()
 		return
+	if _queue_smart_play_recovery("The dedicated room connection was lost.", false):
+		return
+	_smart_play_flow_active = false
 	server_disconnected.emit()
 
 func _on_connection_timeout() -> void:
@@ -1207,7 +1332,12 @@ func _on_connection_timeout() -> void:
 	_finish_connection_failure("Connection to the dedicated server timed out.")
 
 func _finish_connection_failure(message: String) -> void:
+	if _queue_smart_play_recovery(message, false):
+		return
+	_smart_play_flow_active = false
+	_smart_play_recovery_in_progress = false
 	last_connection_error = message.strip_edges()
+	_stop_pending_room_join_keepalive()
 	var api: MultiplayerAPI = _multiplayer_api()
 	var peer: MultiplayerPeer = api.multiplayer_peer if api != null else null
 	if peer != null:
@@ -1218,6 +1348,66 @@ func _finish_connection_failure(message: String) -> void:
 	_room_join_confirmed = false
 	_connected_once_for_attempt = false
 	connection_failed.emit(last_connection_error)
+
+func _queue_smart_play_recovery(message: String, session_was_live: bool) -> bool:
+	if not _smart_play_flow_active or _smart_play_recovery_in_progress:
+		return false
+	if _smart_play_recovery_attempts >= SMART_PLAY_MAX_RECOVERY_ATTEMPTS:
+		# Keep Smart Play alive through a longer outage. Forget old failed rooms
+		# periodically because stale room rows may become healthy again later.
+		_smart_play_recovery_attempts = 0
+		_smart_play_failed_room_ids.clear()
+		print("[ClientNetwork] Smart Play recovery is still unavailable; starting another discovery cycle.")
+	if not session_was_live and not _is_recoverable_smart_play_error(message):
+		return false
+	if not session_was_live:
+		var failed_room_id := str(_current_server_info.get("room_id", _active_room_id)).strip_edges()
+		if not failed_room_id.is_empty():
+			_smart_play_failed_room_ids[failed_room_id] = true
+	_smart_play_recovery_attempts += 1
+	_smart_play_recovery_in_progress = true
+	last_connection_error = message.strip_edges()
+	transport_status_changed.emit("Connection interrupted. Finding a working room...")
+	transport_progress_updated.emit("retry", 0.6)
+	if session_was_live:
+		_smart_play_failed_room_ids.clear()
+		smart_play_reconnecting.emit()
+	var flow_serial := _smart_play_flow_serial
+	disconnect_from_session(true)
+	call_deferred("_run_smart_play_recovery", flow_serial)
+	return true
+
+func _is_recoverable_smart_play_error(message: String) -> bool:
+	var clean_message := message.strip_edges().to_lower()
+	for transient_phrase in [
+		"could not refresh the active room list",
+		"no longer available",
+		"no longer valid",
+		"room is full",
+		"could not connect to the dedicated server",
+		"connection to the dedicated room timed out",
+		"dedicated server closed the socket",
+		"dedicated room handshake timed out",
+		"dedicated room handshake was interrupted",
+		"connection to the dedicated server timed out"
+	]:
+		if clean_message.contains(transient_phrase):
+			return true
+	return false
+
+func _run_smart_play_recovery(flow_serial: int) -> void:
+	var retry_delay := minf(pow(2.0, float(_smart_play_recovery_attempts - 1)), 15.0) + randf_range(0.2, 0.8)
+	await get_tree().create_timer(retry_delay).timeout
+	if not _smart_play_flow_active or flow_serial != _smart_play_flow_serial:
+		return
+	_smart_play_recovery_in_progress = false
+	await _discover_or_host_smart_play()
+
+func _reset_smart_play_recovery_budget_after_stable_join(flow_serial: int, stability_serial: int) -> void:
+	await get_tree().create_timer(SMART_PLAY_RECOVERY_BUDGET_RESET_SECONDS).timeout
+	if _smart_play_flow_active and _room_join_confirmed and flow_serial == _smart_play_flow_serial and stability_serial == _smart_play_stability_serial:
+		_smart_play_recovery_attempts = 0
+		_smart_play_failed_room_ids.clear()
 
 func request_room_summaries() -> Error:
 	if is_host():
@@ -1361,7 +1551,7 @@ func _request_room_join(payload: Dictionary) -> void:
 		call_deferred("_disconnect_peer_after_reject", sender_id)
 		return
 	if incoming_protocol_version != NETWORK_PROTOCOL_VERSION:
-		_reject_room_join.rpc_id(sender_id, "Client/server version mismatch. Update the game and redeploy the dedicated server.")
+		_reject_room_join.rpc_id(sender_id, "Требуется обновление Bobux. Установите последнюю версию приложения и запустите его снова.")
 		call_deferred("_disconnect_peer_after_reject", sender_id)
 		return
 	var duplicate_peer_id: int = _find_live_or_pending_peer_by_user_id(incoming_user_id, sender_id)
@@ -1412,7 +1602,8 @@ func _request_room_join(payload: Dictionary) -> void:
 		"room_id": room_id,
 		"user_id": str(payload.get("user_id", "")).strip_edges(),
 		"username": str(payload.get("username", "Dedicated Server")).strip_edges(),
-		"max_players": max_players
+		"max_players": max_players,
+		"created_msec": Time.get_ticks_msec()
 	}
 	var joined_room_state: Dictionary = _server_rooms.get(room_id, room_state) if _server_rooms.get(room_id, room_state) is Dictionary else room_state
 	_confirm_room_join.rpc_id(sender_id, {
@@ -1420,14 +1611,28 @@ func _request_room_join(payload: Dictionary) -> void:
 		"map_id": str(joined_room_state.get("map_id", _guess_runtime_map_id())).strip_edges(),
 		"map_name": _sanitize_room_map_name(str(joined_room_state.get("map_name", _guess_runtime_map_name())).strip_edges(), str(joined_room_state.get("map_id", _guess_runtime_map_id())).strip_edges(), _guess_runtime_map_name()),
 		"cloud_version_id": str(joined_room_state.get("cloud_version_id", "")).strip_edges(),
+		"pending_join_keepalive_protocol": 1,
 		"max_players": int(joined_room_state.get("max_players", max_players))
 	})
 	print("[RoomHub] Peer %d reserved room '%s' and is waiting for map sync." % [sender_id, room_id])
+
+@rpc("any_peer", "reliable")
+func _request_pending_room_join_keepalive() -> void:
+	var api: MultiplayerAPI = _multiplayer_api()
+	if api == null or not api.is_server():
+		return
+	var sender_id: int = api.get_remote_sender_id()
+	if sender_id <= 0 or not _pending_server_room_joins.has(sender_id):
+		return
+	if _is_server_peer_currently_connected(sender_id):
+		record_server_peer_keepalive(sender_id)
 
 # PRACTICE SCREENSHOT: Client room confirmation RPC - loads the agreed map before the player is accepted into the room.
 @rpc("authority", "reliable")
 func _confirm_room_join(payload: Dictionary) -> void:
 	_stop_connection_timeout()
+	_server_supports_pending_join_keepalive = int(payload.get("pending_join_keepalive_protocol", 0)) >= 1
+	_start_pending_room_join_keepalive()
 	print("[ClientNetwork] Room confirm received on attempt #%d room=%s map=%s" % [_client_attempt_serial, str(payload.get("room_id", "")).strip_edges(), str(payload.get("map_id", "")).strip_edges()])
 	_active_room_id = str(payload.get("room_id", _active_room_id)).strip_edges()
 	_active_map_id = str(payload.get("map_id", _active_map_id)).strip_edges()
@@ -1483,14 +1688,11 @@ func _complete_room_join(payload: Dictionary) -> void:
 		_reject_room_join.rpc_id(sender_id, DUPLICATE_SESSION_REJECTION_MESSAGE)
 		call_deferred("_disconnect_peer_after_reject", sender_id)
 		return
-	var external_conflict: Dictionary = await _find_external_active_session_conflict(pending_user_id, room_id)
+	# The external session check ran before map sync in _request_room_join.
+	# Repeating it here could hold the final room acknowledgement behind a slow
+	# API request; clients time out after eight seconds and reconnect meanwhile.
 	if not _is_server_peer_currently_connected(sender_id):
 		_pending_server_room_joins.erase(sender_id)
-		return
-	if not external_conflict.is_empty():
-		_pending_server_room_joins.erase(sender_id)
-		_reject_room_join.rpc_id(sender_id, DUPLICATE_SESSION_REJECTION_MESSAGE)
-		call_deferred("_disconnect_peer_after_reject", sender_id)
 		return
 	var conflicting_room_id: String = _find_conflicting_process_room_id(room_id)
 	if not conflicting_room_id.is_empty():
@@ -1549,6 +1751,7 @@ func _request_room_leave(payload: Dictionary) -> void:
 	_peer_last_join_msec.erase(sender_id)
 	_peer_join_violations.erase(sender_id)
 	_peer_last_keepalive_msec.erase(sender_id)
+	_peer_keepalive_warning_msec.erase(sender_id)
 	_broadcast_room_summaries(authoritative_room_id)
 	_broadcast_room_peer_profiles(authoritative_room_id)
 	_confirm_room_leave.rpc_id(sender_id, {
@@ -1564,6 +1767,11 @@ func _confirm_room_leave(payload: Dictionary) -> void:
 @rpc("authority", "reliable")
 func _room_join_ready(_payload: Dictionary) -> void:
 	_room_join_confirmed = true
+	_stop_pending_room_join_keepalive()
+	_smart_play_recovery_in_progress = false
+	_smart_play_stability_serial += 1
+	if _smart_play_flow_active and _smart_play_recovery_attempts > 0:
+		call_deferred("_reset_smart_play_recovery_budget_after_stable_join", _smart_play_flow_serial, _smart_play_stability_serial)
 	_stop_connection_timeout()
 	var api: MultiplayerAPI = _multiplayer_api()
 	var local_peer_id: int = api.get_unique_id() if api != null else 0
@@ -1580,6 +1788,7 @@ func _room_join_ready(_payload: Dictionary) -> void:
 
 @rpc("authority", "reliable")
 func _reject_room_join(message: String) -> void:
+	_stop_pending_room_join_keepalive()
 	var resolved_message: String = message.strip_edges() if not message.strip_edges().is_empty() else "The dedicated server rejected this room join."
 	_explicit_join_rejection_message = resolved_message
 	_pending_attempt = MAX_CONNECT_ATTEMPTS
@@ -1602,6 +1811,9 @@ func _select_joinable_room_candidate(rows: Array) -> Dictionary:
 		if not (row_variant is Dictionary):
 			continue
 		var row: Dictionary = row_variant
+		var room_id: String = str(row.get("room_id", "")).strip_edges()
+		if _smart_play_flow_active and not room_id.is_empty() and _smart_play_failed_room_ids.has(room_id):
+			continue
 		if row.has("is_host") and not bool(row.get("is_host", false)):
 			continue
 		var status: String = str(row.get("status", "")).strip_edges().to_lower()
@@ -1611,25 +1823,107 @@ func _select_joinable_room_candidate(rows: Array) -> Dictionary:
 		var max_players: int = int(row.get("max_players", MAX_CLIENTS))
 		if max_players > 0 and players_count >= max_players:
 			continue
-		var matches_preferred_room: bool = false
-		var row_map_id: String = str(row.get("map_id", "")).strip_edges()
-		var row_map_name: String = str(row.get("map_name", "")).strip_edges()
-		if not preferred_map_id.is_empty():
-			matches_preferred_room = row_map_id == preferred_map_id
-			if not matches_preferred_room and row_map_id.is_empty() and not preferred_map_name.is_empty():
-				matches_preferred_room = row_map_name == preferred_map_name
-		elif not preferred_map_name.is_empty():
-			matches_preferred_room = row_map_name == preferred_map_name
-		if not matches_preferred_room:
+		if not room_matches_published_map(row, preferred_map_id, preferred_map_name):
 			continue
 		var row_last_seen: int = int(row.get("last_seen", 0))
 		if players_count > best_players_count or (players_count == best_players_count and row_last_seen > best_last_seen):
 			best_players_count = players_count
 			best_last_seen = row_last_seen
 			best_row = row.duplicate(true)
+	if not best_row.is_empty() and not preferred_map_id.is_empty() and str(best_row.get("map_id", "")).strip_edges() != preferred_map_id:
+		print("[RoomHub] Matched live room through same-owner published map title alias: '%s' (%s)." % [str(best_row.get("map_name", "")), str(best_row.get("map_id", ""))])
 	# No fallback to a mismatched room — return empty so that connect_or_host
 	# creates a new room with the correct map instead of joining an unrelated one.
 	return best_row
+
+func room_matches_published_map(room: Dictionary, preferred_map_id: String, preferred_map_name: String) -> bool:
+	var row_map_id: String = str(room.get("map_id", "")).strip_edges()
+	var row_map_name: String = str(room.get("map_name", "")).strip_edges()
+	var clean_map_id: String = preferred_map_id.strip_edges()
+	var clean_map_name: String = preferred_map_name.strip_edges()
+	if not clean_map_id.is_empty():
+		if row_map_id == clean_map_id:
+			return true
+		if not row_map_id.is_empty():
+			return _same_published_map_title_alias(row_map_id, row_map_name, clean_map_id, clean_map_name)
+		return not clean_map_name.is_empty() and row_map_name == clean_map_name
+	return not clean_map_name.is_empty() and row_map_name == clean_map_name
+
+func _same_published_map_title_alias(row_map_id: String, row_map_name: String, preferred_map_id: String, preferred_map_name: String) -> bool:
+	var row_owner_id := _published_map_owner_prefix(row_map_id)
+	var preferred_owner_id := _published_map_owner_prefix(preferred_map_id)
+	if row_owner_id.is_empty() or row_owner_id != preferred_owner_id:
+		return false
+	var row_title := _normalize_map_alias_title(row_map_name)
+	var preferred_title := _normalize_map_alias_title(preferred_map_name)
+	if row_title.is_empty() or preferred_title.is_empty():
+		return false
+	if row_title == preferred_title:
+		return true
+	return _map_alias_titles_are_one_edit_apart(row_title, preferred_title)
+
+func _published_map_owner_prefix(map_id: String) -> String:
+	var clean_id := map_id.strip_edges().to_lower()
+	var separator := clean_id.find("_")
+	if separator <= 0:
+		return ""
+	return clean_id.substr(0, separator)
+
+func _normalize_map_alias_title(value: String) -> String:
+	var normalizer := RegEx.new()
+	if normalizer.compile("[^\\p{L}\\p{N}]") != OK:
+		return value.strip_edges().to_lower().replace("-", " ").replace("_", " ")
+	var normalized := normalizer.sub(value.to_lower(), " ", true).strip_edges()
+	var words := PackedStringArray()
+	for word in normalized.split(" ", false):
+		var canonical_word := str(word)
+		if canonical_word == "narural":
+			canonical_word = "natural"
+		elif canonical_word == "sisaster" or canonical_word == "disasters":
+			canonical_word = "disaster"
+		if canonical_word not in ["bobux", "edition"] and not canonical_word.is_empty():
+			words.append(canonical_word)
+	return " ".join(words)
+
+func _map_alias_titles_are_one_edit_apart(left: String, right: String) -> bool:
+	if maxi(left.length(), right.length()) > 160:
+		return false
+	var left_words := left.split(" ", false)
+	var right_words := right.split(" ", false)
+	# Only tolerate a typo in the first word. Differences later in the title
+	# can identify a different mode (for example "Disaster" vs "Disasters").
+	if left_words.size() < 3 or left_words.size() != right_words.size():
+		return false
+	for word_index in range(1, left_words.size()):
+		if left_words[word_index] != right_words[word_index]:
+			return false
+	var left_first: String = left_words[0]
+	var right_first: String = right_words[0]
+	var left_length := left_first.length()
+	var right_length := right_first.length()
+	if mini(left_length, right_length) < 5 or absi(left_length - right_length) > 1:
+		return false
+	var left_index := 0
+	var right_index := 0
+	var differences := 0
+	while left_index < left_length and right_index < right_length:
+		if left_first[left_index] == right_first[right_index]:
+			left_index += 1
+			right_index += 1
+			continue
+		differences += 1
+		if differences > 1:
+			return false
+		if left_length == right_length:
+			left_index += 1
+			right_index += 1
+		elif left_length > right_length:
+			left_index += 1
+		else:
+			right_index += 1
+	if left_index < left_length or right_index < right_length:
+		differences += 1
+	return differences == 1
 
 func _get_connected_player_count() -> int:
 	var api: MultiplayerAPI = _multiplayer_api()
@@ -1708,7 +2002,7 @@ func _sanitize_room_map_name(map_name: String, map_id: String = "", fallback_nam
 	if clean_map_name.to_lower() == "classic" or clean_map_id.to_lower() == "classic":
 		return "Classic"
 	if not clean_map_name.is_empty() and not _looks_like_generated_room_or_map_name(clean_map_name):
-		return clean_map_name
+		return GameState.canonicalize_experience_name(clean_map_name) if GameState != null and GameState.has_method("canonicalize_experience_name") else clean_map_name
 	if GameState != null and GameState.has_method("get_selected_map_display_name"):
 		var selected_display_name: String = str(GameState.call("get_selected_map_display_name")).strip_edges()
 		if not selected_display_name.is_empty() and not _looks_like_generated_room_or_map_name(selected_display_name):

@@ -92,7 +92,7 @@ $launcherExportPresets = Join-Path $launcherRoot "export_presets.cfg"
 $launcherExportDir  = Join-Path $projectRoot "launcher_export\windows"
 $launcherExe        = Join-Path $launcherExportDir "BobuxLauncher.exe"
 $launcherPck        = Join-Path $launcherExportDir "BobuxLauncher.pck"
-$gameLuaExtensionDll = Join-Path $projectRoot "addons\luaAPI\bin\libluaapi.windows.template_release.$WindowsArchitecture.dll"
+$gameLuaExtensionDll = Join-Path $projectRoot "addons\luaAPI\bin\libbobuxluau.windows.template_release.$WindowsArchitecture.dll"
 $rbxlConverterSource = Join-Path $projectRoot "addons\rbxl_importer\rbxl_converter.py"
 
 if ([string]::IsNullOrWhiteSpace($MobileReleaseNotes)) {
@@ -421,6 +421,15 @@ tar -czf $hotfix `
 	--exclude="./.venv" `
 	--exclude="./.codex-tools" `
 	--exclude="./.codex-tmp" `
+	--exclude="./Imported Maps" `
+	--exclude="./Roblox-Materials/ClassicPreJune2021" `
+	--exclude="./Roblox-Materials/Modern" `
+	--exclude="./Roblox-Materials/PartsPre2022" `
+	--exclude="./Roblox-Materials/TerrainPre2022" `
+	--exclude="./native/luau_bridge/build" `
+	--exclude="*.obj" `
+	--exclude="*.o" `
+	--exclude="*.os" `
 	--exclude="./toolbox_assets/models" `
 	--exclude="./toolbox_assets/sounds" `
 	--exclude="./toolbox_assets/thumbnails" `
@@ -620,6 +629,7 @@ $manifestObj = @{
 		build   = $LauncherBuild
 		zip_url = "http://$ServerIp/downloads/BobuxLauncher-Windows.zip"
 		sha256  = $launcherSha256
+		package_size = (Get-Item -LiteralPath $launcherZip).Length
 		mirrors = @(
 			"http://$ServerIp/downloads/BobuxLauncher-Windows.zip"
 		)

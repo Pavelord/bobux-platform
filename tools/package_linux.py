@@ -19,7 +19,7 @@ def main():
     assert stage.is_relative_to(root / 'dist'), 'Stage must be inside dist'
     binary = stage / 'Bobux.x86_64'
     assert binary.read_bytes()[:5] == b'\x7fELF\x02', 'Expected a 64-bit ELF executable'
-    assert list(stage.rglob('*luaapi*release*x86_64.so')), 'Linux Lua native library missing'
+    assert list(stage.rglob('*bobuxluau*release*x86_64.so')) or list(stage.rglob('*luaapi*release*x86_64.so')), 'Linux Lua native library missing'
     converter = stage / 'addons/rbxl_importer/rbxl_converter.py'
     converter.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / 'addons/rbxl_importer/rbxl_converter.py', converter)

@@ -37,12 +37,15 @@ function Invoke-BobuxRequest {
 			ok      = $true
 			status  = [int]$response.StatusCode
 			content = [string]$response.Content
+			headers = $response.Headers
 		}
 	} catch {
 		$status = 0
 		$content = ""
+		$headers = @{}
 		if ($_.Exception.Response) {
 			$status = [int]$_.Exception.Response.StatusCode
+			$headers = $_.Exception.Response.Headers
 			try {
 				$reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
 				$content = $reader.ReadToEnd()
@@ -54,6 +57,7 @@ function Invoke-BobuxRequest {
 			ok      = $false
 			status  = $status
 			content = $content
+			headers = $headers
 			error   = $_.Exception.Message
 		}
 	}
@@ -78,6 +82,38 @@ Write-Host "Checking Bobux VPS at $ServerIp..." -ForegroundColor Cyan
 Assert-Status "Landing page" "http://$ServerIp/" @(200) | Out-Null
 $manifest = Assert-Status "Launcher manifest" "http://$ServerIp/launcher/latest.json" @(200)
 Assert-Status "Downloads manifest mirror" "http://$ServerIp/downloads/latest.json" @(200) | Out-Null
+$mobileManifest = Assert-Status "Mobile manifest" "http://$ServerIp/mobile/latest.json" @(200)
+$mobileCacheControl = [string]$mobileManifest.headers['Cache-Control']
+if ($mobileCacheControl -notmatch '(?i)no-store') {
+	throw "Mobile manifest is cacheable ($mobileCacheControl); clients may keep seeing an old build number."
+}
+$mobileJson = $mobileManifest.content | ConvertFrom-Json
+if (-not $mobileJson.android.build -or -not $mobileJson.android.versioned_apk_url) {
+	throw "Mobile manifest is missing the Android build or versioned APK URL."
+}
+$mobileApk = Invoke-BobuxRequest -Url ([string]$mobileJson.android.versioned_apk_url) -Method "HEAD"
+if ([int]$mobileApk.status -ne 200) {
+	throw "Versioned Android APK failed: HTTP $($mobileApk.status) at $($mobileJson.android.versioned_apk_url)"
+}
+$mobileApkLengthHeader = @($mobileApk.headers['Content-Length'])
+$mobileApkSize = [long]$mobileApkLengthHeader[0]
+if ($mobileApkSize -lt 10MB) {
+	throw "Versioned Android APK is undersized ($mobileApkSize bytes)."
+}
+$stableApkUrl = [string]$mobileJson.android.apk_url
+if ([string]::IsNullOrWhiteSpace($stableApkUrl)) {
+	throw "Mobile manifest is missing the stable Android APK URL."
+}
+$stableApk = Invoke-BobuxRequest -Url $stableApkUrl -Method "HEAD"
+if ([int]$stableApk.status -ne 200) {
+	throw "Stable Android APK failed: HTTP $($stableApk.status) at $stableApkUrl"
+}
+$stableApkLengthHeader = @($stableApk.headers['Content-Length'])
+$stableApkSize = [long]$stableApkLengthHeader[0]
+if ($stableApkSize -ne $mobileApkSize) {
+	throw "Stable APK size ($stableApkSize bytes) does not match the versioned build ($mobileApkSize bytes)."
+}
+Write-Host "[OK] Android build $($mobileJson.android.build): $mobileApkSize bytes, manifests are no-store" -ForegroundColor Green
 
 $manifestJson = $manifest.content | ConvertFrom-Json
 if (-not $manifestJson.version -or -not $manifestJson.zip_url) {
