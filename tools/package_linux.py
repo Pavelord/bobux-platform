@@ -25,9 +25,12 @@ def main():
     shutil.copyfile(root / 'addons/rbxl_importer/rbxl_converter.py', converter)
     shutil.copyfile(root / 'assets/branding/bobux_logo_ui.png', stage / 'bobux.png')
     runtime = root / 'dist/release/appimage-runtime-x86_64'
-    runtime_hash = '1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf'
+    # Use an immutable versioned release. The `continuous` asset is replaced in
+    # place upstream, so its bytes stop matching a pinned digest over time.
+    runtime_url = 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64'
+    runtime_hash = '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d'
     if not runtime.exists():
-        urllib.request.urlretrieve('https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64', runtime)
+        urllib.request.urlretrieve(runtime_url, runtime)
     assert hashlib.sha256(runtime.read_bytes()).hexdigest() == runtime_hash, 'AppImage runtime checksum mismatch'
     (stage / 'AppRun').write_text("""#!/bin/sh
 set -eu
