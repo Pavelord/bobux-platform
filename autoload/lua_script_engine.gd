@@ -1001,9 +1001,9 @@ class BobuxInstance extends RefCounted:
 			"DataReady":
 				return str(node.get_meta("roblox_class", "")) == "Player"
 			"AbsoluteSize":
-				return preload("res://addons/rbxl_importer/roblox_gui_runtime.gd").absolute_rect(node).size if node is Control else Vector2.ZERO
+				return node.get_global_rect().size if node is Control else Vector2.ZERO
 			"AbsolutePosition":
-				return preload("res://addons/rbxl_importer/roblox_gui_runtime.gd").absolute_rect(node).position if node is Control else Vector2.ZERO
+				return node.get_global_rect().position if node is Control else Vector2.ZERO
 			"Parent":
 				var p := node.get_parent()
 				return BobuxInstance.wrap(p) if p else null
@@ -2129,8 +2129,6 @@ class BobuxInstance extends RefCounted:
 		if node.is_inside_tree():
 			var replication := node.get_tree().root.get_node_or_null("ImportedPlaceNetwork")
 			if replication != null: replication.mark_changed(node, property_name)
-		if node is MeshInstance3D and property_name in ["Size", "Parent", "Material"]:
-			preload("res://addons/rbxl_importer/material_cache.gd").sync_texture_scale(node, _stud_scale())
 		if node is GPUParticles3D and property_name in ["Parent", "Heat", "RiseVelocity", "Opacity", "SecondaryColor", "Rate"]:
 			preload("res://addons/roblox_runtime/roblox_particles.gd").configure(node, _stud_scale())
 		if str(node.get_meta("roblox_class", "")) == "Sound" and node.is_inside_tree():
@@ -4999,7 +4997,7 @@ func _create_manifest_entry_node(entry: Dictionary) -> Node:
 	return RobloxDataModelClass.create_instance(roblox_class, str(entry.get("name", roblox_class)))
 
 func _apply_manifest_entry_metadata(node: Node, entry: Dictionary) -> void:
-	preload("res://addons/rbxl_importer/legacy_place_migrations.gd").upgrade(entry)
+	preload("res://addons/roblox_runtime/roblox_archive_compatibility.gd").upgrade(entry)
 	var roblox_class := str(entry.get("class", "Instance")).strip_edges()
 	node.set_meta("roblox_ref", str(entry.get("ref", "")).strip_edges())
 	node.set_meta("roblox_class", roblox_class)
@@ -5112,7 +5110,6 @@ func _apply_manifest_part_appearance(mesh_instance: MeshInstance3D, properties: 
 	else:
 		material = imported
 	mesh_instance.material_override = material
-	preload("res://addons/rbxl_importer/material_cache.gd").sync_texture_scale(mesh_instance, float(surface_props.BobuxStudScale))
 	mesh_instance.set_meta("anchored", bool(properties.get("Anchored", true)))
 	mesh_instance.set_meta("can_collide", bool(properties.get("CanCollide", true)))
 	mesh_instance.set_meta("transparency", float(properties.get("Transparency", 0.0)))
