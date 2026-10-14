@@ -1,0 +1,2565 @@
+{
+  "schema_version": 1,
+  "method": "Regex candidates after removing ordinary line and --[[ ]] comments; not Luau AST or data-flow. Receiver type unverified; strings can match. Source ordinals refer to Source fields in the corpus JSON.",
+  "maps": [
+    {
+      "index": 0,
+      "file": "Build a Boat FULLY WORKING (Subscribe to FrenchBread).rbxl",
+      "categories": {
+        "enum_item_field": {
+          "matches": 19,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 295,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 295,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 295,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 515,
+              "line_in_comment_stripped_source": 170,
+              "match": "Enum.ContextActionPriority.High.Value"
+            },
+            {
+              "source_ordinal": 515,
+              "line_in_comment_stripped_source": 313,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 515,
+              "line_in_comment_stripped_source": 350,
+              "match": "Enum.ContextActionPriority.Low.Value"
+            },
+            {
+              "source_ordinal": 538,
+              "line_in_comment_stripped_source": 40,
+              "match": "Enum.ContextActionPriority.Low.Value"
+            },
+            {
+              "source_ordinal": 538,
+              "line_in_comment_stripped_source": 41,
+              "match": "Enum.ContextActionPriority.High.Value"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 9,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 257,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 316,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 257,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 316,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 257,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 316,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 515,
+              "line_in_comment_stripped_source": 271,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 538,
+              "line_in_comment_stripped_source": 432,
+              "match": "Enum.CameraType.Custom"
+            }
+          ]
+        },
+        "enum_core_gui_type": {
+          "matches": 39,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 20,
+              "match": "Enum.CoreGuiType.Health"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 21,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 22,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 23,
+              "match": "Enum.CoreGuiType.Chat"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 39,
+              "match": "Enum.CoreGuiType.Health"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 40,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 41,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 42,
+              "match": "Enum.CoreGuiType.Chat"
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 72,
+          "examples": [
+            {
+              "source_ordinal": 17,
+              "line_in_comment_stripped_source": 14,
+              "match": "Enum.Material.Grass"
+            },
+            {
+              "source_ordinal": 17,
+              "line_in_comment_stripped_source": 17,
+              "match": "Enum.Material.Sand"
+            },
+            {
+              "source_ordinal": 771,
+              "line_in_comment_stripped_source": 102,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 771,
+              "line_in_comment_stripped_source": 921,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 771,
+              "line_in_comment_stripped_source": 1103,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 771,
+              "line_in_comment_stripped_source": 1539,
+              "match": "Enum.Material.Metal"
+            },
+            {
+              "source_ordinal": 773,
+              "line_in_comment_stripped_source": 1503,
+              "match": "Enum.Material.Ice"
+            },
+            {
+              "source_ordinal": 773,
+              "line_in_comment_stripped_source": 1626,
+              "match": "Enum.Material.Neon"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 12,
+          "examples": [
+            {
+              "source_ordinal": 701,
+              "line_in_comment_stripped_source": 97,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 701,
+              "line_in_comment_stripped_source": 103,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            },
+            {
+              "source_ordinal": 701,
+              "line_in_comment_stripped_source": 122,
+              "match": "Enum.HumanoidStateType.Landed"
+            },
+            {
+              "source_ordinal": 701,
+              "line_in_comment_stripped_source": 125,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 701,
+              "line_in_comment_stripped_source": 139,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 771,
+              "line_in_comment_stripped_source": 1476,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 772,
+              "line_in_comment_stripped_source": 858,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 772,
+              "line_in_comment_stripped_source": 859,
+              "match": "Enum.HumanoidStateType.Ragdoll"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 16,
+          "examples": [
+            {
+              "source_ordinal": 702,
+              "line_in_comment_stripped_source": 680,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 712,
+              "line_in_comment_stripped_source": 262,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 768,
+              "line_in_comment_stripped_source": 313,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 775,
+              "line_in_comment_stripped_source": 30,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 802,
+              "line_in_comment_stripped_source": 200,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 823,
+              "line_in_comment_stripped_source": 88,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 823,
+              "line_in_comment_stripped_source": 121,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 873,
+              "line_in_comment_stripped_source": 54,
+              "match": "GetEnumItems("
+            }
+          ]
+        },
+        "enum_typeof": {
+          "matches": 2,
+          "examples": [
+            {
+              "source_ordinal": 885,
+              "line_in_comment_stripped_source": 752,
+              "match": "typeof(Enum."
+            },
+            {
+              "source_ordinal": 1144,
+              "line_in_comment_stripped_source": 752,
+              "match": "typeof(Enum."
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "335df95c8a2839772468ff37e22b7a3fee57a7b1f886651c74934ef56014997b"
+    },
+    {
+      "index": 1,
+      "file": "ACF_-_VANGUARD_2.rbxl",
+      "categories": {
+        "enum_core_gui_type": {
+          "matches": 3,
+          "examples": [
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 1,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 747,
+              "line_in_comment_stripped_source": 26,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 747,
+              "line_in_comment_stripped_source": 27,
+              "match": "Enum.CoreGuiType.Backpack"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 574,
+              "line_in_comment_stripped_source": 33,
+              "match": "Enum.ContextActionPriority.Default.Value"
+            },
+            {
+              "source_ordinal": 574,
+              "line_in_comment_stripped_source": 103,
+              "match": "Enum.RenderPriority.Input.Value"
+            },
+            {
+              "source_ordinal": 581,
+              "line_in_comment_stripped_source": 6,
+              "match": "Enum.ContextActionPriority.High.Value"
+            },
+            {
+              "source_ordinal": 584,
+              "line_in_comment_stripped_source": 406,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 145,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 589,
+              "line_in_comment_stripped_source": 7,
+              "match": "Enum.ContextActionPriority.Default.Value"
+            },
+            {
+              "source_ordinal": 594,
+              "line_in_comment_stripped_source": 15,
+              "match": "Enum.ContextActionPriority.Default.Value"
+            },
+            {
+              "source_ordinal": 596,
+              "line_in_comment_stripped_source": 12,
+              "match": "Enum.ContextActionPriority.Default.Value"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 22,
+          "examples": [
+            {
+              "source_ordinal": 574,
+              "line_in_comment_stripped_source": 272,
+              "match": "Enum.HumanoidStateType.Swimming"
+            },
+            {
+              "source_ordinal": 579,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 579,
+              "line_in_comment_stripped_source": 112,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 582,
+              "line_in_comment_stripped_source": 455,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 582,
+              "line_in_comment_stripped_source": 456,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 582,
+              "line_in_comment_stripped_source": 457,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 590,
+              "line_in_comment_stripped_source": 106,
+              "match": "Enum.HumanoidStateType.Climbing"
+            },
+            {
+              "source_ordinal": 596,
+              "line_in_comment_stripped_source": 317,
+              "match": "Enum.HumanoidStateType.Dead"
+            }
+          ]
+        },
+        "enum_animation_priority": {
+          "matches": 10,
+          "examples": [
+            {
+              "source_ordinal": 584,
+              "line_in_comment_stripped_source": 328,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 618,
+              "line_in_comment_stripped_source": 123,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3573,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3573,
+              "line_in_comment_stripped_source": 72,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3573,
+              "line_in_comment_stripped_source": 77,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3590,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3592,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 3593,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.AnimationPriority.Action"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 15,
+          "examples": [
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 282,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 288,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 291,
+              "match": "Enum.CameraType.Track"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 297,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 300,
+              "match": "Enum.CameraType.Orbital"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 303,
+              "match": "Enum.CameraType.Attach"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 304,
+              "match": "Enum.CameraType.Watch"
+            },
+            {
+              "source_ordinal": 586,
+              "line_in_comment_stripped_source": 305,
+              "match": "Enum.CameraType.Fixed"
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 87,
+          "examples": [
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 214,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 217,
+              "match": "Enum.Material.Glass"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 221,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 224,
+              "match": "Enum.Material.Glass"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 234,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 237,
+              "match": "Enum.Material.Glass"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 241,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 603,
+              "line_in_comment_stripped_source": 244,
+              "match": "Enum.Material.Glass"
+            }
+          ]
+        },
+        "animation_priority_numeric": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 625,
+              "line_in_comment_stripped_source": 139,
+              "match": ".Priority = 10"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 5,
+          "examples": [
+            {
+              "source_ordinal": 736,
+              "line_in_comment_stripped_source": 45,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 747,
+              "line_in_comment_stripped_source": 31,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1142,
+              "line_in_comment_stripped_source": 3,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1142,
+              "line_in_comment_stripped_source": 5,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1155,
+              "line_in_comment_stripped_source": 47,
+              "match": "GetEnumItems("
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "7a44e01ea8f2fe1462d138e0e91345c498ad90156f5ec2e224142a7eca481479"
+    },
+    {
+      "index": 2,
+      "file": "Natural Disaster Survival (Subscribe to FrenchBread).rbxlx",
+      "categories": {
+        "enum_material": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 7,
+              "line_in_comment_stripped_source": 37,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 7,
+              "line_in_comment_stripped_source": 42,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 7,
+              "line_in_comment_stripped_source": 42,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 13,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 481,
+              "line_in_comment_stripped_source": 35,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 481,
+              "line_in_comment_stripped_source": 38,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 486,
+              "line_in_comment_stripped_source": 13,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 488,
+              "line_in_comment_stripped_source": 51,
+              "match": "Enum.Material.Neon"
+            }
+          ]
+        },
+        "enum_core_gui_type": {
+          "matches": 7,
+          "examples": [
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 94,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 109,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 12,
+              "line_in_comment_stripped_source": 61,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 12,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 407,
+              "line_in_comment_stripped_source": 27,
+              "match": "Enum.CoreGuiType.Health"
+            },
+            {
+              "source_ordinal": 465,
+              "line_in_comment_stripped_source": 62,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 465,
+              "line_in_comment_stripped_source": 78,
+              "match": "Enum.CoreGuiType.Backpack"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 35,
+              "line_in_comment_stripped_source": 67,
+              "match": "GetEnumItems("
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 39,
+              "line_in_comment_stripped_source": 27,
+              "match": "Enum.CameraType.Scriptable"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 8,
+          "examples": [
+            {
+              "source_ordinal": 42,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 63,
+              "line_in_comment_stripped_source": 20,
+              "match": "Enum.RenderPriority.Last.Value"
+            },
+            {
+              "source_ordinal": 101,
+              "line_in_comment_stripped_source": 170,
+              "match": "Enum.RenderPriority.First.Value"
+            },
+            {
+              "source_ordinal": 412,
+              "line_in_comment_stripped_source": 7,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 459,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 463,
+              "line_in_comment_stripped_source": 3,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 464,
+              "line_in_comment_stripped_source": 3,
+              "match": "Enum.ContextActionPriority.High.Value"
+            },
+            {
+              "source_ordinal": 464,
+              "line_in_comment_stripped_source": 4,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 408,
+              "line_in_comment_stripped_source": 32,
+              "match": "Enum.HumanoidStateType.Jumping"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "ce1416cd0809576a14dc2c55b6c8b008a6ae2ef5afb6205393bace40febea98b"
+    },
+    {
+      "index": 3,
+      "file": "2017 - Lego's Plane Wars (1).rbxl",
+      "categories": {},
+      "corpus_json_sha256": "c0f749eebf77caa4099b071ec7988d37d046b0b5eb92f5f145807ffe11d820fc"
+    },
+    {
+      "index": 4,
+      "file": "2017 - Lego's Plane Wars.rbxl",
+      "categories": {},
+      "corpus_json_sha256": "c0f749eebf77caa4099b071ec7988d37d046b0b5eb92f5f145807ffe11d820fc"
+    },
+    {
+      "index": 5,
+      "file": "2011 - Natural disasters survival.rbxl",
+      "categories": {},
+      "corpus_json_sha256": "04938603be6a43affbaf2cae664a4c1e7c0e0fbaa2ca3016b7d69b79c76c88e1"
+    },
+    {
+      "index": 6,
+      "file": "PKil(Alpha).rbxl",
+      "categories": {
+        "enum_animation_priority": {
+          "matches": 26,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 254,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 430,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 435,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 440,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 261,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 437,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 442,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 447,
+              "match": "Enum.AnimationPriority.Action"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 3,
+          "examples": [
+            {
+              "source_ordinal": 9,
+              "line_in_comment_stripped_source": 121,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 9,
+              "line_in_comment_stripped_source": 126,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 9,
+              "line_in_comment_stripped_source": 164,
+              "match": "Enum.CameraType.Custom"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 10,
+          "examples": [
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 93,
+              "match": "Enum.HumanoidStateType.Landed"
+            },
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 96,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 139,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 10,
+              "line_in_comment_stripped_source": 139,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 16,
+              "line_in_comment_stripped_source": 81,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 16,
+              "line_in_comment_stripped_source": 81,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 16,
+              "line_in_comment_stripped_source": 134,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 17,
+              "line_in_comment_stripped_source": 80,
+              "match": "Enum.HumanoidStateType.Freefall"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "f534cc33294038bcd5d28f0b18065a688d1dbd66436af0a3f45176a31b11fbbd"
+    },
+    {
+      "index": 7,
+      "file": "Combat-system-UNCOPYLOCKED.rbxl",
+      "categories": {
+        "enum_animation_priority": {
+          "matches": 31,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 261,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 437,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 442,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 447,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 261,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 437,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 442,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 447,
+              "match": "Enum.AnimationPriority.Action"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 14,
+          "examples": [
+            {
+              "source_ordinal": 5,
+              "line_in_comment_stripped_source": 91,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 17,
+              "line_in_comment_stripped_source": 89,
+              "match": "Enum.HumanoidStateType.Climbing"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 210,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 231,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 377,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 19,
+              "line_in_comment_stripped_source": 802,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 26,
+              "line_in_comment_stripped_source": 345,
+              "match": "Enum.HumanoidStateType.Dead"
+            },
+            {
+              "source_ordinal": 26,
+              "line_in_comment_stripped_source": 368,
+              "match": "Enum.HumanoidStateType.Dead"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 7,
+          "examples": [
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 124,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 12,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            },
+            {
+              "source_ordinal": 29,
+              "line_in_comment_stripped_source": 8,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            },
+            {
+              "source_ordinal": 30,
+              "line_in_comment_stripped_source": 43,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            },
+            {
+              "source_ordinal": 30,
+              "line_in_comment_stripped_source": 129,
+              "match": "Enum.RenderPriority.Input.Value"
+            },
+            {
+              "source_ordinal": 37,
+              "line_in_comment_stripped_source": 7,
+              "match": "Enum.ContextActionPriority.High.Value"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 408,
+              "match": "Enum.RenderPriority.Camera.Value"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 15,
+          "examples": [
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 258,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 258,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 273,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 280,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 283,
+              "match": "Enum.CameraType.Track"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 289,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 292,
+              "match": "Enum.CameraType.Orbital"
+            },
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 295,
+              "match": "Enum.CameraType.Attach"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 29,
+              "line_in_comment_stripped_source": 122,
+              "match": "GetEnumItems("
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 43,
+              "line_in_comment_stripped_source": 20,
+              "match": "Enum.Material.Air"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "c772036760741582c4fdb47b4a949b238a386475a1e26094628c0bcfb2a62151"
+    },
+    {
+      "index": 8,
+      "file": "Grw-a-garden-UNCOPYLOCKED.rbxl",
+      "categories": {
+        "enum_animation_priority": {
+          "matches": 6,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 307,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 456,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 459,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 462,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 113,
+              "line_in_comment_stripped_source": 325,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 113,
+              "line_in_comment_stripped_source": 436,
+              "match": "Enum.AnimationPriority.Action"
+            }
+          ]
+        },
+        "enum_core_gui_type": {
+          "matches": 5,
+          "examples": [
+            {
+              "source_ordinal": 7,
+              "line_in_comment_stripped_source": 3,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 21,
+              "line_in_comment_stripped_source": 4,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 146,
+              "line_in_comment_stripped_source": 1666,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 395,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 395,
+              "line_in_comment_stripped_source": 410,
+              "match": "Enum.CoreGuiType.PlayerList"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 25,
+          "examples": [
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 256,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 260,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 273,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 286,
+              "match": "Enum.HumanoidStateType.Swimming"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 308,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 333,
+              "match": "Enum.HumanoidStateType.Landed"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 349,
+              "match": "Enum.HumanoidStateType.Running"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 360,
+              "match": "Enum.HumanoidStateType.Climbing"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 22,
+          "examples": [
+            {
+              "source_ordinal": 102,
+              "line_in_comment_stripped_source": 213,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 105,
+              "line_in_comment_stripped_source": 25,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            },
+            {
+              "source_ordinal": 105,
+              "line_in_comment_stripped_source": 86,
+              "match": "Enum.RenderPriority.Input.Value"
+            },
+            {
+              "source_ordinal": 109,
+              "line_in_comment_stripped_source": 3,
+              "match": "Enum.ContextActionPriority.High.Value"
+            },
+            {
+              "source_ordinal": 113,
+              "line_in_comment_stripped_source": 401,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 92,
+              "match": "Enum.RenderPriority.Camera.Value"
+            },
+            {
+              "source_ordinal": 121,
+              "line_in_comment_stripped_source": 12,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            },
+            {
+              "source_ordinal": 130,
+              "line_in_comment_stripped_source": 5,
+              "match": "Enum.ContextActionPriority.Medium.Value"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 17,
+          "examples": [
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 197,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 198,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 213,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 219,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 221,
+              "match": "Enum.CameraType.Track"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 223,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 225,
+              "match": "Enum.CameraType.Orbital"
+            },
+            {
+              "source_ordinal": 117,
+              "line_in_comment_stripped_source": 227,
+              "match": "Enum.CameraType.Attach"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 5,
+          "examples": [
+            {
+              "source_ordinal": 130,
+              "line_in_comment_stripped_source": 80,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 209,
+              "line_in_comment_stripped_source": 31,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 225,
+              "line_in_comment_stripped_source": 4,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 225,
+              "line_in_comment_stripped_source": 5,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1154,
+              "line_in_comment_stripped_source": 53,
+              "match": "GetEnumItems("
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 35,
+          "examples": [
+            {
+              "source_ordinal": 292,
+              "line_in_comment_stripped_source": 18,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 427,
+              "line_in_comment_stripped_source": 426,
+              "match": "Enum.Material.Concrete"
+            },
+            {
+              "source_ordinal": 428,
+              "line_in_comment_stripped_source": 24,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 434,
+              "line_in_comment_stripped_source": 45,
+              "match": "Enum.Material.Concrete"
+            },
+            {
+              "source_ordinal": 434,
+              "line_in_comment_stripped_source": 45,
+              "match": "Enum.Material.Air"
+            },
+            {
+              "source_ordinal": 434,
+              "line_in_comment_stripped_source": 45,
+              "match": "Enum.Material.Wood"
+            },
+            {
+              "source_ordinal": 434,
+              "line_in_comment_stripped_source": 45,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 434,
+              "line_in_comment_stripped_source": 45,
+              "match": "Enum.Material.WoodPlanks"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "a54fe542bf20d1d20c4a082af1b98d0798c73688dc01e6c5f1359485cc0577fa"
+    },
+    {
+      "index": 9,
+      "file": "Steal-A-Brainrot-Modded-Uncopylocked.rbxl",
+      "categories": {
+        "enum_humanoid_state": {
+          "matches": 55,
+          "examples": [
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 264,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 268,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 281,
+              "match": "Enum.HumanoidStateType.Jumping"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 294,
+              "match": "Enum.HumanoidStateType.Swimming"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 316,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 339,
+              "match": "Enum.HumanoidStateType.Landed"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 355,
+              "match": "Enum.HumanoidStateType.Running"
+            },
+            {
+              "source_ordinal": 6,
+              "line_in_comment_stripped_source": 366,
+              "match": "Enum.HumanoidStateType.Climbing"
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 38,
+          "examples": [
+            {
+              "source_ordinal": 8,
+              "line_in_comment_stripped_source": 305,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 758,
+              "line_in_comment_stripped_source": 38,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 1059,
+              "line_in_comment_stripped_source": 272,
+              "match": "Enum.Material.ForceField"
+            },
+            {
+              "source_ordinal": 1060,
+              "line_in_comment_stripped_source": 377,
+              "match": "Enum.Material.Wood"
+            },
+            {
+              "source_ordinal": 1090,
+              "line_in_comment_stripped_source": 48,
+              "match": "Enum.Material.Metal"
+            },
+            {
+              "source_ordinal": 1090,
+              "line_in_comment_stripped_source": 58,
+              "match": "Enum.Material.Metal"
+            },
+            {
+              "source_ordinal": 1090,
+              "line_in_comment_stripped_source": 68,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 1093,
+              "line_in_comment_stripped_source": 34,
+              "match": "Enum.Material.Concrete"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 27,
+          "examples": [
+            {
+              "source_ordinal": 17,
+              "line_in_comment_stripped_source": 53,
+              "match": "Enum.RenderPriority.Character.Value"
+            },
+            {
+              "source_ordinal": 26,
+              "line_in_comment_stripped_source": 62,
+              "match": "Enum.RenderPriority.Character.Value"
+            },
+            {
+              "source_ordinal": 34,
+              "line_in_comment_stripped_source": 62,
+              "match": "Enum.RenderPriority.Character.Value"
+            },
+            {
+              "source_ordinal": 148,
+              "line_in_comment_stripped_source": 9,
+              "match": "Enum.StudioStyleGuideColor.MainText.Name"
+            },
+            {
+              "source_ordinal": 148,
+              "line_in_comment_stripped_source": 10,
+              "match": "Enum.StudioStyleGuideColor.DimmedText.Name"
+            },
+            {
+              "source_ordinal": 148,
+              "line_in_comment_stripped_source": 14,
+              "match": "Enum.StudioStyleGuideColor.Border.Name"
+            },
+            {
+              "source_ordinal": 148,
+              "line_in_comment_stripped_source": 16,
+              "match": "Enum.StudioStyleGuideColor.Light.Name"
+            },
+            {
+              "source_ordinal": 148,
+              "line_in_comment_stripped_source": 19,
+              "match": "Enum.StudioStyleGuideColor.MainBackground.Name"
+            }
+          ]
+        },
+        "enum_animation_priority": {
+          "matches": 17,
+          "examples": [
+            {
+              "source_ordinal": 35,
+              "line_in_comment_stripped_source": 69,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 35,
+              "line_in_comment_stripped_source": 72,
+              "match": "Enum.AnimationPriority.Action4"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 18,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 410,
+              "line_in_comment_stripped_source": 326,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 410,
+              "line_in_comment_stripped_source": 437,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 923,
+              "line_in_comment_stripped_source": 189,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 923,
+              "line_in_comment_stripped_source": 199,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 923,
+              "line_in_comment_stripped_source": 209,
+              "match": "Enum.AnimationPriority.Action4"
+            }
+          ]
+        },
+        "enum_core_gui_type": {
+          "matches": 15,
+          "examples": [
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 19,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 20,
+              "match": "Enum.CoreGuiType.Health"
+            },
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 21,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 22,
+              "match": "Enum.CoreGuiType.Chat"
+            },
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 23,
+              "match": "Enum.CoreGuiType.EmotesMenu"
+            },
+            {
+              "source_ordinal": 275,
+              "line_in_comment_stripped_source": 24,
+              "match": "Enum.CoreGuiType.All"
+            },
+            {
+              "source_ordinal": 488,
+              "line_in_comment_stripped_source": 395,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 488,
+              "line_in_comment_stripped_source": 407,
+              "match": "Enum.CoreGuiType.PlayerList"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 15,
+          "examples": [
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 212,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 213,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 228,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 234,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 236,
+              "match": "Enum.CameraType.Track"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 238,
+              "match": "Enum.CameraType.Follow"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 240,
+              "match": "Enum.CameraType.Orbital"
+            },
+            {
+              "source_ordinal": 414,
+              "line_in_comment_stripped_source": 242,
+              "match": "Enum.CameraType.Attach"
+            }
+          ]
+        },
+        "enum_items": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 422,
+              "line_in_comment_stripped_source": 81,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 705,
+              "line_in_comment_stripped_source": 613,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 782,
+              "line_in_comment_stripped_source": 145,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 782,
+              "line_in_comment_stripped_source": 215,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1156,
+              "line_in_comment_stripped_source": 3,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1156,
+              "line_in_comment_stripped_source": 5,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1169,
+              "line_in_comment_stripped_source": 47,
+              "match": "GetEnumItems("
+            },
+            {
+              "source_ordinal": 1226,
+              "line_in_comment_stripped_source": 54,
+              "match": "GetEnumItems("
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "ffd8d122522869f544bdcd94b1fcb77dac934147bc14013aa5c1350c0b30ccdf"
+    },
+    {
+      "index": 10,
+      "file": "2017 - Doomspire Brickbattle.rbxl",
+      "categories": {
+        "enum_material": {
+          "matches": 4,
+          "examples": [
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 77,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 78,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 20,
+              "line_in_comment_stripped_source": 30,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 20,
+              "line_in_comment_stripped_source": 34,
+              "match": "Enum.Material.Neon"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "878221ec04c23891c3e802b94e160de5c69b8cbb61d3e17d1e76ab258f16bc14"
+    },
+    {
+      "index": 11,
+      "file": "Doomspire Brickbattle.rbxl",
+      "categories": {
+        "enum_material": {
+          "matches": 4,
+          "examples": [
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 77,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 78,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 20,
+              "line_in_comment_stripped_source": 30,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 20,
+              "line_in_comment_stripped_source": 34,
+              "match": "Enum.Material.Neon"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "d5a8547aa61e76caf0e95c944b19c7309380c2896e49513480a693f2294de99c"
+    },
+    {
+      "index": 12,
+      "file": "Murder Mystery 2.rbxl",
+      "categories": {
+        "enum_core_gui_type": {
+          "matches": 3,
+          "examples": [
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 13,
+              "match": "Enum.CoreGuiType.All"
+            },
+            {
+              "source_ordinal": 38,
+              "line_in_comment_stripped_source": 159,
+              "match": "Enum.CoreGuiType.All"
+            },
+            {
+              "source_ordinal": 39,
+              "line_in_comment_stripped_source": 7,
+              "match": "Enum.CoreGuiType.Backpack"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 51,
+              "match": "Enum.DevTouchMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 56,
+              "match": "Enum.TouchCameraMovementMode.Follow.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 63,
+              "match": "Enum.DevComputerMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 68,
+              "match": "Enum.ComputerCameraMovementMode.Classic.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 120,
+              "match": "Enum.DevComputerMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 125,
+              "match": "Enum.ComputerCameraMovementMode.Classic.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 129,
+              "match": "Enum.ComputerCameraMovementMode.Follow.Name"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 232,
+              "match": "Enum.RenderPriority.Camera.Value"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 2,
+          "examples": [
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 25,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 98,
+              "line_in_comment_stripped_source": 167,
+              "match": "Enum.CameraType.Scriptable"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Flying"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Ragdoll"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Running"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Seated"
+            },
+            {
+              "source_ordinal": 175,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.Swimming"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "c044aa64ffde434483e5f1029ac7b359630665d3bb9686151a202a89b4a5bb78"
+    },
+    {
+      "index": 13,
+      "file": "2015 - Epic Minigames.rbxl",
+      "categories": {
+        "enum_camera_type": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 35,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 80,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 112,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 146,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 183,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 220,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 263,
+              "match": "Enum.CameraType.Scriptable"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 309,
+              "match": "Enum.CameraType.Scriptable"
+            }
+          ]
+        },
+        "enum_core_gui_type": {
+          "matches": 2,
+          "examples": [
+            {
+              "source_ordinal": 189,
+              "line_in_comment_stripped_source": 1,
+              "match": "Enum.CoreGuiType.Chat"
+            },
+            {
+              "source_ordinal": 190,
+              "line_in_comment_stripped_source": 1,
+              "match": "Enum.CoreGuiType.Chat"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 2,
+          "examples": [
+            {
+              "source_ordinal": 201,
+              "line_in_comment_stripped_source": 27,
+              "match": "Enum.HumanoidStateType.Physics"
+            },
+            {
+              "source_ordinal": 201,
+              "line_in_comment_stripped_source": 204,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 776,
+          "examples": [
+            {
+              "source_ordinal": 268,
+              "line_in_comment_stripped_source": 15,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 278,
+              "line_in_comment_stripped_source": 43,
+              "match": "Enum.Material.CorrodedMetal"
+            },
+            {
+              "source_ordinal": 395,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.Material.Granite"
+            },
+            {
+              "source_ordinal": 751,
+              "line_in_comment_stripped_source": 37,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 751,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 764,
+              "line_in_comment_stripped_source": 12,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 1841,
+              "line_in_comment_stripped_source": 11,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 1841,
+              "line_in_comment_stripped_source": 18,
+              "match": "Enum.Material.SmoothPlastic"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "c5a33663c6f19e0b40932bd0e36fdc791981c0158ce6817662ec416454cf142e"
+    },
+    {
+      "index": 14,
+      "file": "2018 - Tower_Of_Hell_Full.rbxl",
+      "categories": {
+        "enum_material": {
+          "matches": 3,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 40,
+              "match": "Enum.Material.Air"
+            },
+            {
+              "source_ordinal": 67,
+              "line_in_comment_stripped_source": 40,
+              "match": "Enum.Material.Air"
+            },
+            {
+              "source_ordinal": 93,
+              "line_in_comment_stripped_source": 36,
+              "match": "Enum.Material.Plastic"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 1,
+          "examples": [
+            {
+              "source_ordinal": 27,
+              "line_in_comment_stripped_source": 28,
+              "match": "Enum.HumanoidStateType.Jumping"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "8cd9c378098cd668361c0e0b6b5a6b67cd6d3a0318aeb0bb0641233e8c543c97"
+    },
+    {
+      "index": 15,
+      "file": "Roblox - Rocket Arena.rbxl",
+      "categories": {},
+      "corpus_json_sha256": "5a8b945d8a4859acebe7079bc8e5278e42d58af05b3f573d069d43506ea5a901"
+    },
+    {
+      "index": 16,
+      "file": "NowDoTheHarlemShake - The Normal Elevator.rbxl",
+      "categories": {
+        "enum_core_gui_type": {
+          "matches": 4,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 188,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 189,
+              "match": "Enum.CoreGuiType.PlayerList"
+            },
+            {
+              "source_ordinal": 23,
+              "line_in_comment_stripped_source": 207,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 23,
+              "line_in_comment_stripped_source": 208,
+              "match": "Enum.CoreGuiType.PlayerList"
+            }
+          ]
+        },
+        "enum_material": {
+          "matches": 34,
+          "examples": [
+            {
+              "source_ordinal": 12,
+              "line_in_comment_stripped_source": 52,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 12,
+              "line_in_comment_stripped_source": 56,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 18,
+              "line_in_comment_stripped_source": 47,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 18,
+              "line_in_comment_stripped_source": 51,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 31,
+              "line_in_comment_stripped_source": 523,
+              "match": "Enum.Material.SmoothPlastic"
+            },
+            {
+              "source_ordinal": 36,
+              "line_in_comment_stripped_source": 318,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 36,
+              "line_in_comment_stripped_source": 320,
+              "match": "Enum.Material.Neon"
+            },
+            {
+              "source_ordinal": 41,
+              "line_in_comment_stripped_source": 129,
+              "match": "Enum.Material.Slate"
+            }
+          ]
+        },
+        "enum_animation_priority": {
+          "matches": 110,
+          "examples": [
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 344,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 363,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 510,
+              "match": "Enum.AnimationPriority.Idle"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 515,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 15,
+              "line_in_comment_stripped_source": 520,
+              "match": "Enum.AnimationPriority.Action"
+            },
+            {
+              "source_ordinal": 83,
+              "line_in_comment_stripped_source": 312,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 83,
+              "line_in_comment_stripped_source": 331,
+              "match": "Enum.AnimationPriority.Core"
+            },
+            {
+              "source_ordinal": 83,
+              "line_in_comment_stripped_source": 478,
+              "match": "Enum.AnimationPriority.Idle"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "aff86dd7988b84d71a9ecea2cb2a066d370e8e734039d1744f4bdcb4379a9c90"
+    },
+    {
+      "index": 17,
+      "file": "Stickmasterluke - The Underground War.rbxl",
+      "categories": {
+        "camera_type_numeric": {
+          "matches": 4,
+          "examples": [
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 37,
+              "match": ".CameraType = 4"
+            },
+            {
+              "source_ordinal": 2,
+              "line_in_comment_stripped_source": 41,
+              "match": ".CameraType = 5"
+            },
+            {
+              "source_ordinal": 3,
+              "line_in_comment_stripped_source": 37,
+              "match": ".CameraType = 4"
+            },
+            {
+              "source_ordinal": 3,
+              "line_in_comment_stripped_source": 41,
+              "match": ".CameraType = 5"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "131a0006d22e0265c7b0d0f0260864d547df2341d198425d23a8b640c6a2d689"
+    },
+    {
+      "index": 18,
+      "file": "Reignwolf - Escape the facility obby.rbxl",
+      "categories": {
+        "enum_material": {
+          "matches": 9,
+          "examples": [
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 82,
+              "match": "Enum.Material.Plastic"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 83,
+              "match": "Enum.Material.Wood"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 84,
+              "match": "Enum.Material.Slate"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 85,
+              "match": "Enum.Material.CorrodedMetal"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 86,
+              "match": "Enum.Material.Ice"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 87,
+              "match": "Enum.Material.Grass"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 88,
+              "match": "Enum.Material.Foil"
+            },
+            {
+              "source_ordinal": 13,
+              "line_in_comment_stripped_source": 89,
+              "match": "Enum.Material.DiamondPlate"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "09ea4eb4e2f6b6719ae1fba764aab630f65df07a605527e98f986302b1d53351"
+    },
+    {
+      "index": 19,
+      "file": "NintendoZACHERY - Be crushed by speeding wall.rbxl",
+      "categories": {},
+      "corpus_json_sha256": "dc42482a6ac9a2b6f79cb705768f04e2818166d7b18884f744bbfa8ecd71caab"
+    },
+    {
+      "index": 20,
+      "file": "Nikilis - Murder Mystery 2.rbxl",
+      "categories": {
+        "enum_core_gui_type": {
+          "matches": 4,
+          "examples": [
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 13,
+              "match": "Enum.CoreGuiType.All"
+            },
+            {
+              "source_ordinal": 1,
+              "line_in_comment_stripped_source": 161,
+              "match": "Enum.CoreGuiType.All"
+            },
+            {
+              "source_ordinal": 24,
+              "line_in_comment_stripped_source": 5,
+              "match": "Enum.CoreGuiType.Backpack"
+            },
+            {
+              "source_ordinal": 32,
+              "line_in_comment_stripped_source": 34,
+              "match": "Enum.CoreGuiType.Backpack"
+            }
+          ]
+        },
+        "enum_item_field": {
+          "matches": 13,
+          "examples": [
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 63,
+              "match": "Enum.DevTouchMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 67,
+              "match": "Enum.TouchCameraMovementMode.Follow.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 75,
+              "match": "Enum.DevComputerMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 79,
+              "match": "Enum.ComputerCameraMovementMode.Classic.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 121,
+              "match": "Enum.DevComputerMovementMode.ClickToMove.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 126,
+              "match": "Enum.ComputerCameraMovementMode.Classic.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 129,
+              "match": "Enum.ComputerCameraMovementMode.Follow.Name"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 218,
+              "match": "Enum.RenderPriority.Camera.Value"
+            }
+          ]
+        },
+        "enum_camera_type": {
+          "matches": 2,
+          "examples": [
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 33,
+              "match": "Enum.CameraType.Custom"
+            },
+            {
+              "source_ordinal": 4,
+              "line_in_comment_stripped_source": 161,
+              "match": "Enum.CameraType.Scriptable"
+            }
+          ]
+        },
+        "enum_humanoid_state": {
+          "matches": 11,
+          "examples": [
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 395,
+              "match": "Enum.HumanoidStateType.FallingDown"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 396,
+              "match": "Enum.HumanoidStateType.Flying"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 397,
+              "match": "Enum.HumanoidStateType.Freefall"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 398,
+              "match": "Enum.HumanoidStateType.GettingUp"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 399,
+              "match": "Enum.HumanoidStateType.Ragdoll"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 400,
+              "match": "Enum.HumanoidStateType.Running"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 401,
+              "match": "Enum.HumanoidStateType.Seated"
+            },
+            {
+              "source_ordinal": 92,
+              "line_in_comment_stripped_source": 402,
+              "match": "Enum.HumanoidStateType.Swimming"
+            }
+          ]
+        }
+      },
+      "corpus_json_sha256": "4db423dae19d7dbafc9f246b22cef16f7c0558ea05366c52df2533a1fd5c3d06"
+    }
+  ],
+  "categories": {
+    "get_state_direct_numeric_compare": {
+      "regex": "GetState\\s*\\([^)]*\\)\\s*(?:==|~=|<=|>=|<|>)\\s*\\d+",
+      "matches": 0,
+      "maps": []
+    },
+    "get_state_reverse_numeric_compare": {
+      "regex": "\\d+\\s*(?:==|~=|<=|>=|<|>)\\s*[^\\n;=]*?GetState\\s*\\([^)]*\\)",
+      "matches": 0,
+      "maps": []
+    },
+    "camera_type_numeric": {
+      "regex": "\\.CameraType\\s*(?:==|~=|=)\\s*\\d+",
+      "matches": 4,
+      "maps": [
+        17
+      ]
+    },
+    "material_numeric": {
+      "regex": "\\.Material\\s*(?:==|~=|=)\\s*\\d+",
+      "matches": 0,
+      "maps": []
+    },
+    "animation_priority_numeric": {
+      "regex": "\\.Priority\\s*(?:==|~=|=)\\s*\\d+",
+      "matches": 1,
+      "maps": [
+        1
+      ]
+    },
+    "change_state_numeric": {
+      "regex": "(?:ChangeState|SetStateEnabled|GetStateEnabled)\\s*\\(\\s*\\d+",
+      "matches": 0,
+      "maps": []
+    },
+    "enum_item_field": {
+      "regex": "Enum\\.[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*\\.(?:Name|Value|EnumType)\\b",
+      "matches": 118,
+      "maps": [
+        0,
+        1,
+        2,
+        7,
+        8,
+        9,
+        12,
+        20
+      ]
+    },
+    "enum_typeof": {
+      "regex": "typeof\\s*\\(\\s*Enum\\.",
+      "matches": 2,
+      "maps": [
+        0
+      ]
+    },
+    "enum_tostring": {
+      "regex": "tostring\\s*\\(\\s*Enum\\.",
+      "matches": 0,
+      "maps": []
+    },
+    "enum_items": {
+      "regex": "\\b(?:GetEnumItems|GetEnums)\\s*\\(",
+      "matches": 39,
+      "maps": [
+        0,
+        1,
+        2,
+        7,
+        8,
+        9
+      ]
+    },
+    "enum_material": {
+      "regex": "\\bEnum\\.Material\\.[A-Za-z_][A-Za-z0-9_]*",
+      "matches": 1074,
+      "maps": [
+        0,
+        1,
+        2,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        16,
+        18
+      ]
+    },
+    "enum_humanoid_state": {
+      "regex": "\\bEnum\\.HumanoidStateType\\.[A-Za-z_][A-Za-z0-9_]*",
+      "matches": 164,
+      "maps": [
+        0,
+        1,
+        2,
+        6,
+        7,
+        8,
+        9,
+        12,
+        13,
+        14,
+        20
+      ]
+    },
+    "enum_camera_type": {
+      "regex": "\\bEnum\\.CameraType\\.[A-Za-z_][A-Za-z0-9_]*",
+      "matches": 90,
+      "maps": [
+        0,
+        1,
+        2,
+        6,
+        7,
+        8,
+        9,
+        12,
+        13,
+        20
+      ]
+    },
+    "enum_animation_priority": {
+      "regex": "\\bEnum\\.AnimationPriority\\.[A-Za-z_][A-Za-z0-9_]*",
+      "matches": 200,
+      "maps": [
+        1,
+        6,
+        7,
+        8,
+        9,
+        16
+      ]
+    },
+    "enum_core_gui_type": {
+      "regex": "\\bEnum\\.CoreGuiType\\.[A-Za-z_][A-Za-z0-9_]*",
+      "matches": 82,
+      "maps": [
+        0,
+        1,
+        2,
+        8,
+        9,
+        12,
+        13,
+        16,
+        20
+      ]
+    }
+  }
+}

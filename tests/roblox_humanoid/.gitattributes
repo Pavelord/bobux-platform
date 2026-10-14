@@ -1,0 +1,6 @@
+# Measured bytes and their SHA-256 must survive Windows/Linux checkouts unchanged.
+*.empirical.json -text
+phase_a/2026-* -text
+phase_c/2026-* -text
+*.zstd -text
+*.mp4 -text

@@ -1,0 +1,37 @@
+{
+  "commit": "031b2f91d3d47274c255f3ed5691c29f792c181d",
+  "enums": {
+    "SensorUpdateType": {
+      "source_url": "https://raw.githubusercontent.com/Roblox/creator-docs/031b2f91d3d47274c255f3ed5691c29f792c181d/content/en-us/reference/engine/enums/SensorUpdateType.yaml",
+      "source_sha256": "608ea62553c7c19a7c57e2834f788211be350c2fbd580c04cadc186a68bd101d",
+      "items": [
+        {
+          "name": "OnRead",
+          "value": 0,
+          "tags": []
+        },
+        {
+          "name": "Manual",
+          "value": 1,
+          "tags": []
+        }
+      ]
+    },
+    "RaycastFilterType": {
+      "source_url": "https://raw.githubusercontent.com/Roblox/creator-docs/031b2f91d3d47274c255f3ed5691c29f792c181d/content/en-us/reference/engine/enums/RaycastFilterType.yaml",
+      "source_sha256": "cd399ac38f38bc4b31d66fb91b09374883393445bb7705f915cb815460699dd7",
+      "items": [
+        {
+          "name": "Exclude",
+          "value": 0,
+          "tags": []
+        },
+        {
+          "name": "Include",
+          "value": 1,
+          "tags": []
+        }
+      ]
+    }
+  }
+}
