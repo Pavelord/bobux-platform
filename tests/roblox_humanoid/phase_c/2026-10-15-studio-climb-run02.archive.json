@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "kind": "own_native_evidence_archive",
+  "source_basename": "2026-10-15-studio-climb-run02.raw.log",
+  "raw_bytes": 75283757,
+  "raw_sha256": "2e52e496a1b363d5fcc7807452d3ac0cfbe9fb5947179d93654d7ef55126fafd",
+  "packed_bytes": 8455346,
+  "packed_sha256": "163479d4074498165f2b2b9e2b8c95142b64145b0cdf4ad4ed092abbb5b6b086",
+  "codec": {
+    "name": "zstd",
+    "level": 3,
+    "write_content_size": true,
+    "write_checksum": true,
+    "single_frame": true
+  },
+  "strict_utf8": true,
+  "zstandard_package_version": "0.25.0",
+  "scope": "Byte-exact storage of own native telemetry; no parity result"
+}
