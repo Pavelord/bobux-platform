@@ -1,0 +1,4 @@
+# Source hashes in evidence manifests refer to exact bytes.
+*.gd -text
+*.luau -text
+*.py -text

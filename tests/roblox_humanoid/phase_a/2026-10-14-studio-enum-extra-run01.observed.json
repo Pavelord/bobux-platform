@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "run_id": "06e5b50d-dbad-4187-bf85-12d34a204bc8",
+  "status": "OBSERVED",
+  "rows": 6,
+  "sequence": "1..6",
+  "marker_issues": [],
+  "raw_marker_sha256": "eac64122882d9dd8676acb467dc02cd2d7bfdc1d07f2ab6e1906ab51c07f4264",
+  "structured_sha256": "bf0cfd177f200ded653b4423d5acdbd99e346aa24cd582599c9bc4f9c1f56306",
+  "probe_source_sha256": "9c63fc93164d610d3922f8ae544a597ee6f069bdb28c2281a57a40c7968d8522",
+  "native_source_file": "0.742.0.7421053_20261014T205732Z_Studio_44174_last.log",
+  "cases": [
+    "negative_fraction_half",
+    "negative_fraction_one_half",
+    "alias_FromName_Blacklist",
+    "alias_FromName_Whitelist",
+    "FromValue_other_enum_receiver",
+    "GetEnumItems_other_enum_receiver"
+  ]
+}

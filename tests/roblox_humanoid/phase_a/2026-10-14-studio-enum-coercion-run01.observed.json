@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "kind": "enum_coercion_evidence_report",
+  "run_id": "c475020d-1687-4cb5-9b53-2ecbe4d5a2f7",
+  "studio_version": "0.742.0.7421053",
+  "raw_sha256": "bf6f00d2dd18a509353347852a76aec14ae5778e81e23eb2773923961e154e19",
+  "raw_rows": 543,
+  "blocked_rows": 0,
+  "parser_issues": [],
+  "status": "OBSERVED",
+  "parity_status": "NOT_IMPLEMENTED_NOT_CALIBRATED",
+  "contexts": {
+    "manifest_or_fixture": 1,
+    "enum": 246,
+    "enums": 6,
+    "enum_item": 20,
+    "fresh": 108,
+    "live_workspace": 144,
+    "track_loaded_then_controller_detached": 18
+  },
+  "native_pcall_outcomes": {
+    "True": 220,
+    "False": 322
+  },
+  "source_policy": "Only Bobux-authored black-box probe measurements; no original script Source, asset IDs or keyframes retained"
+}

@@ -1,0 +1,375 @@
+{
+  "checks": [
+    {
+      "details": "Luau 0.719",
+      "name": "Native Luau version",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "36226a4f7dde505e224e5fbccefb26c8584ffd4ef752a02f9d5e9a771243237b",
+      "name": "immutable native reference SHA256 and run identity",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native root type strings and readonly error",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed HumanoidStateType order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed AnimationPriority order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed CameraType order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed Material order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed SensorMode order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed SensorUpdateType order properties identity readonly",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "bf6f00d2dd18a509353347852a76aec14ae5778e81e23eb2773923961e154e19",
+      "name": "immutable native coercion reference SHA256 and run identity",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native coercion restore tagged own observations",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed HumanoidStateType FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed AnimationPriority FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed CameraType FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed Material FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed SensorMode FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native observed RaycastFilterType FromName FromValue arity errors",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native GetEnums alphabetic covered subset (648 full types not implemented)",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native item aliases readonly reads operators and root receiver",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "bf0cfd177f200ded653b4423d5acdbd99e346aa24cd582599c9bc4f9c1f56306",
+      "name": "immutable native extra reference SHA256 and run identity",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "native negative fractions aliases and actual Enum receiver",
+      "ok": true,
+      "provenance": "MEASURED"
+    },
+    {
+      "details": "",
+      "name": "Name Value EnumType",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "userdata typeof tostring",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "equal domains and unequal numeric values",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "table key identity",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "native push preserves userdata identity",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "GetEnumItems sparse domain and singleton values",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "GetEnums returns real enum types",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "FromName FromValue canonical identity and fractional truncation",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "read only item type root",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "unknown member and internals unavailable",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "property fixture assignment round trip",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "boundary stores scalar IDs",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "fixture strict input policy (native coercion pending)",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "ExistingNumericEnums unchanged namespace and shared raw store",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "two VM profile isolation on shared data",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "strict and explicit numeric coercion",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "nonfinite and fractional numeric rejection",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "unknown profile rejected without numeric fallback",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "missing owner control retains only item userdata",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "LuaAPI.configure_gc(GC_COLLECT) result=0",
+      "name": "missing owner control actual full GC",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "missing owner control expires registry and weak parent",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "missing owner control exposes no fabricated parent",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "missing owner control teardown releases isolated item",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "first parity VM retains item after namespace removed",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "second parity VM retains independent table keys",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "LuaAPI.configure_gc(GC_COLLECT) result=0",
+      "name": "first parity VM actual full GC after globals removed",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "LuaAPI.configure_gc(GC_COLLECT) result=0",
+      "name": "second parity VM actual full GC after globals removed",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "VM owners retain registry type and item",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "live first parity VM after external owner released",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "second VM survives first VM teardown",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "LuaAPI.configure_gc(GC_COLLECT) result=0",
+      "name": "remaining parity VM actual full GC after first closed",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "live second parity VM after first closed",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    },
+    {
+      "details": "",
+      "name": "last VM teardown releases registry graph without cycles",
+      "ok": true,
+      "provenance": "ENGINE_APPROXIMATION"
+    }
+  ],
+  "coercion_reference": {
+    "path": "res://tests/roblox_humanoid/phase_a/2026-10-14-studio-enum-coercion-run01.raw.json",
+    "rows": 543,
+    "run_id": "c475020d-1687-4cb5-9b53-2ecbe4d5a2f7",
+    "sha256": "bf6f00d2dd18a509353347852a76aec14ae5778e81e23eb2773923961e154e19"
+  },
+  "extra_reference": {
+    "path": "res://tests/roblox_humanoid/phase_a/2026-10-14-studio-enum-extra-run01.raw.json",
+    "rows": 6,
+    "run_id": "06e5b50d-dbad-4187-bf85-12d34a204bc8",
+    "sha256": "bf0cfd177f200ded653b4423d5acdbd99e346aa24cd582599c9bc4f9c1f56306"
+  },
+  "fail": 0,
+  "native_reference": {
+    "observed_domains": 6,
+    "observed_items": 83,
+    "path": "res://tests/roblox_humanoid/phase_a/2026-10-14-studio-run02.raw.log",
+    "run_id": "56d7b7d5-beac-4f26-ba3e-d771a14ece51",
+    "seq": 2,
+    "sha256": "36226a4f7dde505e224e5fbccefb26c8584ffd4ef752a02f9d5e9a771243237b"
+  },
+  "not_implemented": [
+    "GetEnums 648 complete domains",
+    "native class-specific property/method input coercion in production",
+    "production shared wrapper/event boundary",
+    "require/task profile propagation",
+    "network codec and negotiation"
+  ],
+  "not_observed": [
+    "large numeric conversion boundaries",
+    "function/Vector3 input conversion"
+  ],
+  "pass": 54,
+  "scope": "isolated EnumItem prototype, not production A3 completion",
+  "godot_version": "4.7.stable.official.5b4e0cb0f",
+  "luau_version": "0.719",
+  "host": "Windows desktop; Android not tested by this validator",
+  "exit_code": 0,
+  "source_sha256": {
+    "addons/roblox_runtime/enums/roblox_enums.gd": "971893889865abf25cde50e16dd34b72570ee361866227f6c21b697861667f06",
+    "addons/roblox_runtime/enums/roblox_enum_item.gd": "cfd948a81327a5b889129fb2b92fe39634334f61add26553a74cd36e5b2772a9",
+    "addons/roblox_runtime/enums/roblox_enum_registry.gd": "1890840aa27c4d8a5dd359d0d974218b393371c2537c814ba792d9440b96423d",
+    "addons/roblox_runtime/enums/roblox_enum_type.gd": "5a7459bd4aa149baca7784cef824a6fd232d67919d8e9270fde56aabf9a093c2",
+    "tools/character_parity/validate_enumitem_prototype.gd": "9acdc223d052161a8c75314995b03fa8b93fc3dcc86c01d398a2ad9537cbeea9"
+  },
+  "runtime_log_sha256": "46a6df5cd013d667d6f7f285e3af419d9fabee016e740d18d2176a3991a7d2ed",
+  "prior_run_status": "r02 parse failure; preserved log; historical18PASS baseline not overwritten"
+}
