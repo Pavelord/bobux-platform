@@ -12,6 +12,14 @@ const COERCION_RUN_ID := "c475020d-1687-4cb5-9b53-2ecbe4d5a2f7"
 const EXTRA_REFERENCE := "res://tests/roblox_humanoid/phase_a/2026-10-14-studio-enum-extra-run01.raw.json"
 const EXTRA_SHA256 := "bf0cfd177f200ded653b4423d5acdbd99e346aa24cd582599c9bc4f9c1f56306"
 const EXTRA_RUN_ID := "06e5b50d-dbad-4187-bf85-12d34a204bc8"
+const CHARACTER_DOMAIN_REFERENCE := "res://tests/roblox_humanoid/phase_a/2026-10-15-studio-character-enums-run01.raw.json"
+const CHARACTER_DOMAIN_SHA256 := "9b3a8f4aabc02ad0fc2be5ddb040385d2bf03ec7c367a1897be67ea0ac1e0315"
+const CHARACTER_DOMAIN_RUN_ID := "664b4f14-6de7-42a1-95b3-2e80065d19ec"
+const OFFICIAL_SCHEMA := "res://tests/roblox_humanoid/phase_a/creator_docs_api.json"
+const OFFICIAL_SCHEMA_SHA256 := "82d9ba4b397c95077ae4a8389f0c13f359ed3b877df4514e0c43653cfccca088"
+const OFFICIAL_SUPPLEMENT := "res://tests/roblox_humanoid/phase_a/creator_docs_enum_supplement.json"
+const OFFICIAL_SUPPLEMENT_SHA256 := "515095e342115f9b429877c509b101bd04384d82a7c148d821e14c0fb926e624"
+const OFFICIAL_COMMIT := "031b2f91d3d47274c255f3ed5691c29f792c181d"
 var checks: Array[Dictionary] = []
 
 class PropertyFixture extends RefCounted:
@@ -159,6 +167,94 @@ func native_reference() -> Dictionary:
 	record("immutable native reference SHA256 and run identity", valid, digest, "MEASURED")
 	return reference if valid else {}
 
+func character_domain_reference() -> Dictionary:
+	var digest := FileAccess.get_sha256(CHARACTER_DOMAIN_REFERENCE)
+	if digest != CHARACTER_DOMAIN_SHA256:
+		record("immutable ten-domain native reference SHA256", false, digest, "MEASURED")
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CHARACTER_DOMAIN_REFERENCE))
+	var valid: bool = parsed is Dictionary and parsed.get("kind") == "character_enum_domains" and parsed.get("schema") == 1 and parsed.get("run_id") == CHARACTER_DOMAIN_RUN_ID and parsed.get("studio_version") == "0.743.0.7431133" and parsed.get("status") == "OBSERVED" and parsed.get("blocked_domains") == 0 and parsed.get("domain_count") == 10 and parsed.get("canonical_item_count") == 99 and parsed.get("families", []).size() == 10
+	record("immutable ten-domain native reference SHA256 run counts", valid, digest, "MEASURED")
+	return parsed if valid else {}
+
+func compare_native_character_domains(lua: Variant, reference: Dictionary) -> void:
+	if reference.is_empty(): return
+	lua.push_variant("nativeCharacterDomains", reference)
+	run_case(lua, "native ten domains all 99 canonical items in observed order", """
+local reference = nativeCharacterDomains
+assert(type(Enum) == reference.root.lua_type and typeof(Enum) == reference.root.type)
+assert(tostring(Enum) == reference.root.tostring)
+assert(#Enum:GetEnums() == reference.domain_count)
+local seen, count = {}, 0
+for _, observed in ipairs(reference.families) do
+    assert(not seen[observed.name])
+    seen[observed.name] = true
+    local family = Enum[observed.name]
+    assert(type(family) == observed.lua_type and typeof(family) == observed.type)
+    assert(tostring(family) == observed.tostring)
+    local items = family:GetEnumItems()
+    assert(#items == observed.item_count and #items == #observed.items)
+    for index, expected in ipairs(observed.items) do
+        assert(index == expected.order)
+        local actual = items[index]
+        assert(actual.Name == expected.Name and actual.Value == expected.Value)
+        assert(type(actual) == expected.lua_type and typeof(actual) == expected.type)
+        assert(tostring(actual) == expected.tostring)
+        assert(tostring(actual.EnumType) == expected.EnumType)
+        assert((actual.EnumType == family) == expected.family_identity)
+        assert((actual == family[actual.Name]) == expected.identity_equal)
+        count += 1
+    end
+end
+assert(count == reference.canonical_item_count and count == 99)
+for _, family in ipairs(Enum:GetEnums()) do assert(seen[tostring(family)]) end
+""", "MEASURED")
+	run_case(lua, "native ten-domain capture Raycast aliases lookup and FromName", """
+local function compare(callback, expected)
+    local result = table.pack(pcall(callback))
+    assert(result[1] == expected.ok)
+    assert(expected.ok and result.n - 1 == expected.return_count)
+    for index, observed in ipairs(expected.returns) do
+        local actual = result[index + 1]
+        assert(type(actual) == observed.lua_type and typeof(actual) == observed.type)
+        assert(actual.Name == observed.Name and actual.Value == observed.Value)
+        assert(tostring(actual.EnumType) == observed.EnumType)
+        assert(tostring(actual) == observed.tostring)
+    end
+end
+assert(#nativeCharacterDomains.aliases == nativeCharacterDomains.alias_count)
+for _, observed in ipairs(nativeCharacterDomains.aliases) do
+    local family = Enum[observed.domain]
+    compare(function() return family[observed.alias] end, observed.lookup)
+    compare(function() return family:FromName(observed.alias) end, observed.from_name)
+end
+""", "MEASURED")
+	lua.push_variant("nativeCharacterDomains", null)
+
+func compare_pinned_official_schema() -> void:
+	var digest := FileAccess.get_sha256(OFFICIAL_SCHEMA)
+	var supplement_digest := FileAccess.get_sha256(OFFICIAL_SUPPLEMENT)
+	if digest != OFFICIAL_SCHEMA_SHA256 or supplement_digest != OFFICIAL_SUPPLEMENT_SHA256:
+		record("pinned official enum schema SHA256", false, "%s / %s" % [digest, supplement_digest], "DOCUMENTED")
+		return
+	var official: Variant = JSON.parse_string(FileAccess.get_file_as_string(OFFICIAL_SCHEMA))
+	var supplement: Variant = JSON.parse_string(FileAccess.get_file_as_string(OFFICIAL_SUPPLEMENT))
+	var valid: bool = official is Dictionary and supplement is Dictionary and official.get("commit") == OFFICIAL_COMMIT and supplement.get("commit") == OFFICIAL_COMMIT
+	record("pinned official enum schema identity SHA256", valid, OFFICIAL_COMMIT, "DOCUMENTED")
+	if not valid: return
+	var enums: Dictionary = official.get("enums", {}).duplicate(true)
+	enums.merge(supplement.get("enums", {}), true)
+	var covered_items := 0
+	for domain in REGISTRY.DEFINITIONS:
+		var expected: Dictionary = {}
+		for entry in enums.get(domain, {}).get("items", []): expected[entry.name] = int(entry.value)
+		var actual: Dictionary = {}
+		for pair in REGISTRY.DEFINITIONS[domain]: actual[pair[0]] = int(pair[1])
+		var pairs_match: bool = not expected.is_empty() and actual == expected and actual.size() == REGISTRY.DEFINITIONS[domain].size()
+		record("pinned official %s all definition pairs" % domain, pairs_match, "%d items" % actual.size(), "DOCUMENTED")
+		covered_items += actual.size()
+	record("pinned official ten-domain scope 99 items", REGISTRY.DEFINITIONS.size() == 10 and enums.size() == 10 and covered_items == 99, "%d domains / %d items" % [REGISTRY.DEFINITIONS.size(), covered_items], "DOCUMENTED")
+
 func compare_native_observation(lua: Variant, reference: Dictionary) -> void:
 	if reference.is_empty(): return
 	lua.push_variant("nativeEnumRoot", {"lua_type": reference.enum_lua_type, "type": reference.enum_type, "tostring": reference.enum_tostring, "write": reference.enums_write})
@@ -296,7 +392,7 @@ end
 	lua.push_variant("nativeRootSubset", root_subset)
 	run_case(lua, "native GetEnums alphabetic covered subset (648 full types not implemented)", """
 local subset = Enum:GetEnums()
-assert(#subset == #nativeRootSubset and #subset == 7)
+assert(#subset == #nativeRootSubset and #subset == 10)
 for i, expected in ipairs(nativeRootSubset) do assert(tostring(subset[i]) == expected) end
 assert(#Enum:GetEnums(123) == #subset)
 """, "MEASURED")
@@ -418,6 +514,9 @@ func run() -> void:
 	compare_native_observation(parity, reference)
 	compare_native_coercion(parity)
 	compare_native_extra(parity)
+	var character_reference := character_domain_reference()
+	compare_native_character_domains(parity, character_reference)
+	compare_pinned_official_schema()
 	run_case(parity, "Name Value EnumType", """
 local item = Enum.HumanoidStateType.Jumping
 assert(item.Name == 'Jumping' and item.Value == 3)
@@ -466,12 +565,12 @@ assert(#Enum.HumanoidStateType:GetEnumItems() == 17)
 """)
 	run_case(parity, "GetEnums returns real enum types", """
 local enums = Enum:GetEnums()
-assert(#enums == 7)
+assert(#enums == 10)
 for _, enumType in ipairs(enums) do
     assert(typeof(enumType) == 'Enum' and #enumType:GetEnumItems() > 0)
 end
 enums[1] = nil
-assert(#Enum:GetEnums() == 7)
+assert(#Enum:GetEnums() == 10)
 """)
 	run_case(parity, "FromName FromValue canonical identity and fractional truncation", """
 assert(Enum.HumanoidStateType:FromName('Jumping') == Enum.HumanoidStateType.Jumping)
@@ -542,7 +641,7 @@ assert(itemKeyTable[Enum.HumanoidStateType.Jumping]==27)
 	var failed := 0
 	for result in checks:
 		if not result.ok: failed += 1
-	var report := {"scope": "isolated EnumItem prototype, not production A3 completion", "checks": checks, "pass": checks.size() - failed, "fail": failed, "native_reference": {"path": NATIVE_REFERENCE, "sha256": NATIVE_REFERENCE_SHA256, "run_id": NATIVE_RUN_ID, "seq": 2, "observed_domains": 6, "observed_items": 83}, "coercion_reference": {"path": COERCION_REFERENCE, "sha256": COERCION_SHA256, "run_id": COERCION_RUN_ID, "rows": 543}, "extra_reference": {"path": EXTRA_REFERENCE, "sha256": EXTRA_SHA256, "run_id": EXTRA_RUN_ID, "rows": 6}, "not_observed": ["large numeric conversion boundaries", "function/Vector3 input conversion"], "not_implemented": ["GetEnums 648 complete domains", "native class-specific property/method input coercion in production", "production shared wrapper/event boundary", "require/task profile propagation", "network codec and negotiation"]}
+	var report := {"scope": "isolated EnumItem prototype, not production A3 completion", "checks": checks, "pass": checks.size() - failed, "fail": failed, "native_reference": {"path": NATIVE_REFERENCE, "sha256": NATIVE_REFERENCE_SHA256, "run_id": NATIVE_RUN_ID, "seq": 2, "observed_domains": 6, "observed_items": 83}, "coercion_reference": {"path": COERCION_REFERENCE, "sha256": COERCION_SHA256, "run_id": COERCION_RUN_ID, "rows": 543}, "extra_reference": {"path": EXTRA_REFERENCE, "sha256": EXTRA_SHA256, "run_id": EXTRA_RUN_ID, "rows": 6}, "character_domain_reference": {"path": CHARACTER_DOMAIN_REFERENCE, "sha256": CHARACTER_DOMAIN_SHA256, "run_id": CHARACTER_DOMAIN_RUN_ID, "observed_domains": 10, "observed_items": 99, "native_namespace_count": character_reference.get("root", {}).get("count")}, "official_schema": {"path": OFFICIAL_SCHEMA, "sha256": OFFICIAL_SCHEMA_SHA256, "supplement_path": OFFICIAL_SUPPLEMENT, "supplement_sha256": OFFICIAL_SUPPLEMENT_SHA256, "commit": OFFICIAL_COMMIT}, "not_observed": ["large numeric conversion boundaries", "function/Vector3 input conversion"], "not_implemented": ["complete native Enum namespace (648 types on 0.742; 651 on 0.743)", "native class-specific property/method input coercion in production", "production shared wrapper/event boundary", "require/task profile propagation", "network codec and negotiation"]}
 	DirAccess.make_dir_recursive_absolute("res://.codex-tmp/character_parity")
 	var destination := report_path()
 	if FileAccess.file_exists(destination):

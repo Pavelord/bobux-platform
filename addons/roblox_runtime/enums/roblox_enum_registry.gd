@@ -6,6 +6,9 @@ extends RefCounted
 ## run 56d7b7d5-beac-4f26-ba3e-d771a14ece51, kind a3_enum_probe.
 ## RaycastFilterType and aliases: studio-enum-coercion-run01.raw.json,
 ## run c475020d-1687-4cb5-9b53-2ecbe4d5a2f7, enum_identity/alias observations.
+## Ten-domain order/items confirmed in Studio 0.743.0.7431133:
+## 2026-10-15-studio-character-enums-run01.raw.json,
+## run 664b4f14-6de7-42a1-95b3-2e80065d19ec; 99 canonical items.
 ## ExistingNumericEnums must remain the default for current production VMs.
 
 const ITEM_SCRIPT = preload("res://addons/roblox_runtime/enums/roblox_enum_item.gd")
@@ -23,8 +26,13 @@ const DEFINITIONS := {
 		["Climbing", 12], ["Seated", 13], ["PlatformStanding", 14],
 		["Dead", 15], ["Physics", 16], ["None", 18],
 	],
+	"HumanoidRigType": [["R6", 0], ["R15", 1]],
 	"CameraType": [["Fixed", 0], ["Attach", 1], ["Watch", 2], ["Track", 3],
 		["Follow", 4], ["Custom", 5], ["Scriptable", 6], ["Orbital", 7]],
+	"CameraMode": [["Classic", 0], ["LockFirstPerson", 1]],
+	"CoreGuiType": [["PlayerList", 0], ["Health", 1], ["Backpack", 2], ["Chat", 3],
+		["All", 4], ["EmotesMenu", 5], ["SelfView", 6], ["Captures", 7],
+		["AvatarSwitcher", 8], ["ExperienceShop", 9]],
 	"AnimationPriority": [["Idle", 0], ["Movement", 1], ["Action", 2],
 		["Action2", 3], ["Action3", 4], ["Action4", 5], ["Core", 1000]],
 	"Material": [["Plastic", 256], ["SmoothPlastic", 272], ["Neon", 288],
@@ -47,7 +55,10 @@ const DEFINITIONS := {
 const ALIASES := {"RaycastFilterType": {"Blacklist": "Exclude", "Whitelist": "Include"}}
 const SOURCES := {
 	"HumanoidStateType": "https://create.roblox.com/docs/reference/engine/enums/HumanoidStateType",
+	"HumanoidRigType": "https://create.roblox.com/docs/reference/engine/enums/HumanoidRigType",
 	"CameraType": "https://create.roblox.com/docs/reference/engine/enums/CameraType",
+	"CameraMode": "https://create.roblox.com/docs/reference/engine/enums/CameraMode",
+	"CoreGuiType": "https://create.roblox.com/docs/reference/engine/enums/CoreGuiType",
 	"AnimationPriority": "https://create.roblox.com/docs/reference/engine/enums/AnimationPriority",
 	"Material": "https://create.roblox.com/docs/reference/engine/enums/Material",
 	"SensorMode": "https://create.roblox.com/docs/reference/engine/enums/SensorMode",
