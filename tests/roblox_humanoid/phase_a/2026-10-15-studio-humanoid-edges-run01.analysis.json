@@ -1,0 +1,2256 @@
+{
+  "schema": 1,
+  "status": "OBSERVED_NOT_PARITY_PASS",
+  "run_id": "481ea197-ed76-4972-b05e-7a875c3fc888",
+  "studio_version": "0.743.0.7431133",
+  "date_utc": "2026-10-15T11:11:12Z",
+  "raw_path": "tests/roblox_humanoid/phase_a/2026-10-15-studio-humanoid-edges-run01.raw.json",
+  "raw_sha256": "22772eaa9965b6711656ab67f231c440c8a9dbcaca57b3e990824af9bdb28b9e",
+  "native_rows": 91,
+  "enabled_inputs": [
+    {
+      "id": "numeric_string",
+      "raw_arg": {
+        "value": "8",
+        "type": "string"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.04836289957165718,
+            0.008069167844951153
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.03832854703068733,
+            0.019956951960921288
+          ]
+        }
+      ],
+      "events": []
+    },
+    {
+      "id": "full_enum_string",
+      "raw_arg": {
+        "value": "Enum.HumanoidStateType.Running",
+        "type": "string"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.004945280030369759,
+            0.024726400151848793
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.007912447676062584,
+            0.0237373448908329
+          ]
+        }
+      ],
+      "events": []
+    },
+    {
+      "id": "unknown_string",
+      "raw_arg": {
+        "value": "BOBUX_NONEXISTENT_ITEM",
+        "type": "string"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.005934336222708225,
+            0.026302296668291092
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 0,
+          "events_after_window": 0,
+          "heartbeat_dt": [
+            0.010037840344011784,
+            0.020075680688023567
+          ]
+        }
+      ],
+      "events": []
+    },
+    {
+      "id": "canonical_name_control",
+      "raw_arg": {
+        "value": "Running",
+        "type": "string"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [
+            "Running"
+          ],
+          "disabled_after_window": [
+            "Running"
+          ],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 1,
+          "events_after_window": 1,
+          "heartbeat_dt": [
+            0.013049191795289516,
+            0.18525877594947815
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 2,
+          "events_after_window": 2,
+          "heartbeat_dt": [
+            0.05364220216870308,
+            0.022311965003609657
+          ]
+        }
+      ],
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 0.23680110000077548,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_false_immediate",
+          "seq": 1
+        },
+        {
+          "humanoid": "target",
+          "wall_s": 0.43363790000057634,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_true_immediate",
+          "seq": 2
+        }
+      ]
+    },
+    {
+      "id": "canonical_item_control",
+      "raw_arg": {
+        "Value": 8,
+        "type": "EnumItem",
+        "Name": "Running",
+        "EnumType": "HumanoidStateType"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [
+            "Running"
+          ],
+          "disabled_after_window": [
+            "Running"
+          ],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 1,
+          "events_after_window": 1,
+          "heartbeat_dt": [
+            0.007883296348154545,
+            0.04828518629074097
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 2,
+          "events_after_window": 2,
+          "heartbeat_dt": [
+            0.012810355983674526,
+            0.055561646819114685
+          ]
+        }
+      ],
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 0.5106216000003769,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_false_immediate",
+          "seq": 1
+        },
+        {
+          "humanoid": "target",
+          "wall_s": 0.5685416000005716,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_true_immediate",
+          "seq": 2
+        }
+      ]
+    },
+    {
+      "id": "canonical_number_control",
+      "raw_arg": {
+        "value": 8,
+        "type": "number"
+      },
+      "disabled_before": [],
+      "operations": [
+        {
+          "enabled": false,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [
+            "Running"
+          ],
+          "disabled_after_window": [
+            "Running"
+          ],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 1,
+          "events_after_window": 1,
+          "heartbeat_dt": [
+            0.03709941729903221,
+            0.02105642668902874
+          ]
+        },
+        {
+          "enabled": true,
+          "call": {
+            "ok": true,
+            "returns": [],
+            "return_count": 0
+          },
+          "disabled_immediate": [],
+          "disabled_after_window": [],
+          "raw_getter_after_window": {
+            "ok": true,
+            "returns": [
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "return_count": 1
+          },
+          "events_after_immediate": 2,
+          "events_after_window": 2,
+          "heartbeat_dt": [
+            0.008569643832743168,
+            0.057459477335214615
+          ]
+        }
+      ],
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 0.6349057000006724,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_false_immediate",
+          "seq": 1
+        },
+        {
+          "humanoid": "target",
+          "wall_s": 0.6923968000000968,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "set_true_immediate",
+          "seq": 2
+        }
+      ]
+    }
+  ],
+  "method_calls": [
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "correct",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0060483659617602825,
+        0.04332488402724266
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "other_humanoid",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.008905814960598946,
+        0.02275930531322956
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "omitted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.006926745176315308,
+        0.01979069970548153
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "shifted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012863955460488796,
+        0.15983989834785461
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "explicit_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.007936735637485981,
+        0.020833931863307953
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "table",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012897196225821972,
+        0.015873471274971962
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "part",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.017867686226963997,
+        0.017160361632704735
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "number",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.15247900784015656,
+        0.02092767506837845
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "receiver",
+      "id": "enum_item",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function ChangeState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.009990209713578224,
+        0.07892265915870667
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "missing",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0074066221714019775,
+        0.022283118218183517
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "one_nil",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.00810295157134533,
+        0.019244510680437088
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_only",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.015193034894764423,
+        0.01721877232193947
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_nil",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01620590314269066,
+        0.16198672354221344
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_false",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.009954850189387798,
+        0.08549325168132782
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_true",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07469026744365692,
+        0.024250896647572517
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_false_trailing_nil",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011114994063973427,
+        0.08683287352323532
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.010966879315674305,
+        0.08678808808326721
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "nil_false",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012880920432507992,
+        0.08771798014640808
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "nil_nil",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0120081240311265,
+        0.08441939204931259
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "nil_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07477408647537231,
+        0.025051524862647057
+      ]
+    },
+    {
+      "method": "ChangeState",
+      "category": "arity",
+      "id": "state_nil_extra",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07290156930685043,
+        0.025000525638461113
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "correct",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.010000210255384445,
+        0.08536814898252487
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "other_humanoid",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.078345388174057,
+        0.025967422872781754
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "omitted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01098621729761362,
+        0.08983317017555237
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "shifted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07119204103946686,
+        0.02886425144970417
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "explicit_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0169204231351614,
+        0.08113826811313629
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "table",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.013164008036255836,
+        0.08812112361192703
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "part",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.013985985890030861,
+        0.08865948021411896
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "number",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.015851488336920738,
+        0.0842038244009018
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "receiver",
+      "id": "enum_item",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetState"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07154668122529984,
+        0.02701493166387081
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "missing",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012006635777652264,
+        0.08368045836687088
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "one_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.010827739723026752,
+        0.09091422706842422
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_only",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.009001323021948338,
+        0.09034012258052826
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07777033746242523,
+        0.025974858552217484
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_false",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01598452776670456,
+        0.08316394686698914
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_true",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07713931053876877,
+        0.02603554166853428
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_false_trailing_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0762329176068306,
+        0.029068874195218086
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011026125401258469,
+        0.09361963719129562
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "nil_false",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.00998649001121521,
+        0.09244610369205475
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "nil_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0839892253279686,
+        0.028023716062307358
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "nil_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012010163627564907,
+        0.08995981514453888
+      ]
+    },
+    {
+      "method": "GetState",
+      "category": "arity",
+      "id": "state_nil_extra",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "Value": 18,
+            "type": "EnumItem",
+            "Name": "None",
+            "EnumType": "HumanoidStateType"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01000193040817976,
+        0.08868724852800369
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "correct",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011979947797954082,
+        0.09194491058588028
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "other_humanoid",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07942752540111542,
+        0.025052549317479134
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "omitted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07297459244728088,
+        0.02602522075176239
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "shifted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01501454971730709,
+        0.02016303315758705
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "explicit_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.014030477963387966,
+        0.14403700828552246
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "table",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012007379904389381,
+        0.0862884372472763
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "part",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07213123142719269,
+        0.027676459401845932
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "number",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011861340142786503,
+        0.08846934139728546
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "receiver",
+      "id": "enum_item",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function GetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07417354732751846,
+        0.02380785532295704
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "missing",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.009919939562678337,
+        0.09009384363889694
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "one_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011154340580105782,
+        0.08455017954111099
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_only",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07215573638677597,
+        0.028040796518325806
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.013018940575420856,
+        0.0893930047750473
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_false",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.06942655146121979,
+        0.0261183250695467
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_true",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.015068264678120613,
+        0.01776852086186409
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_false_trailing_nil",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.13788701593875885,
+        0.028974654152989388
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07569285482168198,
+        0.029333587735891342
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "nil_false",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01314953900873661,
+        0.08909986168146133
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "nil_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011868144385516644,
+        0.09346606582403183
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "nil_false_extra",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07274246960878372,
+        0.028699472546577454
+      ]
+    },
+    {
+      "method": "GetStateEnabled",
+      "category": "arity",
+      "id": "state_nil_extra",
+      "call": {
+        "ok": true,
+        "returns": [
+          {
+            "value": true,
+            "type": "boolean"
+          }
+        ],
+        "return_count": 1
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07656038552522659,
+        0.025110799819231033
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "correct",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 6.682765000000472,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [
+        "Running"
+      ],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07373147457838058,
+        0.028197316452860832
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "other_humanoid",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "other",
+          "wall_s": 6.784483200000068,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [
+        "Running"
+      ],
+      "heartbeat_dt": [
+        0.01510570477694273,
+        0.08451860398054123
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "omitted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07191108912229538,
+        0.024013200774788857
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "shifted",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.010005500167608261,
+        0.09110599756240845
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "explicit_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.010063869878649712,
+        0.09048475325107574
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "table",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.015918336808681488,
+        0.08806225657463074
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "part",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07237058877944946,
+        0.026014143601059914
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "number",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07147081196308136,
+        0.02872597984969616
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "receiver",
+      "id": "enum_item",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Expected ':' not '.' calling member function SetStateEnabled"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07392216473817825,
+        0.026017913594841957
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "missing",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.014009646140038967,
+        0.08303006738424301
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "one_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.017941420897841454,
+        0.08398798853158951
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_only",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0744793638586998,
+        0.025912899523973465
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.01550814975053072,
+        0.08719436079263687
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_false",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 7.986061300000074,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [
+        "Running"
+      ],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.07265651971101761,
+        0.0249767005443573
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_true",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 8.084824100000333,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": true,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.013986951671540737,
+        0.0854622945189476
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_false_trailing_nil",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 8.18316600000071,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [
+        "Running"
+      ],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.015030165202915668,
+        0.08960452675819397
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_false_extra",
+      "call": {
+        "ok": true,
+        "returns": [],
+        "return_count": 0
+      },
+      "events": [
+        {
+          "humanoid": "target",
+          "wall_s": 8.286070699999982,
+          "args": {
+            "values": [
+              {
+                "Value": 8,
+                "type": "EnumItem",
+                "Name": "Running",
+                "EnumType": "HumanoidStateType"
+              },
+              {
+                "value": false,
+                "type": "boolean"
+              }
+            ],
+            "n": 2
+          },
+          "phase": "invoke_immediate",
+          "seq": 1
+        }
+      ],
+      "target_disabled_after_window": [
+        "Running"
+      ],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012115740217268467,
+        0.08879020065069199
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "nil_false",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.012356681749224663,
+        0.09125188738107681
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "nil_nil",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011566047556698322,
+        0.09373637288808823
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "nil_false_extra",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 1 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.011386079713702202,
+        0.09075901657342911
+      ]
+    },
+    {
+      "method": "SetStateEnabled",
+      "category": "arity",
+      "id": "state_nil_extra",
+      "call": {
+        "ok": false,
+        "returns": [],
+        "error": "Argument 2 missing or nil"
+      },
+      "events": [],
+      "target_disabled_after_window": [],
+      "other_disabled_after_window": [],
+      "heartbeat_dt": [
+        0.0760636031627655,
+        0.029051898047327995
+      ]
+    }
+  ],
+  "no_fit": true,
+  "limitations": [
+    "One observation per exact input case, not five independent repeats.",
+    "Fresh unparented Humanoids: ChangeState physical effects NOT_OBSERVABLE.",
+    "Signals observed immediately and for two subsequent Heartbeats only.",
+    "Studio 0.743 evidence is kept separate from earlier 0.742 coercion data.",
+    "No claim about script API routes outside these four Humanoid methods."
+  ]
+}

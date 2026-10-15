@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "kind": "humanoid_edge_evidence_report",
+  "run_id": "481ea197-ed76-4972-b05e-7a875c3fc888",
+  "studio_version": "0.743.0.7431133",
+  "raw_sha256": "22772eaa9965b6711656ab67f231c440c8a9dbcaca57b3e990824af9bdb28b9e",
+  "raw_rows": 91,
+  "native_signal_events": 12,
+  "native_pcall_outcomes": {
+    "True": 55,
+    "False": 41
+  },
+  "categories": {
+    "manifest": 1,
+    "enabled_string": 6,
+    "method_call": 84
+  },
+  "parser_issues": [],
+  "status": "OBSERVED",
+  "parity_status": "NOT_CALIBRATED",
+  "physical_ChangeState_status": "NOT_OBSERVABLE_UNPARENTED_FIXTURE",
+  "source_policy": "Only own black-box probe data; no original scripts/assets/keyframes exported"
+}
