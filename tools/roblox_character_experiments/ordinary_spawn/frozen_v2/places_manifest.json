@@ -1,0 +1,26 @@
+{
+  "scope": "preregistered source-ready native places; no Play capture performed",
+  "registration_sha256": "b2f02492b81644565aed45b7d4fb6798318457b7d995a12197807e132a7dd273",
+  "place_sha256": {
+    "native_default_r6_default_play1.rbxlx": "3232c69d0bb7ebff954fe858aeab30a8054ff283222b92bd946e5290387d9594",
+    "native_default_r6_default_play2.rbxlx": "51f22b12bc7f39f0f195a508a76c9c0a34d61ffb9792a4ec81686eef19031006",
+    "native_default_r6_default_play3.rbxlx": "46ddb9da8d928d0c76f5039f5370de1df6b54e8cde037a505131ce8b9ac69ff4",
+    "native_default_r6_default_play4.rbxlx": "e52019518b28b58dd851d6c8c15e5ae5a50964350a8eeb476fb661b986999ace",
+    "native_default_r6_default_play5.rbxlx": "9b0e3d204a0d2ca072d2514784a00d067bc610a3cabe836493a4006de2872c4a",
+    "native_default_r6_altered_play1.rbxlx": "e03f19b26bcc7b6a13cd54b95453007289afbdf85ccc3007ef6e9af37a7c7481",
+    "native_default_r6_altered_play2.rbxlx": "80648f8f231c56ddcf98ad4d5785397f5e80307fbf35c420e56937d453906e22",
+    "native_default_r6_altered_play3.rbxlx": "63849113ddec635bc68de8b27231948fa894cfbfcaca94986030e1627dde0acd",
+    "native_default_r6_altered_play4.rbxlx": "b3b29b9d612bb27fe32351367ff1bbfd879afb346a7cc48074ba77273021ace7",
+    "native_default_r6_altered_play5.rbxlx": "7f78e33e3069e2ceb64faa1ea5adb0852415b1d8686ad271b8b141051a1da183",
+    "native_default_r15_default_play1.rbxlx": "65faba5e20c1a582bc32e9e96d4d33b4d1813a53212aa25bd18e78dea118d6b4",
+    "native_default_r15_default_play2.rbxlx": "51acf068a1999d6d2928f98300d30450e29f71b33d5e4a760ff5bcd0cb42fd21",
+    "native_default_r15_default_play3.rbxlx": "2e9809310991f8851124f1eac2ae8e54757ebb7246242388943b3ce8424b51d1",
+    "native_default_r15_default_play4.rbxlx": "92dcb4a5079c05e39e412eb82927ef1686a8fa33524ff17fa54269ae56aad812",
+    "native_default_r15_default_play5.rbxlx": "3079845fc5df446da5b269f5f204477f933a5a92d5825d2e9c4583ba8895a653",
+    "native_default_r15_altered_play1.rbxlx": "a341c5b89b14eff5172a51a9f8b544b160c0349328e317dd01aa9119c09631af",
+    "native_default_r15_altered_play2.rbxlx": "c0c503ae8aea6fe210facfa7fde8c77adfbc404080a9a810f12ab942c0a2ccad",
+    "native_default_r15_altered_play3.rbxlx": "0421307ea71a0a82870a87609fdb8edeee55b4267f285448db22166e031f36e7",
+    "native_default_r15_altered_play4.rbxlx": "0ef2b89bffdde14760dfb2c6f04e8d10c619f8eb2f80bfc67bb6eedf59c7a08e",
+    "native_default_r15_altered_play5.rbxlx": "d8c7dd6850d5c898b375944d5043a876d632cb1ddc37cb2c63d4fd2c4415ecb2"
+  }
+}

@@ -1,3 +1,4 @@
 # Fixture source hashes are preregistered before native capture.
 *.luau -text
 *.rbxlx -text
+*.py -text

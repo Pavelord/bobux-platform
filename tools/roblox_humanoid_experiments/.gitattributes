@@ -1,0 +1,2 @@
+# The reused XML helper is part of the native fixture provenance.
+*.py -text
