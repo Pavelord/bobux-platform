@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs><radialGradient id="halo"><stop stop-color="#6a341c"/><stop offset=".45" stop-color="#332019"/><stop offset="1" stop-color="#111115"/></radialGradient><linearGradient id="ground" x2="0" y2="1"><stop stop-color="#241a1b"/><stop offset="1" stop-color="#101014"/></linearGradient></defs>
+<rect width="1600" height="900" fill="#111115"/><ellipse cx="1170" cy="390" rx="780" ry="600" fill="url(#halo)"/><circle cx="1250" cy="190" r="105" fill="#ffb35b" opacity=".06"/>
+<path d="M0 780Q300 690 630 770T1200 740T1600 770V900H0Z" fill="url(#ground)"/>
+<g fill="#09090d" opacity=".75"><path d="M1450 850 1440 320 1400 200 1445 275 1470 150 1460 420 1520 300 1490 470 1495 850Z"/><path d="M80 850 100 480 50 330 110 420 145 260 130 570 200 440 150 640 155 850Z"/></g>
+<g fill="#ff9b3d" opacity=".14"><circle cx="630" cy="180" r="3"/><circle cx="720" cy="490" r="2"/><circle cx="1410" cy="660" r="4"/><circle cx="950" cy="730" r="3"/><circle cx="560" cy="680" r="2"/></g>
+<g fill="#08090c"><path d="m1140 110 20 7 14-16 15 16 20-7-12 25-23 12-23-12Z"/><path d="m1360 260 12 5 10-12 10 12 12-5-8 17-14 8-14-8Z"/></g>
+</svg>
