@@ -1,6 +1,6 @@
 # Bobux Legacy Cleanup Audit
 
-Last updated: 2026-06-11.
+Last updated: 2026-10-09.
 
 This file exists so the next clean Codex session does not mistake old deployment
 paths for active game systems.
@@ -20,16 +20,17 @@ paths for active game systems.
 - `autoload/cloud_api.gd`: active Bobux API wrapper. The file keeps a few
   legacy cache/session filenames only so old local sessions can migrate safely;
   it must not be reconnected to Supabase.
-- `autoload/supabase_client.gd`: compatibility shim for old callers. Do not add
-  new Supabase behavior here; route new API calls through `CloudAPI`.
-- `project.godot` autoload name `SupabaseClient`: keep until every old caller is
-  migrated.
+- The `SupabaseClient` shim and autoload were retired on 2026-10-09. All active
+  callers use `CloudAPI`; there is no Supabase runtime connection.
 
 ## Treat As Legacy / Do Not Extend
 
 - `exiting_game/`: old mirrored deployment folder. Current deploy/export scripts
   exclude it. Do not sync or edit it.
-- `supabase/`: old migrations/policies. Do not apply automatically.
+- `supabase/`: retired from the active project on 2026-10-09. Historical files
+  were moved to the ignored `.codex-tmp/retired-supabase` archive after the
+  automatic approval review rejected recursive deletion. The archive has no
+  role in the runtime or client export; do not restore it as an active service.
 - `render.yaml`: removed on 2026-06-11.
 - `docs/free_hosting_guide.md` and `docs/huggingface_setup.md`: removed on 2026-06-11.
 - `tools/sync_exiting_game.ps1`: removed on 2026-06-11.
@@ -63,16 +64,12 @@ paths for active game systems.
 
 ## Next Cleanup Steps
 
-1. Migrate remaining callers away from the `SupabaseClient` autoload name.
-2. Replace legacy local auth/session cache filenames after old exported builds
+1. Replace legacy local auth/session cache filenames after old exported builds
    no longer need migration compatibility.
-3. Delete `supabase/` after confirming there are no needed historical migration
-   notes inside it.
-4. Remove or archive `exiting_game/` outside the project root so Godot stops
+2. Remove or archive `exiting_game/` outside the project root so Godot stops
    warning about the nested `project.godot`.
 
 ## Do Not Do In A Blind Cleanup
 
 - Do not delete `autoload/cloud_api.gd`; it is active despite old names.
-- Do not delete `autoload/supabase_client.gd` until all references are migrated.
 - Do not deploy a build until the user explicitly approves it.

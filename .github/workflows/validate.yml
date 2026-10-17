@@ -85,6 +85,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Validation failed: $test" }
           }
 
+      - name: Validate ENet map asset replication
+        shell: pwsh
+        run: python tools/run_imported_replication_test.py
+
+      - name: Validate WebSocket protocol update rejection
+        shell: pwsh
+        run: python tools/run_network_protocol_gate.py --godot "$env:GODOT_BIN"
+
       - name: Validate launcher install detection
         shell: pwsh
         run: |

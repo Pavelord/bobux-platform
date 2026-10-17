@@ -1,0 +1,35 @@
+name: Задержки и производительность
+description: Помочь воспроизвести торможение или долгую загрузку.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия Bobux или commit
+    validations:
+      required: true
+  - type: textarea
+    id: device
+    attributes:
+      label: Устройство
+      description: ОС, процессор, видеокарта и память либо модель телефона.
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Где и при каких действиях тормозит
+      description: Название режима, число игроков, первый или повторный вход, сеть Wi-Fi / мобильная.
+    validations:
+      required: true
+  - type: textarea
+    id: measurement
+    attributes:
+      label: Наблюдения
+      description: Примерное время загрузки, FPS, длительность зависания и шаги для повторения.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Дополнительные материалы
+      description: Короткая запись или лог без паролей, токенов и персональных данных.

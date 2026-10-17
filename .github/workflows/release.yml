@@ -193,14 +193,17 @@ jobs:
         env:
           BOBUX_AI_API_KEY: ${{ secrets.BOBUX_AI_API_KEY }}
           BOBUX_AI_FOLDER_ID: ${{ secrets.BOBUX_AI_FOLDER_ID }}
+          ALLOW_REDEPLOY: ${{ inputs.allow_redeploy }}
         run: |
+          $recoveryArgs = @()
+          if ($env:ALLOW_REDEPLOY -eq "true") { $recoveryArgs += "--allow-redeploy" }
           python ./tools/deploy_bobux_release_paramiko.py `
             --key-file "$env:BOBUX_DEPLOY_KEY_FILE" `
             --known-hosts "$env:BOBUX_DEPLOY_KNOWN_HOSTS" `
             --version "$env:RELEASE_VERSION" `
             --build "$env:RELEASE_BUILD" `
             --mobile-version "$env:MOBILE_VERSION" `
-            --mobile-build "$env:MOBILE_BUILD"
+            --mobile-build "$env:MOBILE_BUILD" @recoveryArgs
 
       - name: Verify public production endpoints
         if: ${{ inputs.deploy_production }}

@@ -1,115 +1,88 @@
-# Bobux Current Architecture and Cleanup Map
+# Bobux: текущая архитектура и продолжение работы
 
-Last updated: 2026-06-11.
+Обновлено **17 октября 2026** по текущим исходникам. Для запуска и команд сборки см. [DEVELOPMENT.md](DEVELOPMENT.md); общий обзор — [README.md](../README.md).
 
-This file exists so a fresh Codex thread can continue without inheriting the
-confusion from old Supabase, Render, Hugging Face, and `exiting_game` paths.
+## Рабочая копия и артефакты
 
-## Release Rule
+По последнему решению владельца основной проект остаётся в `C:\robloxclone`; внешний SSD используется для сборок и тяжёлых артефактов. Копия `D:\robloxclone` сохраняется как резервная. Не смешивайте Git index и generated files двух копий; новые проверки и дальнейшие изменения выполняются из выбранного основного проекта.
 
-Do not upload a release while this branch is in stabilization. The user asked to
-stop deploying broken builds. Make code changes locally, validate, then ask for
-permission before running deploy scripts.
+17 октября старые локальные build/toolchain-артефакты объёмом около 47,95 GiB вынесены из новой копии в `D:\Bobux_Artifacts\2026-10-17`. Соответствующие старые каталоги с диска C собраны в `C:\Bobux_Delete_After_Check_2026-10-17`; это перемещение для проверки, не удаление. Эти папки не относятся к исходникам и не должны публиковаться в Git. Отдельные команды могут требовать восстановления нужного инструмента или явного пути к нему.
 
-## Active Runtime
+Абсолютные пути выше описывают только текущую локальную миграцию. Сам проект и инструкции для нового clone должны работать относительно корня репозитория.
 
-- Godot project root: `C:/robloxclone`
-- App name: Bobux
-- Main scene: `res://scenes/login/login.tscn`
-- API base: `http://109.71.245.162/api`
-- WebSocket: `ws://109.71.245.162/ws`
-- Backend implementation: `services/bobux_api/server.js`
-- Backend storage/database: PocketBase plus files on the VPS
-- Multiplayer process: Godot headless dedicated server launched with
-  `server/server_main.gd`
+## Область публикации и выпуска
 
-## Active Autoloads
+Текущая задача разрешает обновить исходники и оформление GitHub. Это не команда выпускать клиент, обновлять manifest или развёртывать сервисы на VPS. Для выпуска нужна явная инструкция в действующей задаче и проверка готовых артефактов. Не переносите автоматически разрешение на выпуск из старого Halloween-обсуждения.
 
-- `GameState`: local game/session state.
-- `UserSession`: logged-in user state and avatar snapshot.
-- `Analytics`: lightweight event helper.
-- `CloudAPI`: current Bobux API client despite the legacy name.
-- `SupabaseClient`: legacy compatibility shim only.
-- `MapManager`: map cache/download entry point.
-- `NetworkManager`: WebSocket transport and room join flow.
-- `MobileRuntime`: Android/mobile controls and runtime behavior.
-- `LuaScriptEngine`: experimental script runtime.
+## Активный runtime
 
-## Active But Messy Areas
+| Компонент | Текущий маршрут |
+| --- | --- |
+| Основной проект | `project.godot`, Godot 4.7, Compatibility renderer |
+| Главная сцена | `scenes/login/login.tscn` |
+| Клиент | `scenes/`, `scripts/`, `autoload/` |
+| Нативный скриптинг | Luau 0.719 через `native/luau_bridge/` и `addons/luaAPI/luaAPI.gdextension` |
+| HTTP API | `services/bobux_api/server.js`, Node.js / Express |
+| Данные API | PocketBase, локальные файлы и SQLite-модули |
+| Выделенные комнаты | Godot headless, `server/server_main.gd`, WebSocket |
+| Импорт миров | Python converter и `addons/rbxl_importer/` |
+| Лаунчер | Отдельный `launcher/project.godot` |
 
-These paths are active and should be handled deliberately:
+В текущем `project.godot` записаны версия клиента `0.1.53` и mobile build `58`. Это значения исходной конфигурации, а не подтверждение опубликованной сборки. Клиентские API endpoints находятся в `[cloud]`, WebSocket endpoint — в `[application]`. Для локальных тестов используйте изолированную конфигурацию.
 
-- `server/server_main.gd`: active Godot dedicated WebSocket entry point. It uses
-  Bobux API/service-key naming and is launched by the VPS deploy scripts. Do not
-  delete it.
-- `docker-entrypoint.sh`, `Dockerfile`, and `ops/vps/deploy_remote.sh`: deployment
-  helpers that may still start the Godot dedicated server. Audit before removal.
+Имена `LuaScriptEngine` и `luaAPI` являются сохранёнными именами интеграции. Они не означают замену основного runtime обратно на Lua. Platform mappings и старые библиотеки вне проверенных Bobux Luau-сборок требуют отдельной проверки.
 
-## Legacy/Archived Areas
+## Зарегистрированные autoloads
 
-These paths are not part of the intended active release path:
+Источник списка — секция `[autoload]` основного `project.godot`.
 
-- `exiting_game/`: old deployment mirror. Current export/deploy scripts exclude it.
-- `supabase/`: old SQL migrations and policies. Do not apply automatically.
-- `render.yaml`: removed on 2026-06-11.
-- `docs/free_hosting_guide.md` and `docs/huggingface_setup.md`: removed on 2026-06-11.
-- `heartbeat_status.json`: legacy inactive heartbeat artifact updated to the VPS URL.
+| Autoload | Ответственность |
+| --- | --- |
+| `GameSceneLoader` | Переходы и загрузка сцен |
+| `ClientPreferences` | Настройки клиента |
+| `GameState`, `UserSession` | Состояние игры, аккаунта и аватара |
+| `Analytics` | События аналитики |
+| `CloudAPI` | HTTP API, авторизация, кэш и операции контента |
+| `MapManager` | Работа с мирами и загрузкой |
+| `NetworkManager` | Клиентская сеть и вход в комнаты |
+| `EditorTestServer` | Тестовый сервер редактора |
+| `MobileRuntime` | Мобильный ввод и runtime-настройки |
+| `LuaScriptEngine` | Подготовка и выполнение Luau-скриптов |
+| `ToolboxAssetService` | Ресурсы Toolbox |
+| `RobloxAudioPack`, `MapMediaStream` | Аудиобиблиотека и медиа миров |
+| `ImportedPlaceNetwork` | Сетевая интеграция импортированных миров |
+| `HalloweenEventUI`, `UpdateTrailer` | UI события и воспроизведение трейлера |
 
-Do not delete these blindly until all code references are removed or a release
-branch confirms they are unused. Marking them here prevents new work from
-building on them accidentally.
+`SupabaseClient` больше не зарегистрирован, файл `autoload/supabase_client.gd` удалён. Действующий backend — собственный API с PocketBase. Legacy-названия переменных, endpoint shapes и старые имена session-файлов могут оставаться для миграции; это не основание заново подключать Supabase. Перед удалением совместимости проверяйте реальные callers и старые версии клиента.
 
-## Current Emergency Fix
+## Активные подсистемы и исторические материалы
 
-The unstable avatar decal projection layer is disabled by default:
+- `scripts/lobby/lobby.gd`, `avatar_ui.gd` и `scripts/player/player.gd` содержат действующие UI, аватар и preview pipeline. Старый совет отключить одежду и decals из июньского handoff не является текущей инструкцией. Не меняйте визуальные возможности ради ускорения без проверки причины задержки.
+- `scripts/main/main.gd`, `server/server_main.gd` и сетевые autoloads участвуют в настоящих игровых комнатах. Наличие серверного каталога вне client export не делает его неиспользуемым.
+- `game/` — отдельно версионируемый репозиторий release-материалов. Он не подменяет основной исходный проект.
+- `exiting_game/` — исторический submodule, исключённый из текущего client export. Не используйте его как вторую активную копию для исправлений.
+- `.godot/`, `.codex-tmp/`, toolchains, кэши и экспорты — локальные рабочие материалы. Нужные экспериментальные доказательства фиксируются отдельно с hashes; их не следует удалять вместе с воспроизводимыми кэшами.
+- `heartbeat_status.json` — служебный runtime-артефакт: активный сервер умеет записывать heartbeat. Не считайте его автоматически неиспользуемым по названию или возрасту.
 
-```gdscript
-const ENABLE_AVATAR_DECAL_LAYER: bool = false
-const ENABLE_AVATAR_CLOTHING_DECALS: bool = false
-```
+## Текущая character parity задача
 
-File: `scripts/player/player.gd`
+Полный план: [ROBLOX_CHARACTER_ARCHITECTURE_RU.md](ROBLOX_CHARACTER_ARCHITECTURE_RU.md). Текущий статус и доказательства: [ROBLOX_CHARACTER_PARITY_RU.md](ROBLOX_CHARACTER_PARITY_RU.md). Фаза A остаётся **PARTIAL**, фазы A–J не завершены. Native-наблюдение и успешный локальный validator не являются взаимозаменяемыми доказательствами полной совместимости.
 
-Why: template cropping and multi-decal projection are currently incorrect. They
-make avatars ugly, make previews expensive, and risk freezing the lobby. Saved
-face/badge/shirt/pants data remains in profiles so the future renderer can reuse it.
+В рамках задачи защищены:
 
-## Known High-Risk Systems
+- `scripts/place_editor/studio.gd`;
+- `scripts/main/main.gd`;
+- `addons/rbxl_importer/rbxl_runtime_importer.gd`;
+- любой файл `map_format.gd`.
 
-- Avatar clothing/template pipeline: needs a clean atlas renderer before release.
-- Model editor import/publish: partially implemented, needs validation before public use.
-- Catalog/avatar items: backend collections exist, UI is not production-grade yet.
-- Lobby sections: many async refreshes exist; avoid adding more automatic network calls.
-- Old compatibility names: `SupabaseClient` is only an autoload shim, not a live
-  Supabase connection.
+Не заменяйте модель и закруглённую голову Bobux, авторские карты или importer V2 ради получения PASS. Сохраняйте исторические native-данные, train / holdout и исходные FAIL. `ExistingNumericEnums` остаётся default; experimental EnumItem profile включается отдельно. Сетевой rollout требует явной проверки совместимости старых и новых peers.
 
-## Recommended Cleanup Order
+## Продолжение работы
 
-1. Stabilize lobby startup and avatar preview.
-2. Keep home/profile/friends previews lightweight.
-3. Replace `SupabaseClient` callers with direct `CloudAPI` calls, then remove the shim.
-4. Replace legacy local session/cache filenames after old exported builds no
-   longer need migration compatibility.
-5. Rewrite avatar clothes from a single atlas texture system, not many ad-hoc decals.
-6. Rebuild model/catalog UI after the base game is stable.
+1. Перед изменением проверьте, что текущий cwd и Git repository действительно относятся к основной копии `C:\robloxclone`, а не к резервной копии на D.
+2. Сопоставьте затрагиваемое поведение с актуальными исходниками и профильными отчётами, а не со старым общим handoff.
+3. Проверьте соответствующие Python / Godot / API контракты. Native Studio captures и Godot suite выполняются раздельно; runner не закрывает Studio автоматически.
+4. Для Android отдельно повторите вход, загрузку аватара и контента, прокрутку UI и нужный игровой сценарий на физическом устройстве. Desktop PASS этого не заменяет.
+5. Публикуйте только необходимые исходники, ресурсы и воспроизводимые доказательства. Не добавляйте базы игроков, приватные логи, tokens, exports или полный локальный toolchain.
 
-## Validation Checklist Before Any Deploy
-
-- Godot editor opens without parse errors.
-- Login works with a real account.
-- Lobby reaches Home without freezing.
-- Avatar tab opens and can change body colors.
-- Games list loads progressively and does not block the UI.
-- Joining a known map succeeds.
-- Returning to lobby clears mobile controls and game UI.
-- Friend request send/receive works in lobby and in-game.
-- Windows export version and launcher manifest build number are incremented.
-- Android export version code is incremented if APK is built.
-
-## Notes For The Next Codex Thread
-
-- The user values speed, but broken releases hurt trust. Validate first.
-- Do not sync or edit `exiting_game`.
-- Do not reconnect Supabase.
-- Do not deploy until the user explicitly says the local build is acceptable.
-- Prefer small reversible stabilizing patches before large feature work.
+В корне пока нет общей лицензии Bobux. Сохраняйте существующие сторонние лицензии и не объявляйте все ассеты свободными для повторного распространения.

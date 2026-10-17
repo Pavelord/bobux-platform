@@ -1,0 +1,34 @@
+name: Ошибка в игре или редакторе
+description: Сообщить о воспроизводимой проблеме Bobux.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия или commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Платформа и устройство
+      placeholder: Windows / Android, модель устройства и версия ОС
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Как повторить
+      description: Укажите режим, последовательность действий и частоту появления ошибки.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Ожидаемый и фактический результат
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Запись экрана или подходящий фрагмент лога
+      description: Уберите пароли, токены, cookies и персональные данные.

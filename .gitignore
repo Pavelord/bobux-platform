@@ -16,6 +16,7 @@ __pycache__/
 
 # Build and release output
 /dist/
+/.dist/
 /launcher_export/
 /mybuild/
 /export_templates/
@@ -87,6 +88,19 @@ id_rsa
 id_rsa.*
 id_ed25519
 id_ed25519.*
+
+# Local imported test places are retained on disk; they are not Bobux sources.
+/Imported Maps/
+
+# Native build intermediates (runtime DLL/SO files remain tracked).
+/addons/luaAPI/bin/*.exp
+/addons/luaAPI/bin/*.lib
+/addons/luaAPI/bin/*.map
+*.obj.import
+/tools/roblox_character_experiments/**/*.import
+/tools/roblox_humanoid_experiments/**/*.import
+/tests/roblox_humanoid/**/*.translation
+/tests/roblox_humanoid/**/*.csv.import
 
 # Temporary files left by editors and native builds
 *.tmp
