@@ -55,8 +55,12 @@ func run() -> void:
 		"publishing an imported GUI must preserve its responsive UDim2 scale terms")
 	gui.free()
 	var texture_cache := CACHE.new()
+	# Air is an enum value without a renderable surface texture. Keep this
+	# separate from the real-texture contract for textured solid materials.
+	var air_material: StandardMaterial3D = texture_cache.get_named_material(Color.WHITE, "Air")
+	check(air_material != null and air_material.albedo_texture == null, "Air must remain an untextured material")
 	for material_name in CACHE.NAMED_MATERIAL_ENUMS.keys():
-		if material_name in ["Plastic", "SmoothPlastic", "Neon", "ForceField", "Water"]:
+		if material_name in ["Plastic", "SmoothPlastic", "Neon", "ForceField", "Air", "Water"]:
 			continue
 		var named_material: StandardMaterial3D = texture_cache.get_named_material(Color.WHITE, str(material_name))
 		var texture := named_material.albedo_texture as Texture2D if named_material != null else null
