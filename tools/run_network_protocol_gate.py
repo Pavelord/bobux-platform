@@ -3,7 +3,14 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
+
+# Windows CI may provide a cp1252 pipe; rejection diagnostics include Unicode.
+# Keep the console UTF-8 like the captured Godot logs, without dropping text.
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, 'reconfigure'):
+        stream.reconfigure(encoding='utf-8', errors='backslashreplace')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--godot', required=True)

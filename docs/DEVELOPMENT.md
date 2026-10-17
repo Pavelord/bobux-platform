@@ -102,13 +102,26 @@ Workflow [Bobux Validate](../.github/workflows/validate.yml) содержит т
 
 В `export_presets.cfg` есть presets `Windows Desktop`, `Android` и `Linux`. Их параметры и native libraries должны соответствовать целевой архитектуре. В частности, текущий Windows release preset настроен на x86_32; редактор и его debug extension могут быть x86_64.
 
-Пример локальных release exports после установки шаблонов и настройки SDK / подписи:
+Для будущих локальных сборок используйте `tools/build_local.ps1`. При наличии диска D он выбирает `D:\Bobux_Artifacts\local`, иначе — `.dist/local` внутри проекта. Каждая сборка получает новую папку с UTC timestamp и GUID, готовый файл и `export.log`. Скрипт не меняет presets, не запускает готовую игру и ничего не публикует. Архив старых сборок от 17 октября находится отдельно в `D:\Bobux_Artifacts\2026-10-17`.
+
+Сначала проверьте план без запуска Godot и создания файлов:
 
 ```powershell
-New-Item -ItemType Directory -Path ./dist/local -Force
-& $env:GODOT_BIN --headless --path . --export-release 'Windows Desktop' ./dist/local/Bobux.exe
-& $env:GODOT_BIN --headless --path . --export-release Android ./dist/local/Bobux.apk
+./tools/build_local.ps1 -Preset 'Windows Desktop' -DryRun
+./tools/build_local.ps1 -Preset Android -DryRun
+./tools/build_local.ps1 -Project Launcher -DryRun
 ```
+
+После установки шаблонов и настройки SDK / подписи можно выполнить экспорт:
+
+```powershell
+./tools/build_local.ps1 -Preset 'Windows Desktop' -ArtifactRoot 'D:\Bobux_Artifacts\local'
+./tools/build_local.ps1 -Preset Android -GodotBin "$env:GODOT_BIN"
+```
+
+Приоритет пути артефактов: `-ArtifactRoot`, затем переменная `BOBUX_ARTIFACT_ROOT`, затем default. Для редактора: `-GodotBin`, затем `GODOT_BIN`, затем локальный `.codex-tools/godot-4.7/..._console.exe`. `-Project Game` поддерживает presets `Windows Desktop`, `Android`, `Linux`; `-Project Launcher` — только `Windows Desktop`. Пути с junction/symlink в цепочке назначения отклоняются. Внутренний кэш Godot остаётся рядом с проектом; перенос выходного файла не переносит `.godot/`.
+
+CI и release packagers продолжают использовать свои прежние пути и команды; этот wrapper предназначен для локального экспорта.
 
 Подпись Android хранится локально, без keystore и паролей в Git. Успешный экспорт не публикует обновление: загрузка сборок, manifest и развёртывание API / игровых серверов относятся к отдельному выпуску. Скрипты `deploy_vps.ps1` и `tools/mobile/deploy_mobile_release.ps1` изменяют внешнюю среду; для обычной разработки их запуск не нужен.
 
