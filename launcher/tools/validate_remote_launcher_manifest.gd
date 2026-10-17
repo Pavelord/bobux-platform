@@ -3,8 +3,8 @@ extends SceneTree
 const MANIFEST_URL := "http://109.71.245.162/launcher/latest.json"
 const API_HEALTH_URL := "http://109.71.245.162/api/health"
 const RANGE_BYTES := 512 * 1024
-const EXPECTED_GAME_BUILD := 39
-const EXPECTED_LAUNCHER_BUILD := 13
+const EXPECTED_GAME_BUILD := 54
+const EXPECTED_LAUNCHER_BUILD := 21
 
 func _init() -> void:
 	call_deferred("_run")

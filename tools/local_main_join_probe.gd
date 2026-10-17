@@ -38,7 +38,7 @@ func _initialize() -> void:
 	var game_state: Node = _get_autoload("GameState")
 	var cloud_api: Node = _get_autoload("CloudAPI")
 	var user_session: Node = _get_autoload("UserSession")
-	var auth_compat_client: Node = _get_autoload("SupabaseClient")
+	var auth_compat_client: Node = _get_autoload("CloudAPI")
 	if network_manager == null or game_state == null:
 		push_error("[MainJoinProbe] Required autoloads are unavailable.")
 		quit(1)
@@ -55,8 +55,8 @@ func _initialize() -> void:
 		if not override_username.is_empty():
 			user_session.set("username", override_username)
 			user_session.set("is_logged_in", true)
-	if auth_compat_client != null and auth_compat_client.has_method("get_user_id"):
-		print("[MainJoinProbe] Session user id=%s" % str(auth_compat_client.call("get_user_id")))
+	if auth_compat_client != null and auth_compat_client.has_method("get_current_user_id"):
+		print("[MainJoinProbe] Session user id=%s" % str(auth_compat_client.call("get_current_user_id")))
 	if not network_manager.connected_to_server.is_connected(_on_connected):
 		network_manager.connected_to_server.connect(_on_connected)
 	if not network_manager.connection_failed.is_connected(_on_failed):

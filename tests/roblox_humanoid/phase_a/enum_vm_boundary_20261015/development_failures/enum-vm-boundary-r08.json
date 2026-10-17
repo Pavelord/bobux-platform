@@ -1,0 +1,169 @@
+{
+	"checks": [
+		{
+			"detail": "",
+			"name": "reject invalid profile  before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile TypoParity before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile <null> before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile 77 before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile false before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": true, \"runtime_id\": 1, \"scheduled\": true, \"completed\": false }",
+			"name": "actual scheduled legacy VM started",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": true, \"runtime_id\": 2, \"scheduled\": true, \"completed\": false }",
+			"name": "actual scheduled parity VM started",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "both scripts reached listeners",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "legacy uses shared actual BobuxInstance and event",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "parity uses the same actual BobuxInstance and event",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "legacy actual callbacks/modules/coroutines/tasks",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "parity actual callbacks/modules/coroutines/tasks",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "canonical state setter zero returns and scalar backend",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "internal Humanoid stores bool under scalar state key",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "both Wait paths receive converted arguments",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "legacy event arguments remain numbers",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "parity Connect extracted lowercase Once Wait module arguments",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "Connect and Wait preserve raw interior false and trailing nil",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "legacy Once/Wait exactly once",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "parity Once/Wait exactly once",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "install actual nested callback B to A to B",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: assertion failed!\nBobux:1\n\n",
+			"name": "nested callback preserves both VM profiles",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[]",
+			"name": "cross callbacks reached both native VM hooks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "Once churn completes without native enum transport",
+			"status": "PASS"
+		},
+		{
+			"detail": "18",
+			"name": "VM owner does not retain unbounded Once history",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "drop namespace and collect GC retains VM registry",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "closing legacy VM leaves parity profile live",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "Stop disconnects parity listeners on sibling Humanoid",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "parity VM teardown releases registry and adapter",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "deferred start retains immutable opt-in profile",
+			"status": "PASS"
+		},
+		{
+			"detail": "[]",
+			"name": "no Luau runtime errors",
+			"status": "PASS"
+		}
+	],
+	"fail": 2,
+	"open": [
+		"complete enum namespace",
+		"other enum properties",
+		"native opaque strings and bool/receiver coercion",
+		"tagged wire codec and version negotiation",
+		"Humanoid physical calibration"
+	],
+	"pass": 29,
+	"scope": "opt-in production Humanoid EnumItem VM boundary"
+}

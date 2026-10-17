@@ -48,6 +48,17 @@ $ErrorActionPreference = "Stop"
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
+function Remove-ReleaseWorkspaceDirectory([string]$Path) {
+	$resolvedTarget = [System.IO.Path]::GetFullPath($Path)
+	$workspacePrefix = $projectRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+	if (-not $resolvedTarget.StartsWith($workspacePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+		throw "Release cleanup target is outside the workspace: $resolvedTarget"
+	}
+	if (Test-Path -LiteralPath $resolvedTarget) {
+		Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+	}
+}
+
 # ---- Godot binary ----
 # Prefer the console binary so export failures are visible and reflected in LASTEXITCODE.
 $godotBin = $GodotExecutable
@@ -244,7 +255,7 @@ Write-Host ""
 Write-Host "--- Step 1/7: Bumping version ---" -ForegroundColor Yellow
 $projectGodot = Join-Path $projectRoot "project.godot"
 if (Test-Path $projectGodot) {
-	$content = Get-Content $projectGodot -Raw
+	$content = Get-Content -LiteralPath $projectGodot -Raw -Encoding UTF8
 	$content = $content -replace 'config/version="[^"]*"', "config/version=`"$Version`""
 	$content = $content -replace 'mobile/build=\d+', "mobile/build=$MobileBuild"
 	[System.IO.File]::WriteAllText($projectGodot, $content, $utf8NoBom)
@@ -253,7 +264,7 @@ if (Test-Path $projectGodot) {
 $exportPresets = Join-Path $projectRoot "export_presets.cfg"
 if (Test-Path $exportPresets) {
 	$windowsFileVersion = Get-WindowsFileVersion $Version
-	$exportContent = Get-Content $exportPresets -Raw
+	$exportContent = Get-Content -LiteralPath $exportPresets -Raw -Encoding UTF8
 	$exportContent = $exportContent -replace 'application/file_version="[^"]*"', "application/file_version=`"$windowsFileVersion`""
 	$exportContent = $exportContent -replace 'application/product_version="[^"]*"', "application/product_version=`"$windowsFileVersion`""
 	$exportContent = ([regex]'binary_format/architecture="[^"]*"').Replace($exportContent, "binary_format/architecture=`"$WindowsArchitecture`"", 1)
@@ -264,7 +275,7 @@ if (Test-Path $exportPresets) {
 	Write-Host "  OK: export_presets.cfg -> Windows $windowsFileVersion ($WindowsArchitecture), Android $MobileVersion build $MobileBuild" -ForegroundColor Green
 }
 if (Test-Path $launcherProjectGodot) {
-	$launcherContent = Get-Content $launcherProjectGodot -Raw
+	$launcherContent = Get-Content -LiteralPath $launcherProjectGodot -Raw -Encoding UTF8
 	$launcherContent = $launcherContent -replace 'version="[^"]*"', "version=`"$LauncherVersion`""
 	$launcherContent = $launcherContent -replace 'build=\d+', "build=$LauncherBuild"
 	[System.IO.File]::WriteAllText($launcherProjectGodot, $launcherContent, $utf8NoBom)
@@ -272,7 +283,7 @@ if (Test-Path $launcherProjectGodot) {
 }
 $launcherScript = Join-Path $launcherRoot "scripts\launcher.gd"
 if (Test-Path $launcherScript) {
-	$launcherScriptContent = Get-Content $launcherScript -Raw
+	$launcherScriptContent = Get-Content -LiteralPath $launcherScript -Raw -Encoding UTF8
 	$launcherScriptContent = $launcherScriptContent -replace 'const LAUNCHER_VERSION: String = "[^"]*"', "const LAUNCHER_VERSION: String = `"$LauncherVersion`""
 	$launcherScriptContent = $launcherScriptContent -replace 'const LAUNCHER_BUILD: int = \d+', "const LAUNCHER_BUILD: int = $LauncherBuild"
 	[System.IO.File]::WriteAllText($launcherScript, $launcherScriptContent, $utf8NoBom)
@@ -280,7 +291,7 @@ if (Test-Path $launcherScript) {
 }
 if (Test-Path $launcherExportPresets) {
 	$launcherFileVersion = Get-WindowsFileVersion $LauncherVersion
-	$launcherExportContent = Get-Content $launcherExportPresets -Raw
+	$launcherExportContent = Get-Content -LiteralPath $launcherExportPresets -Raw -Encoding UTF8
 	$launcherExportContent = $launcherExportContent -replace 'application/file_version="[^"]*"', "application/file_version=`"$launcherFileVersion`""
 	$launcherExportContent = $launcherExportContent -replace 'application/product_version="[^"]*"', "application/product_version=`"$launcherFileVersion`""
 	$launcherExportContent = $launcherExportContent -replace 'binary_format/architecture="[^"]*"', "binary_format/architecture=`"$WindowsArchitecture`""
@@ -290,6 +301,16 @@ if (Test-Path $launcherExportPresets) {
 }
 
 # Compile the exact source state that is about to be exported.
+$releaseProject = Get-Content -LiteralPath (Join-Path $projectRoot "project.godot") -Raw -Encoding UTF8
+$releasePresets = Get-Content -LiteralPath (Join-Path $projectRoot "export_presets.cfg") -Raw -Encoding UTF8
+if ($releaseProject -notmatch '(?m)^run/main_scene="res://scenes/login/login\.tscn"\s*$' -or
+	$releasePresets -match 'name="Android Performance"|package/unique_name="com\.bobux\.performance"') {
+	throw "Diagnostic export configuration is active. Restore the production login scene and export presets before release."
+}
+$nativeIntegritySnapshot = Join-Path $distRelease "native-inputs-build$Build.json"
+$nativeValidator = Join-Path $projectRoot "tools\validate_native_release_artifacts.py"
+python -X utf8 $nativeValidator snapshot $nativeIntegritySnapshot
+if ($LASTEXITCODE -ne 0) { throw "Native release inputs are missing, truncated or have the wrong architecture." }
 Write-Host ""
 Write-Host "--- Step 1b/7: Validating Godot projects ---" -ForegroundColor Yellow
 if (-not (Test-Path $godotBin)) {
@@ -366,7 +387,7 @@ if (-not $SkipExport) {
 	# Launcher export
 	Write-Host "  Exporting Windows Launcher -> $launcherExe"
 	if (Test-Path $launcherExportDir) {
-		Remove-Item $launcherExportDir -Recurse -Force
+		Remove-ReleaseWorkspaceDirectory $launcherExportDir
 	}
 	New-Item -ItemType Directory -Path $launcherExportDir -Force | Out-Null
 	$ErrorActionPreference = 'Continue'
@@ -405,6 +426,9 @@ Write-Host "--- Step 3/7: Building server hotfix tarball ---" -ForegroundColor Y
 if (Test-Path $hotfix) { Remove-Item $hotfix -Force }
 
 Push-Location $projectRoot
+# Build this unrelated local folder name without relying on PowerShell 5's
+# decoding of a UTF-8 script without a BOM.
+$inactivePracticeFolder = [regex]::Unescape('\u043f\u0440\u0430\u043a\u0442\u0438\u043a\u0430')
 tar -czf $hotfix `
 	--exclude="./.git" `
 	--exclude="./*/.git" `
@@ -414,6 +438,18 @@ tar -czf $hotfix `
 	--exclude="./exiting_game" `
 	--exclude="./launcher_export" `
 	--exclude="./dist" `
+	--exclude="./.dist" `
+	--exclude="./.agents" `
+	--exclude="./supabase" `
+	--exclude="./autoload/supabase_client.gd" `
+	--exclude="./autoload/supabase_client.gd.uid" `
+	--exclude="./export_templates" `
+	--exclude="./practice_docx_work" `
+	--exclude="./practice_render_ascii" `
+	--exclude="./practice_report_exact_qa" `
+	--exclude="./practice_report_qa" `
+	--exclude="./stress_reports" `
+	--exclude="./$inactivePracticeFolder" `
 	--exclude="./mybuild" `
 	--exclude="./tmp_*" `
 	--exclude="./node_modules" `
@@ -427,18 +463,52 @@ tar -czf $hotfix `
 	--exclude="./Roblox-Materials/PartsPre2022" `
 	--exclude="./Roblox-Materials/TerrainPre2022" `
 	--exclude="./native/luau_bridge/build" `
+	--exclude="./native/luau_bridge/build*" `
+	--exclude="./tools/rbxl_compare/rbxdom_oracle/target" `
 	--exclude="*.obj" `
 	--exclude="*.o" `
 	--exclude="*.os" `
+	--exclude="*.a" `
+	--exclude="*.lib" `
+	--exclude="*.exp" `
+	--exclude="*.pdb" `
+	--exclude="*.map" `
+	--exclude="*.pyc" `
+	--exclude="*/__pycache__" `
+	--exclude="*/.pytest_cache" `
 	--exclude="./toolbox_assets/models" `
 	--exclude="./toolbox_assets/sounds" `
 	--exclude="./toolbox_assets/thumbnails" `
 	--exclude="*/node_modules" `
 	--exclude="*/.env" `
+	--exclude="*/.env.local" `
+	--exclude="*/.env.production" `
+	--exclude="*/.env.development" `
+	--exclude="./services/bobux_api/data" `
+	--exclude="./services/bobux_api/storage" `
+	--exclude="./services/bobux_api/uploads" `
+	--exclude="*.sqlite*" `
+	--exclude="*.db" `
 	--exclude="*.keystore" `
 	--exclude="*.jks" `
+	--exclude="*.p12" `
+	--exclude="*.pfx" `
+	--exclude="*.pem" `
+	--exclude="*.key" `
 	.
+$hotfixArchiveExit = $LASTEXITCODE
 Pop-Location
+if ($hotfixArchiveExit -ne 0) {
+	throw "Server hotfix archive creation failed (tar exit code $hotfixArchiveExit)."
+}
+python -X utf8 (Join-Path $projectRoot "tools\validate_server_release_archive.py") $hotfix
+if ($LASTEXITCODE -ne 0) {
+	throw "Server hotfix archive safety/contents validation failed."
+}
+python -X utf8 $nativeValidator unchanged $nativeIntegritySnapshot
+if ($LASTEXITCODE -ne 0) { throw "Native libraries changed during export; rebuild after compilation stops." }
+python -X utf8 $nativeValidator server $hotfix
+if ($LASTEXITCODE -ne 0) { throw "Server archive contains a truncated or stale native Luau library." }
 
 $sz = Get-SizeMB $hotfix
 Assert-HealthyFile $hotfix 1024 "Server hotfix archive"
@@ -450,7 +520,7 @@ Write-Host "  OK: $hotfix ($sz MB)" -ForegroundColor Green
 Write-Host ""
 Write-Host "--- Step 4/7: Building Windows ZIP ---" -ForegroundColor Yellow
 
-if (Test-Path $windowsStageDir) { Remove-Item $windowsStageDir -Recurse -Force }
+if (Test-Path $windowsStageDir) { Remove-ReleaseWorkspaceDirectory $windowsStageDir }
 New-Item -ItemType Directory -Path $windowsStageDir -Force | Out-Null
 
 Copy-Item $gameExe (Join-Path $windowsStageDir "Bobux.exe") -Force
@@ -513,16 +583,18 @@ Assert-ZipEntries $windowsVersionedZip @{
 	"addons/luaAPI/bin/$(Split-Path -Leaf $gameLuaExtensionDll)" = 256KB
 	"version.json" = 20
 } "Windows release ZIP"
+python -X utf8 $nativeValidator windows $windowsVersionedZip --windows-architecture $WindowsArchitecture
+if ($LASTEXITCODE -ne 0) { throw "Windows ZIP native Luau library size/SHA-256 mismatch." }
 $windowsRoundTripDir = Join-Path $distRelease "Bobux-Windows-$Version-build$Build-verify"
 if (Test-Path $windowsRoundTripDir) {
-	Remove-Item $windowsRoundTripDir -Recurse -Force
+	Remove-ReleaseWorkspaceDirectory $windowsRoundTripDir
 }
 Expand-Archive -LiteralPath $windowsVersionedZip -DestinationPath $windowsRoundTripDir -Force
 Assert-HealthyFile (Join-Path $windowsRoundTripDir "Bobux.exe") (10MB) "Extracted Windows game executable"
 Assert-HealthyFile (Join-Path $windowsRoundTripDir "addons\rbxl_importer\rbxl_converter.py") (32KB) "Extracted RBXL converter"
 Assert-HealthyFile (Join-Path $windowsRoundTripDir "addons\luaAPI\bin\$(Split-Path -Leaf $gameLuaExtensionDll)") (256KB) "Extracted LuaAPI Windows extension"
 Invoke-GameSmokeTest (Join-Path $windowsRoundTripDir "Bobux.exe") (Join-Path $distRelease "roundtrip-smoke")
-Remove-Item $windowsRoundTripDir -Recurse -Force
+Remove-ReleaseWorkspaceDirectory $windowsRoundTripDir
 
 $sz = Get-SizeMB $windowsVersionedZip
 Write-Host "  OK: $windowsVersionedZip ($sz MB)" -ForegroundColor Green
@@ -545,8 +617,8 @@ if (-not $SkipMobile) {
 	if (Test-Path $sourceApk) {
 		Copy-Item $sourceApk $mobileApkVersioned -Force
 		Copy-Item $sourceApk $mobileApkLatest -Force
-		if (-not (Test-Path $versionedGameApk)) {
-			Copy-Item $sourceApk $versionedGameApk -Force
+		if ([System.IO.Path]::GetFullPath($sourceApk) -ne [System.IO.Path]::GetFullPath($versionedGameApk)) {
+			Copy-Item -LiteralPath $sourceApk -Destination $versionedGameApk -Force
 		}
 		Assert-ZipEntries $mobileApkVersioned @{
 			"AndroidManifest.xml" = 1024
@@ -554,6 +626,8 @@ if (-not $SkipMobile) {
 			"lib/arm64-v8a/libgodot_android.so" = 1MB
 			"lib/armeabi-v7a/libgodot_android.so" = 1MB
 		} "Android APK"
+		python -X utf8 $nativeValidator apk $mobileApkVersioned
+		if ($LASTEXITCODE -ne 0) { throw "Android APK native Luau library size/SHA-256 mismatch." }
 		$sz = Get-SizeMB $mobileApkVersioned
 		Write-Host "  OK: $mobileApkVersioned ($sz MB)" -ForegroundColor Green
 	} else {
@@ -586,6 +660,8 @@ if (Test-Path $launcherExe) {
 # ================================================================
 #  STEP 6: Update manifests (latest.json)
 # ================================================================
+python -X utf8 $nativeValidator unchanged $nativeIntegritySnapshot
+if ($LASTEXITCODE -ne 0) { throw "Native libraries changed while packaging; manifests will not be published." }
 Write-Host ""
 Write-Host "--- Step 6/7: Updating manifests ---" -ForegroundColor Yellow
 

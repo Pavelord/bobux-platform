@@ -1,0 +1,2 @@
+# Frozen telemetry, manifests and source snapshots use byte-level SHA-256.
+* -text -whitespace

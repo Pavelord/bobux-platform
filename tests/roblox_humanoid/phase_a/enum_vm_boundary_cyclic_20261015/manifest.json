@@ -1,0 +1,56 @@
+{
+  "date_local": "2026-10-15",
+  "timezone": "Europe/Kaliningrad",
+  "status": "PASS_MINIMAL_OPT_IN_SLICE",
+  "godot": "4.7.stable.official.5b4e0cb0f",
+  "luau_runtime": "0.719",
+  "results": {
+    "parity-first": {
+      "pass": 36,
+      "fail": 0,
+      "sha256": "0b156dc8695f6ac4b9a833da7f82dda2bdf341c995365cbfd086964f69659952"
+    },
+    "legacy-first": {
+      "pass": 36,
+      "fail": 0,
+      "sha256": "396fdaac62b70fca33d392d376feb82a85a2d501d6fe12585d60b52ed72465d2"
+    },
+    "player": {
+      "pass": 40,
+      "fail": 0,
+      "sha256": "b95bfb6615ae01be892cfee871e17ed5ce7dd66b62ca3f283d2506a04f7e340f"
+    },
+    "npc": {
+      "pass": 16,
+      "fail": 0,
+      "sha256": "d8ae414abaa5e94885e4e9b6d1b2f6dbf3c3e4ac2f9ce2e4f1e924f613425a66"
+    }
+  },
+  "source_sha256": {
+    "autoload/lua_script_engine.gd": "34e78ea0845bd2ab9eb38e6493c0e3671871016c6b07736f906d0a2f1bc803ca",
+    "addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd": "87112705862d9473c4a4887b823e1d3869b1e9b62e42861764fe868ac85556ef",
+    "tools/character_parity/enum_vm_contract.luau": "6e7a8cdf28c68ad835524d245a441835e8365f72aca771c4ec5b557514802efe",
+    "tools/character_parity/validate_enum_vm_boundary.gd": "cd38cb3cdeacb7f68462c8310a8a4894dbfd8666afff25956433efe29c72f6be",
+    "tools/character_parity/check_enum_vm_sources.py": "3dd9ba56de0824577020c110275292ec2879ada58adef94306ff5ef033698093",
+    "tools/character_parity/enum_vm_cyclic_contract.luau": "03c0cf4cbdfb9757b5016bb945f3f1eb2cf45ed66faa4d378e18975005f310cc"
+  },
+  "dirty_snapshot_sha256": "5f6bc6f95391354f5aaaefc8c97adf07046a7c213a99799731275a7f6e4f8ca9",
+  "development_failures": [],
+  "open": [
+    "complete enum namespace",
+    "typed boundaries for all other enum properties",
+    "native opaque-string/bool/receiver edge coercion",
+    "generic BindableEvent EnumItem interop between registries",
+    "tagged wire codec and explicit capability negotiation",
+    "generic BobuxEvent equality (rawequal identity verified; default Object equality remains unchanged)",
+    "Humanoid physical/default-state calibration"
+  ],
+  "unchanged": [
+    "ExistingNumericEnums default",
+    "protected production files",
+    "native C++",
+    "map sources",
+    "85-item registry kernel",
+    "historical 48 PASS / 5 FAIL / 18 SKIP calibration"
+  ]
+}

@@ -1,0 +1,360 @@
+{
+  "schema": 1,
+  "fixture_version": "2026-10-15-a2-ordinary-native-v2",
+  "status": "PREREGISTERED_SOURCE_READY_NOT_NATIVE_OBSERVED",
+  "creator_docs_commit": "031b2f91d3d47274c255f3ed5691c29f792c181d",
+  "creator_docs_snapshot_sha256": "82d9ba4b397c95077ae4a8389f0c13f359ed3b877df4514e0c43653cfccca088",
+  "fixture_source_sha256": {
+    "common.luau": "6fb310a41b2a0f9388a64a9ed8071894fa53f6a9ba1d3dc7cb1afe3c68cde83e",
+    "measure.client.luau": "71eae21edef6fc73871aa88a4a24af31c6e33e7f3ec747df246ec70fe3d17295",
+    "serializer_test.luau": "b63c8a1b5d8ef70e1a8b0e022676dadaf5c713e8edbc6d07a8573503990a5e79",
+    "setup.server.luau": "b94e8e8d1c4b1e3ca1402fa9a1f8dfe1baf70896fa9246ce5aca08699bc4ae64"
+  },
+  "builder_sha256": "3e9ee7b4c328b962cb2ea2724b3e46790e79dba84a1ce202f230d091c5cac81c",
+  "reused_transport": {
+    "export": "tools/roblox_character_experiments/export_zstd.commandbar.luau",
+    "export_sha256": "f09c7e42d7779c6c3f4f06b49488c6092e79862c52005405d8f06f08dc476aee",
+    "parser": "tools/roblox_character_experiments/parse_compressed_output.py",
+    "parser_sha256": "f908e0634ba4e57caf2f06606f128b48df3891732d9070c38de6c67eead49ac0",
+    "policy": "Use existing Zstd/Base64/SHA256 transport on own telemetry only; no existing parser edited"
+  },
+  "cases": [
+    {
+      "id": "native_default_r6_default_play1",
+      "requested_rig": "R6",
+      "profile": "default",
+      "session_index": 1,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r6_default_play2",
+      "requested_rig": "R6",
+      "profile": "default",
+      "session_index": 2,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r6_default_play3",
+      "requested_rig": "R6",
+      "profile": "default",
+      "session_index": 3,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r6_default_play4",
+      "requested_rig": "R6",
+      "profile": "default",
+      "session_index": 4,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r6_default_play5",
+      "requested_rig": "R6",
+      "profile": "default",
+      "session_index": 5,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r6_altered_play1",
+      "requested_rig": "R6",
+      "profile": "altered",
+      "session_index": 1,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r6_altered_play2",
+      "requested_rig": "R6",
+      "profile": "altered",
+      "session_index": 2,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r6_altered_play3",
+      "requested_rig": "R6",
+      "profile": "altered",
+      "session_index": 3,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r6_altered_play4",
+      "requested_rig": "R6",
+      "profile": "altered",
+      "session_index": 4,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r6_altered_play5",
+      "requested_rig": "R6",
+      "profile": "altered",
+      "session_index": 5,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r15_default_play1",
+      "requested_rig": "R15",
+      "profile": "default",
+      "session_index": 1,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r15_default_play2",
+      "requested_rig": "R15",
+      "profile": "default",
+      "session_index": 2,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r15_default_play3",
+      "requested_rig": "R15",
+      "profile": "default",
+      "session_index": 3,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r15_default_play4",
+      "requested_rig": "R15",
+      "profile": "default",
+      "session_index": 4,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r15_default_play5",
+      "requested_rig": "R15",
+      "profile": "default",
+      "session_index": 5,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {}
+    },
+    {
+      "id": "native_default_r15_altered_play1",
+      "requested_rig": "R15",
+      "profile": "altered",
+      "session_index": 1,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r15_altered_play2",
+      "requested_rig": "R15",
+      "profile": "altered",
+      "session_index": 2,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r15_altered_play3",
+      "requested_rig": "R15",
+      "profile": "altered",
+      "session_index": 3,
+      "split": "train",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r15_altered_play4",
+      "requested_rig": "R15",
+      "profile": "altered",
+      "session_index": 4,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    },
+    {
+      "id": "native_default_r15_altered_play5",
+      "requested_rig": "R15",
+      "profile": "altered",
+      "session_index": 5,
+      "split": "holdout",
+      "path": "NATIVE_DEFAULT",
+      "prejoin_values": {
+        "CharacterWalkSpeed": 23,
+        "CharacterJumpPower": 61,
+        "CharacterJumpHeight": 9,
+        "CharacterUseJumpPower": false,
+        "CharacterMaxSlopeAngle": 37,
+        "AutoJumpEnabled": false,
+        "CameraMinZoomDistance": 2,
+        "CameraMaxZoomDistance": 60,
+        "CharacterBreakJointsOnDeath": false
+      }
+    }
+  ],
+  "initial_join_cases": 20,
+  "fixed_before_join": {
+    "LoadCharacterAppearance": false,
+    "LuaCharacterController": "Legacy (native observed enum Value=1)",
+    "Players.CharacterAutoLoads": false
+  },
+  "default_policy": "Nine inheritance fields omitted in XML; native defaults observed, never populated from assumed numbers",
+  "requested_rig_policy": "Coverage label only. No rig setting/custom Character installed. Actual RigType mismatch BLOCKED.",
+  "native_description_path": "NOT_IMPLEMENTED_IN_THIS_FIRST_SLICE; separate preregistered continuation required",
+  "per_session": {
+    "initial_native_loads": 5,
+    "post_join_native_loads": 5,
+    "initial_join_repeats": 1,
+    "respawns_are_not_independent_joins": true
+  },
+  "post_join_values": {
+    "CharacterWalkSpeed": 31,
+    "CharacterJumpPower": 44,
+    "CharacterJumpHeight": 5.5,
+    "CharacterUseJumpPower": true,
+    "CharacterMaxSlopeAngle": 55,
+    "AutoJumpEnabled": true,
+    "CameraMinZoomDistance": 1,
+    "CameraMaxZoomDistance": 90,
+    "CharacterBreakJointsOnDeath": true
+  },
+  "post_join_policy": "Mutate only StarterPlayer after five completed generations; record live Player/Character before/after, then five native reloads. Never copy fields to Player/Humanoid.",
+  "snapshot_delays_wall_s": [
+    0.25,
+    1,
+    3
+  ],
+  "required_snapshot_points": [
+    "CharacterAdded_immediate",
+    "first_PostSimulation",
+    "after_0.25s",
+    "after_1s",
+    "after_3s"
+  ],
+  "time_basis": "Record actual os.clock arrival for every point; requested wall delay is not a simulated frame or exact timing guarantee",
+  "timeouts": {
+    "native_load_wall_s": 20,
+    "snapshot_window_wall_s": 7,
+    "session_wall_s": 300
+  },
+  "tolerances": {
+    "enum_name_value_domain": "exact",
+    "boolean": "exact",
+    "scalar_numeric_abs": 1e-06,
+    "timing": "observed distributions, no exact callback arrival assertion",
+    "lifecycle": "Compare per-realm ordered event streams; missing appearance event under appearance-disabled is recorded, not automatically FAIL"
+  },
+  "rollout_policy": "AvatarJointUpgrade/ClassicDeath NOT_OBSERVABLE without registered public readable API; no hidden settings queried",
+  "noise_policy": "Five independent Play sessions per rig/profile; ambiguous lifecycle requires a separately preregistered >=10-session extension before comparison/calibration",
+  "no_native_parity_pass_claim": true,
+  "source_policy": "No stock Source, asset IDs, textures, models or original animation keyframes accessed/exported",
+  "revision_reason": "v1 was never captured: source review found false-value serializer loss and incomplete server barrier. v2 uses explicit success branch, executable serializer regression and all-point/+3s generation validation."
+}

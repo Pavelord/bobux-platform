@@ -1,0 +1,307 @@
+{
+  "schema": 1,
+  "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+  "studio_version": "0.743.0.7431133",
+  "date_utc": "2026-10-16T12:12:59Z",
+  "mode": "ordinary_spawn_a2",
+  "raw_sha256": "4448cd8a4fa99ba596c1a8a2495d67a18688095f390138a03c23e11c3d648792",
+  "raw_records": 306,
+  "parser_issues": [],
+  "status": "OBSERVED",
+  "parity_status": "NOT_IMPLEMENTED_NOT_CALIBRATED",
+  "units": {
+    "time": "seconds; wall=os.clock"
+  },
+  "run_result": {
+    "lifecycle_counts": {
+      "CharacterRemoving": 9,
+      "CharacterAppearanceLoaded": 0,
+      "CharacterAdded": 10
+    },
+    "errors": [],
+    "requested_rig": "R15",
+    "cases": [
+      {
+        "server_generation": 1,
+        "wall_s": 4.509263799991459,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "prejoin_profile",
+          "spawn_index": 1,
+          "rig": "R15"
+        },
+        "seq": 15,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 1,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_1"
+      },
+      {
+        "server_generation": 2,
+        "wall_s": 7.626227699991432,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "prejoin_profile",
+          "spawn_index": 2,
+          "rig": "R15"
+        },
+        "seq": 29,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 2,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_2"
+      },
+      {
+        "server_generation": 3,
+        "wall_s": 10.740992299994105,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "prejoin_profile",
+          "spawn_index": 3,
+          "rig": "R15"
+        },
+        "seq": 43,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 3,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_3"
+      },
+      {
+        "server_generation": 4,
+        "wall_s": 13.858009799994761,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "prejoin_profile",
+          "spawn_index": 4,
+          "rig": "R15"
+        },
+        "seq": 57,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 4,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_4"
+      },
+      {
+        "server_generation": 5,
+        "wall_s": 16.975411799998255,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "prejoin_profile",
+          "spawn_index": 5,
+          "rig": "R15"
+        },
+        "seq": 71,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 5,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_5"
+      },
+      {
+        "server_generation": 6,
+        "wall_s": 20.141752600000473,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "post_join_mutation",
+          "spawn_index": 6,
+          "rig": "R15"
+        },
+        "seq": 86,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 6,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_6"
+      },
+      {
+        "server_generation": 7,
+        "wall_s": 23.258202699988033,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "post_join_mutation",
+          "spawn_index": 7,
+          "rig": "R15"
+        },
+        "seq": 100,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 7,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_7"
+      },
+      {
+        "server_generation": 8,
+        "wall_s": 26.374118899999303,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "post_join_mutation",
+          "spawn_index": 8,
+          "rig": "R15"
+        },
+        "seq": 114,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 8,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_8"
+      },
+      {
+        "server_generation": 9,
+        "wall_s": 29.492449600002146,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "post_join_mutation",
+          "spawn_index": 9,
+          "rig": "R15"
+        },
+        "seq": 128,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 9,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_9"
+      },
+      {
+        "server_generation": 10,
+        "wall_s": 32.60720179999771,
+        "actual_rig": "R15",
+        "realm": "client",
+        "parameters": {
+          "path": "NATIVE_DEFAULT",
+          "split": "holdout",
+          "phase": "post_join_mutation",
+          "spawn_index": 10,
+          "rig": "R15"
+        },
+        "seq": 142,
+        "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+        "schema": 1,
+        "local_generation": 10,
+        "status": "OBSERVED",
+        "kind": "case_result",
+        "no_parity_pass_claim": true,
+        "case": "spawn_10"
+      }
+    ],
+    "reason": "ten native loads completed",
+    "status": "OBSERVED",
+    "independent_play_session": 5,
+    "no_parity_pass_claim": true,
+    "realm": "client",
+    "wall_s": 32.66894209999009,
+    "scope": "One Play session; ten native Character generations are repeated respawns, never ten independent joins",
+    "case": "spawn_10",
+    "count": 10,
+    "initial_join_case": "native_default_r15_altered_play5",
+    "seq": 306,
+    "kind": "run_result",
+    "schema": 1,
+    "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46"
+  },
+  "baseline_summary": [
+    {
+      "geometry": null,
+      "WalkSpeed": null,
+      "rig": "R15",
+      "completed_trials": 10,
+      "statuses": {
+        "OBSERVED": 10
+      },
+      "climb_outcomes": {
+        "None": 10
+      },
+      "vertical_speed": null,
+      "max_root_rise": null,
+      "holdout_ids": [
+        "spawn_1",
+        "spawn_2",
+        "spawn_3",
+        "spawn_4",
+        "spawn_5",
+        "spawn_6",
+        "spawn_7",
+        "spawn_8",
+        "spawn_9",
+        "spawn_10"
+      ],
+      "train_ids": [],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    }
+  ],
+  "a2_counts": {
+    "fresh_instances": 0,
+    "official_models": {},
+    "native_getter_observations": {}
+  },
+  "source_provenance": "Real official Studio public APIs; raw output is immutable evidence once saved; no original assets/source exported",
+  "compressed_transport": {
+    "status": "VERIFIED",
+    "manifest": {
+      "encoded_bytes": 28872,
+      "encoding": "base64",
+      "codec_policy": "Public EncodingService Zstd3/Base64/Sha256; byte-identical Bobux-authored telemetry only",
+      "compressed_sha256": "fdd49befe43e4f224d731183dde4e8bb960a0fce364c6c488e08c8db2a479cb7",
+      "compression_level": 3,
+      "raw_bytes": 966329,
+      "compressed_bytes": 21654,
+      "packets": 42,
+      "raw_records": 306,
+      "compression": "zstd",
+      "run_id": "bdff1d90-55fa-41d0-83dd-19ddfe0cdc46",
+      "packet_bytes": 700,
+      "schema": 1,
+      "raw_sha256": "4448cd8a4fa99ba596c1a8a2495d67a18688095f390138a03c23e11c3d648792"
+    },
+    "integrity_issues": [],
+    "scope": "Byte-exact own telemetry transport; no parity PASS claim"
+  }
+}

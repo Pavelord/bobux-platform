@@ -1,0 +1,14 @@
+[package]
+name = "rbxdom_place_oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+rbx_binary = "=3.0.1"
+rbx_xml = "=3.0.0"
+rbx_dom_weak = "=4.2.0"
+serde_json = "1.0"
+sha2 = "0.10"
+flate2 = "1.1"

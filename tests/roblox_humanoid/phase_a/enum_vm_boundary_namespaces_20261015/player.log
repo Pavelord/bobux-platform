@@ -1,0 +1,44 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[LuaScriptEngine] Runtime: Luau 0.719
+[humanoid-player] PASS actual Luau listeners and property writes
+[humanoid-player] PASS AutoRotate and HipHeight survive runtime synchronization
+[humanoid-player] PASS all public Humanoid state IDs
+[humanoid-player] PASS AutoRotate false preserves facing while walking
+[humanoid-player] PASS AutoRotate false also covers shift lock and camera input
+[humanoid-player] PASS AutoRotate true resumes camera facing
+[humanoid-player] PASS Humanoid Move keeps analog speed and reports unit direction
+[humanoid-player] PASS Running reports stopping and MoveDirection follows intent
+[humanoid-player] PASS ChangeState Freefall preserves an ascending impulse
+[humanoid-player] PASS ascending Freefall persists through automatic state resolution
+[humanoid-player] PASS air movement follows live Workspace Gravity
+[humanoid-player] PASS JumpHeight uses the same live gravity as freefall
+[humanoid-player] PASS Landed remains observable after a physical landing
+[humanoid-player] PASS Landed resolves to Running after its configured transient
+[humanoid-player] PASS disabled Jumping blocks both script and input jumps
+[humanoid-player] PASS PlatformStand publishes PlatformStanding and suppresses control
+[humanoid-player] PASS explicit Physics stays active until a script changes state
+[humanoid-player] PASS ChangeState Running exits passive physics
+[humanoid-player] PASS MoveTo follows the target part local point
+[humanoid-player] PASS moving MoveTo target completes once
+[humanoid-player] PASS MoveTo timeout reports false once
+[humanoid-player] PASS root teleport cancels MoveTo
+[humanoid-player] PASS swimming horizontal speed is 87.5 percent of WalkSpeed
+[humanoid-player] PASS swimming respects AutoRotate false
+[humanoid-player] PASS world-space Move climbs at 70 percent independently of camera yaw=0.0
+[humanoid-player] PASS world-space Move climbs at 70 percent independently of camera yaw=3.14159265358979
+[humanoid-player] PASS disabled Climbing blocks the automatic truss motor
+[humanoid-player] PASS automatic water contact enters Swimming
+[humanoid-player] PASS disabled Swimming stops the automatic water motor
+[humanoid-player] PASS disabled Seated prevents automatic attachment
+[humanoid-player] PASS seat enters and emits Seated true with the part once
+[humanoid-player] PASS seat exit emits Seated false nil once
+[humanoid-player] PASS BreakJointsOnDeath false preserves the visual rig
+[humanoid-player] PASS BreakJointsOnDeath true retains existing fragments
+[humanoid-player] PASS respawn respects a fractional custom MaxHealth
+[humanoid-player] PASS infinite logical health survives finite damage and frame synchronization
+[humanoid-player] PASS existing HUD getters keep infinite health presentation finite
+[humanoid-player] PASS reducing MaxHealth clamps an infinite current health
+[humanoid-player] PASS original Bobux head mesh remains in use
+[humanoid-player] PASS no Luau script failures
+[humanoid-player] checks=40 failures=[]

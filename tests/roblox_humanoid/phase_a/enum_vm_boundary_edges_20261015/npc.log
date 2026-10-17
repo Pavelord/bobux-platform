@@ -1,0 +1,20 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[LuaScriptEngine] Runtime: Luau 0.719
+[humanoid-npc] PASS authored model receives motor without replacing Instance tree
+[humanoid-npc] PASS real Luau enum, shared signals, Move, camera axes, moving target
+[humanoid-npc] PASS real Luau NPC fractional health and idempotent death
+[humanoid-npc] PASS no Luau execution error
+[humanoid-npc] PASS pitched camera-relative Move uses horizontal visible forward
+[humanoid-npc] PASS NPC default gravity is 196.2 stud/s2
+[humanoid-npc] PASS NPC sees live workspace Gravity mutation
+[humanoid-npc] PASS NPC JumpHeight uses live gravity and existing scale (ballistic approximation)
+[humanoid-npc] PASS explicit Freefall keeps ascending momentum
+[humanoid-npc] PASS NPC authored JumpPower stays literal while calibrated motion preserves stud scale
+[humanoid-npc] PASS direct NPC numeric setters reject NaN/Inf and preserve values
+[humanoid-npc] PASS Physics state preserves horizontal momentum, uses world gravity over six real ticks
+[humanoid-npc] PASS MoveTo follows moved and rotated target with original local offset
+[humanoid-npc] PASS root CFrame/position teleport cancels moving-target walk
+[humanoid-npc] PASS actual NPC floor contact publishes Freefall, Landed, then Running
+[humanoid-npc] PASS GetState string RunningNoPhysics resolves to ID 10
+[humanoid-npc] failures=[]

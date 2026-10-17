@@ -1,0 +1,78 @@
+{
+  "date_local": "2026-10-15",
+  "timezone": "Europe/Kaliningrad",
+  "status": "PASS_MINIMAL_OPT_IN_SLICE",
+  "godot": "4.7.stable.official.5b4e0cb0f",
+  "luau_runtime": "0.719",
+  "results": {
+    "parity-first": {
+      "pass": 43,
+      "fail": 0,
+      "sha256": "0fed9d3c81dd42c6541dcf51653d7af6eb08f6dcaa4ed26e52b533791ca0e147"
+    },
+    "legacy-first": {
+      "pass": 43,
+      "fail": 0,
+      "sha256": "ca761e4fcc6214862b0e0e762e565824ed1d5946cf559b8fadc33f328f6f8a7b"
+    },
+    "player": {
+      "pass": 40,
+      "fail": 0,
+      "sha256": "b95bfb6615ae01be892cfee871e17ed5ce7dd66b62ca3f283d2506a04f7e340f"
+    },
+    "npc": {
+      "pass": 16,
+      "fail": 0,
+      "sha256": "d8ae414abaa5e94885e4e9b6d1b2f6dbf3c3e4ac2f9ce2e4f1e924f613425a66"
+    }
+  },
+  "consumer_scope": [
+    "Humanoid state methods/signals",
+    "Camera.CameraType: typed getter, strict setter, scalar storage; camera algorithms and event ordering remain partial"
+  ],
+  "source_sha256": {
+    "autoload/lua_script_engine.gd": "3a67ef039400a640e8ef7230f4d4884af41c47a7cf7f13722647926181a5580b",
+    "addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd": "3606b7ec67db421fa01a500848edc5e431f1e708374686f0c17d5b68d372b4bb",
+    "tools/character_parity/enum_vm_contract.luau": "bdb0a71ce1fc2103d5f7b7e0cb897e0e6c77c10cc836fababf2093947d652ad2",
+    "tools/character_parity/validate_enum_vm_boundary.gd": "966d802ba82e4c7ef8ba4451d327d802797c51d11d1cbbab4fe0e33497606f52",
+    "tools/character_parity/check_enum_vm_sources.py": "5ed06304159938a6ae30f86b31e40ae4edd33bc15d0e064bf4456a0d918d97dd",
+    "tools/character_parity/enum_vm_cyclic_contract.luau": "e5e8fbf97826e07922a42909df88de78d0c8dab7eb6a2a269c73f957d196130e",
+    "tools/character_parity/enum_vm_humanoid_edges_contract.luau": "aeebfb7fad5cfbdff48b09fadb159cf3553bb2effe6cb56dfa9c4db88cca6bed",
+    "tools/character_parity/enum_vm_camera_contract.luau": "ef58f9b8c058613debc95dee7b109f20868f536757c75d518edeacb36865789b",
+    "addons/roblox_runtime/enums/roblox_enum_registry.gd": "bd1707413c2350e0626b89828e1e84f5fc684d7b26db6239429f8afbbb9127e1",
+    "addons/roblox_runtime/enums/roblox_enum_item.gd": "cfd948a81327a5b889129fb2b92fe39634334f61add26553a74cd36e5b2772a9",
+    "addons/roblox_runtime/enums/roblox_enum_type.gd": "5a7459bd4aa149baca7784cef824a6fd232d67919d8e9270fde56aabf9a093c2",
+    "addons/roblox_runtime/enums/roblox_enums.gd": "971893889865abf25cde50e16dd34b72570ee361866227f6c21b697861667f06"
+  },
+  "native_reference_sha256": {
+    "tests/roblox_humanoid/phase_a/2026-10-14-studio-enum-coercion-run01.raw.json": "bf6f00d2dd18a509353347852a76aec14ae5778e81e23eb2773923961e154e19",
+    "tests/roblox_humanoid/phase_a/2026-10-15-studio-humanoid-edges-run01.raw.json": "22772eaa9965b6711656ab67f231c440c8a9dbcaca57b3e990824af9bdb28b9e"
+  },
+  "dirty_snapshot_sha256": "5f6bc6f95391354f5aaaefc8c97adf07046a7c213a99799731275a7f6e4f8ca9",
+  "development_failures": [
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_camera_20261015/development_failures/enum-vm-camera-r02.log",
+      "sha256": "9d417b24c67ba0ff7ccd4ad852b0de79269183114f94099e046b9878b65968ac"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_camera_20261015/development_failures/enum-vm-camera-r03.log",
+      "sha256": "b685c2c9f52a8a1464b39a34c447ad437a094e3a9012e167fccd4d820fddb248"
+    }
+  ],
+  "open": [
+    "complete enum namespace",
+    "typed boundaries for all other enum properties",
+    "remaining bool casts and noncanonical ChangeState coercion",
+    "generic BindableEvent EnumItem interop between registries",
+    "tagged wire codec and explicit capability negotiation",
+    "generic BobuxEvent equality (rawequal identity verified; default Object equality remains unchanged)",
+    "Humanoid physical/default-state calibration"
+  ],
+  "unchanged": [
+    "ExistingNumericEnums default",
+    "protected production files",
+    "native C++",
+    "map sources",
+    "historical 48 PASS / 5 FAIL / 18 SKIP calibration"
+  ]
+}

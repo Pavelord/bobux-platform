@@ -1,0 +1,38 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[LuaScriptEngine] Runtime: Luau 0.719
+[enum-vm] PASS reject invalid profile  before allocation 
+[enum-vm] PASS reject invalid profile TypoParity before allocation 
+[enum-vm] PASS reject invalid profile <null> before allocation 
+[enum-vm] PASS reject invalid profile 77 before allocation 
+[enum-vm] PASS reject invalid profile false before allocation 
+[enum-vm] PASS actual scheduled legacy VM started { "ok": true, "runtime_id": 1, "scheduled": true, "completed": false }
+[enum-vm] PASS actual scheduled parity VM started { "ok": true, "runtime_id": 2, "scheduled": true, "completed": false }
+[enum-vm] PASS both scripts reached listeners 
+[enum-vm] PASS legacy uses shared actual BobuxInstance and event 
+[enum-vm] PASS parity uses the same actual BobuxInstance and event 
+[enum-vm] PASS legacy actual callbacks/modules/coroutines/tasks 
+[enum-vm] PASS parity actual callbacks/modules/coroutines/tasks 
+[enum-vm] PASS canonical state setter zero returns and scalar backend 
+[enum-vm] PASS internal Humanoid stores bool under scalar state key 
+[enum-vm] PASS canonical ChangeState calls actual motor and returns no values 
+[enum-vm] PASS both Wait paths receive converted arguments 
+[enum-vm] PASS legacy event arguments remain numbers 
+[enum-vm] PASS parity Connect extracted lowercase Once Wait module arguments 
+[enum-vm] PASS Connect and Wait preserve raw interior false and trailing nil 
+[enum-vm] PASS legacy Once/Wait exactly once 
+[enum-vm] PASS parity Once/Wait exactly once 
+[enum-vm] PASS install actual nested callback B to A to B 
+[enum-vm] PASS nested callback preserves both VM profiles 
+[enum-vm] PASS cross callbacks reached both native VM hooks ["A to B: ", "B to A: "]
+[enum-vm] PASS Disconnect prevents subsequent legacy event delivery 
+[enum-vm] PASS Once churn starts in actual scheduled coroutine 
+[enum-vm] PASS Once churn executes all 256 callbacks 
+[enum-vm] PASS VM owner does not retain unbounded Once history 19
+[enum-vm] PASS drop namespace and collect GC retains VM registry 
+[enum-vm] PASS closing legacy VM leaves parity profile live 
+[enum-vm] PASS Stop disconnects parity listeners on sibling Humanoid 
+[enum-vm] PASS parity VM teardown releases registry and adapter 
+[enum-vm] PASS deferred start retains immutable opt-in profile 
+[enum-vm] PASS no Luau runtime errors []
+[enum-vm] PASS=34 FAIL=0

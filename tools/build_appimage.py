@@ -21,7 +21,10 @@ with artifact.open('wb') as target:
         with source.open('rb') as stream:
             shutil.copyfileobj(stream, target)
 artifact.chmod(0o755)
-smoke = subprocess.run([str(artifact), '--headless', '--', '--verify-lua-runtime'], env={**os.environ, 'APPIMAGE_EXTRACT_AND_RUN': '1'}, capture_output=True, text=True, timeout=120)
+# Keep the extraction inside the deployment's verified temporary directory.
+# EXTRACT_AND_RUN left multi-hundred-MiB appimage_extracted_* directories in /tmp.
+subprocess.run([str(artifact), '--appimage-extract'], cwd=stage, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=120)
+smoke = subprocess.run([str(stage / 'squashfs-root/AppRun'), '--headless', '--', '--verify-lua-runtime'], capture_output=True, text=True, timeout=120)
 assert smoke.returncode == 0 and 'BOBUX_LUA_SMOKE_OK' in smoke.stdout, (smoke.stdout + smoke.stderr)[-4000:]
 manifest_path = out / 'desktop-latest.json'
 manifest = json.loads(manifest_path.read_text())

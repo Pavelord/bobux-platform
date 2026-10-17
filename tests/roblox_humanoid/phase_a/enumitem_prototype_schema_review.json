@@ -1,0 +1,112 @@
+{
+  "scope": "STATIC_DEFINITION_PAIRS_ONLY; runtime/order/profile integration NOT_RUN",
+  "official_commit": "031b2f91d3d47274c255f3ed5691c29f792c181d",
+  "registry_source_sha256": "bd1707413c2350e0626b89828e1e84f5fc684d7b26db6239429f8afbbb9127e1",
+  "domains": {
+    "HumanoidStateType": {
+      "status": "STATIC_MATCH",
+      "item_count": 17,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "HumanoidRigType": {
+      "status": "STATIC_MATCH",
+      "item_count": 2,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "CameraType": {
+      "status": "STATIC_MATCH",
+      "item_count": 8,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "CameraMode": {
+      "status": "STATIC_MATCH",
+      "item_count": 2,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "CoreGuiType": {
+      "status": "STATIC_MATCH",
+      "item_count": 10,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "AnimationPriority": {
+      "status": "STATIC_MATCH",
+      "item_count": 7,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "Material": {
+      "status": "STATIC_MATCH",
+      "item_count": 45,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "SensorMode": {
+      "status": "STATIC_MATCH",
+      "item_count": 4,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "SensorUpdateType": {
+      "status": "STATIC_MATCH",
+      "item_count": 2,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    },
+    "RaycastFilterType": {
+      "status": "STATIC_MATCH",
+      "item_count": 2,
+      "missing_pairs": [],
+      "extra_pairs": [],
+      "duplicate_names": [],
+      "duplicate_values": [],
+      "same_as_yaml_sequence": true,
+      "sequence_is_empirically_confirmed": false
+    }
+  },
+  "missing_requested_domains": [],
+  "definition_pairs_ok": true,
+  "registered_domain_count": 10,
+  "canonical_item_count": 99,
+  "completeness_scope": "Only the listed domains; a match does not establish complete Enum:GetEnums coverage. Alias behavior is checked by separate native/VM fixtures."
+}

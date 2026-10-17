@@ -1,0 +1,159 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Cannot infer the type of "numeric_string" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd:88)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://tools/character_parity/validate_enum_vm_boundary.gd:0)
+ERROR: Failed to load script "res://tools/character_parity/validate_enum_vm_boundary.gd" with error "Compilation failed".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+[LuaScriptEngine] Runtime: Luau 0.719
+[enum-vm] PASS reject invalid profile  before allocation 
+[enum-vm] PASS reject invalid profile TypoParity before allocation 
+[enum-vm] PASS reject invalid profile <null> before allocation 
+[enum-vm] PASS reject invalid profile 77 before allocation 
+[enum-vm] PASS reject invalid profile false before allocation 
+SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base 'GDScript'.
+   at: _push_runtime_bindings (res://autoload/lua_script_engine.gd:4368)
+   GDScript backtrace (most recent call first):
+       [0] _push_runtime_bindings (res://autoload/lua_script_engine.gd:4368)
+       [1] start_script (res://autoload/lua_script_engine.gd:3514)
+       [2] run_script (res://autoload/lua_script_engine.gd:3311)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:76)
+SCRIPT ERROR: Invalid call. Nonexistent function 'type_setup' in base 'GDScript'.
+   at: _native_lua_type_setup (res://autoload/lua_script_engine.gd:4500)
+   GDScript backtrace (most recent call first):
+       [0] _native_lua_type_setup (res://autoload/lua_script_engine.gd:4500)
+       [1] start_script (res://autoload/lua_script_engine.gd:3546)
+       [2] run_script (res://autoload/lua_script_engine.gd:3311)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:76)
+WARNING: [LuaScriptEngine] EnumVmParity: [LUA_ERRRUN - runtime error ]
+[LUA] [LUA_ERRRUN - runtime error ]
+Bobux:326: attempt to index nil with 'HumanoidStateType'
+Bobux:326: attempt to index nil with 'HumanoidStateType'
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _resume_script_runtime (res://autoload/lua_script_engine.gd:3982)
+       [1] start_script (res://autoload/lua_script_engine.gd:3591)
+       [2] run_script (res://autoload/lua_script_engine.gd:3311)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:76)
+[enum-vm] PASS actual scheduled legacy VM started { "ok": true, "runtime_id": 2, "scheduled": false, "completed": true }
+[enum-vm] FAIL actual scheduled parity VM started { "ok": false, "error": "[LUA ERROR] [LUA_ERRRUN - runtime error ]\nBobux:326: attempt to index nil with \'HumanoidStateType\'", "runtime_id": 1 }
+[enum-vm] FAIL both scripts reached listeners 
+[enum-vm] PASS legacy uses shared actual BobuxInstance and event 
+[enum-vm] FAIL parity uses the same actual BobuxInstance and event [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] PASS legacy actual callbacks/modules/coroutines/tasks 
+[enum-vm] FAIL parity actual callbacks/modules/coroutines/tasks [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[enum-vm] FAIL cyclic operands keys writes method arguments and ignored extras stay Lua-side [LUA_ERRRUN - runtime error ]
+Bobux:4: attempt to index nil with 'HumanoidStateType'
+
+
+[enum-vm] FAIL all 94 cyclic-boundary assertions executed 0
+[enum-vm] FAIL native enabled-string and extracted-receiver contract [LUA_ERRRUN - runtime error ]
+Bobux:4: attempt to index nil with 'HumanoidStateType'
+
+
+[enum-vm] FAIL native edge contract completes including quiet event window 0
+[enum-vm] PASS immutable native CameraType input reference 
+[enum-vm] FAIL actual CurrentCamera/fresh CameraType strict setter and typed getter [LUA_ERRRUN - runtime error ]
+Bobux:8: attempt to index nil with 'CameraType'
+
+
+[enum-vm] FAIL CameraType contract completes all 594 assertions 0
+ERROR: The object does not have any 'meta' values with the key 'bobux_enum_boundary_owner'.
+   at: get_meta (core/object/object.cpp:1052)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tools/character_parity/validate_enum_vm_boundary.gd:136)
+[enum-vm] FAIL canonical state setter zero returns and scalar backend [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] FAIL internal Humanoid stores bool under scalar state key 
+[enum-vm] FAIL canonical ChangeState calls actual motor and returns no values [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] FAIL both Wait paths receive converted arguments 
+[enum-vm] FAIL legacy event arguments remain numbers [LUA_ERRRUN - runtime error ]
+Bobux:463: assertion failed!
+Bobux:463 function check_events
+Bobux:1
+
+
+[enum-vm] FAIL parity Connect extracted lowercase Once Wait module arguments [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[LUA] Bobux:332: legacy state expected Freefall/5, got number/8
+WARNING: [LuaScriptEngine] Task failed: Bobux:332: legacy state expected Freefall/5, got number/8
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4438)
+       [2] _invoke_connection (res://autoload/lua_script_engine.gd:154)
+       [3] _invoke_connection (res://autoload/lua_script_engine.gd:147)
+       [4] FireArgs (res://autoload/lua_script_engine.gd:116)
+       [5] Fire (res://autoload/lua_script_engine.gd:112)
+       [6] _fire_existing_runtime_event (res://autoload/lua_script_engine.gd:7158)
+       [7] run (res://tools/character_parity/validate_enum_vm_boundary.gd:149)
+[enum-vm] FAIL Connect and Wait preserve raw interior false and trailing nil 
+[enum-vm] FAIL legacy Once/Wait exactly once [LUA_ERRRUN - runtime error ]
+Bobux:463: assertion failed!
+Bobux:463 function check_events
+Bobux:1
+
+
+[enum-vm] FAIL parity Once/Wait exactly once [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[enum-vm] FAIL install actual nested callback B to A to B [LUA_ERRRUN - runtime error ]
+Bobux:129: attempt to call a nil value
+Bobux:133 function spawn
+Bobux:1
+
+
+[LUA] Bobux:332: legacy state expected Freefall/5, got number/8
+WARNING: [LuaScriptEngine] Task failed: Bobux:332: legacy state expected Freefall/5, got number/8
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4438)
+       [2] _invoke_connection (res://autoload/lua_script_engine.gd:154)
+       [3] _invoke_connection (res://autoload/lua_script_engine.gd:147)
+       [4] FireArgs (res://autoload/lua_script_engine.gd:116)
+       [5] Fire (res://autoload/lua_script_engine.gd:112)
+       [6] _fire_existing_runtime_event (res://autoload/lua_script_engine.gd:7158)
+       [7] run (res://tools/character_parity/validate_enum_vm_boundary.gd:168)
+[enum-vm] FAIL nested callback preserves both VM profiles [LUA_ERRRUN - runtime error ]
+Bobux:1: assertion failed!
+Bobux:1
+
+
+[enum-vm] FAIL cross callbacks reached both native VM hooks []
+[enum-vm] FAIL Disconnect prevents subsequent legacy event delivery [LUA_ERRRUN - runtime error ]
+Bobux:464: assertion failed!
+Bobux:464 function check_events
+Bobux:1
+
+
+[enum-vm] FAIL Once churn starts in actual scheduled coroutine [LUA_ERRRUN - runtime error ]
+Bobux:129: attempt to call a nil value
+Bobux:133 function spawn
+Bobux:1
+
+
+[enum-vm] FAIL Once churn executes all 256 callbacks 
+ERROR: The object does not have any 'meta' values with the key 'bobux_enum_boundary_owner'.
+   at: get_meta (core/object/object.cpp:1052)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tools/character_parity/validate_enum_vm_boundary.gd:181)
+SCRIPT ERROR: Invalid access to property or key '_connections' on a base object of type 'Nil'.
+   at: run (res://tools/character_parity/validate_enum_vm_boundary.gd:182)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tools/character_parity/validate_enum_vm_boundary.gd:182)

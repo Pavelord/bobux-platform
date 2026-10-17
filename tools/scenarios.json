@@ -1,0 +1,1785 @@
+{
+  "schema_version": 1,
+  "frame_semantics": "Durations are physics/Stepped ticks. move is a world-space vector with magnitude 0..1; jump is a one-tick edge; climb_axis is -1 down, +1 up.",
+  "course": {
+    "parts": [
+      {
+        "name": "walk_stop_floor",
+        "kind": "Part",
+        "position": [
+          0,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "jump_stationary_floor",
+        "kind": "Part",
+        "position": [
+          30,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "jump_run_floor",
+        "kind": "Part",
+        "position": [
+          48,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_0_5_start_floor",
+        "kind": "Part",
+        "position": [
+          72,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_0_5_block",
+        "kind": "Part",
+        "position": [
+          72,
+          0.25,
+          -6
+        ],
+        "size": [
+          10,
+          0.5,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_1_start_floor",
+        "kind": "Part",
+        "position": [
+          96,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_1_block",
+        "kind": "Part",
+        "position": [
+          96,
+          0.5,
+          -6
+        ],
+        "size": [
+          10,
+          1,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_1_5_start_floor",
+        "kind": "Part",
+        "position": [
+          120,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_1_5_block",
+        "kind": "Part",
+        "position": [
+          120,
+          0.75,
+          -6
+        ],
+        "size": [
+          10,
+          1.5,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_2_start_floor",
+        "kind": "Part",
+        "position": [
+          144,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_2_block",
+        "kind": "Part",
+        "position": [
+          144,
+          1,
+          -6
+        ],
+        "size": [
+          10,
+          2,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_3_start_floor",
+        "kind": "Part",
+        "position": [
+          168,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_3_block",
+        "kind": "Part",
+        "position": [
+          168,
+          1.5,
+          -6
+        ],
+        "size": [
+          10,
+          3,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_4_start_floor",
+        "kind": "Part",
+        "position": [
+          192,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_4_block",
+        "kind": "Part",
+        "position": [
+          192,
+          2,
+          -6
+        ],
+        "size": [
+          10,
+          4,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_5_start_floor",
+        "kind": "Part",
+        "position": [
+          216,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_5_block",
+        "kind": "Part",
+        "position": [
+          216,
+          2.5,
+          -6
+        ],
+        "size": [
+          10,
+          5,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_6_5_start_floor",
+        "kind": "Part",
+        "position": [
+          240,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "ledge_6_5_block",
+        "kind": "Part",
+        "position": [
+          240,
+          3.25,
+          -6
+        ],
+        "size": [
+          10,
+          6.5,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "stairs_start_floor",
+        "kind": "Part",
+        "position": [
+          270,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "stairs_1",
+        "kind": "Part",
+        "position": [
+          270,
+          0.25,
+          -3.5
+        ],
+        "size": [
+          6,
+          0.5,
+          3
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "stairs_2",
+        "kind": "Part",
+        "position": [
+          270,
+          0.5,
+          -6.5
+        ],
+        "size": [
+          6,
+          1,
+          3
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "stairs_3",
+        "kind": "Part",
+        "position": [
+          270,
+          0.75,
+          -9.5
+        ],
+        "size": [
+          6,
+          1.5,
+          3
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "stairs_4",
+        "kind": "Part",
+        "position": [
+          270,
+          1,
+          -12.5
+        ],
+        "size": [
+          6,
+          2,
+          3
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "slope_start_floor",
+        "kind": "Part",
+        "position": [
+          294,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "inclined_slope",
+        "kind": "Part",
+        "position": [
+          294,
+          2.05,
+          -5
+        ],
+        "size": [
+          8,
+          1,
+          12
+        ],
+        "rotation_deg": [
+          20,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "beam_1_start_floor",
+        "kind": "Part",
+        "position": [
+          318,
+          -0.5,
+          8
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "beam_width_1",
+        "kind": "Part",
+        "position": [
+          318,
+          0.5,
+          -8
+        ],
+        "size": [
+          1,
+          1,
+          24
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "beam_2_start_floor",
+        "kind": "Part",
+        "position": [
+          342,
+          -0.5,
+          8
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "beam_width_2",
+        "kind": "Part",
+        "position": [
+          342,
+          0.5,
+          -8
+        ],
+        "size": [
+          2,
+          1,
+          24
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "edge_platform",
+        "kind": "Part",
+        "position": [
+          366,
+          0.5,
+          -1
+        ],
+        "size": [
+          8,
+          1,
+          12
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "corner_platform",
+        "kind": "Part",
+        "position": [
+          390,
+          0.5,
+          -3
+        ],
+        "size": [
+          6,
+          1,
+          6
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "wall_jump_start_floor",
+        "kind": "Part",
+        "position": [
+          414,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "wall_jump_wall",
+        "kind": "Part",
+        "position": [
+          414,
+          2,
+          -3
+        ],
+        "size": [
+          8,
+          4,
+          0.5
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "beam_landing_start_floor",
+        "kind": "Part",
+        "position": [
+          438,
+          -0.5,
+          6
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "landing_narrow_beam",
+        "kind": "Part",
+        "position": [
+          438,
+          0.5,
+          0
+        ],
+        "size": [
+          1,
+          1,
+          24
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "truss_approach_start_floor",
+        "kind": "Part",
+        "position": [
+          462,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "vertical_truss",
+        "kind": "TrussPart",
+        "position": [
+          462,
+          4,
+          -6
+        ],
+        "size": [
+          2,
+          8,
+          1
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "angled_truss",
+        "kind": "TrussPart",
+        "position": [
+          486,
+          4,
+          -6
+        ],
+        "size": [
+          2,
+          8,
+          1
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          20
+        ]
+      },
+      {
+        "name": "truss_course_floor",
+        "kind": "Part",
+        "position": [
+          510,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "truss_angle_course_floor",
+        "kind": "Part",
+        "position": [
+          534,
+          -0.5,
+          3
+        ],
+        "size": [
+          12,
+          1,
+          10
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "fall_floor",
+        "kind": "Part",
+        "position": [
+          558,
+          -0.5,
+          -1
+        ],
+        "size": [
+          12,
+          1,
+          12
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "truss_edge_floor",
+        "kind": "Part",
+        "position": [
+          590,
+          0.5,
+          -1
+        ],
+        "size": [
+          12,
+          1,
+          12
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "truss_edge_block",
+        "kind": "Part",
+        "position": [
+          590,
+          1,
+          -8
+        ],
+        "size": [
+          12,
+          2,
+          8
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "truss_by_ledge",
+        "kind": "TrussPart",
+        "position": [
+          590,
+          4,
+          -3
+        ],
+        "size": [
+          2,
+          8,
+          1
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "walk_start_stop",
+      "spawn": [
+        0,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 60,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 45,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_stationary",
+      "spawn": [
+        30,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 15,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 100,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_run",
+      "spawn": [
+        48,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 100,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_0_5",
+      "spawn": [
+        72,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_1",
+      "spawn": [
+        96,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_1_5",
+      "spawn": [
+        120,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_2",
+      "spawn": [
+        144,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_3",
+      "spawn": [
+        168,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_4",
+      "spawn": [
+        192,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_5",
+      "spawn": [
+        216,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_ledge_6_5",
+      "spawn": [
+        240,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 10,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 110,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_stairs",
+      "spawn": [
+        270,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 240,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_slope",
+      "spawn": [
+        294,
+        3.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 180,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_beam_width_1",
+      "spawn": [
+        318,
+        3.0,
+        12
+      ],
+      "commands": [
+        {
+          "ticks": 240,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_beam_width_2",
+      "spawn": [
+        342,
+        3.0,
+        12
+      ],
+      "commands": [
+        {
+          "ticks": 240,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_edge_slow",
+      "spawn": [
+        366,
+        4.0,
+        4
+      ],
+      "commands": [
+        {
+          "ticks": 420,
+          "move": [
+            0,
+            0,
+            -0.1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "walk_corner_slow",
+      "spawn": [
+        390,
+        4.0,
+        -2
+      ],
+      "commands": [
+        {
+          "ticks": 300,
+          "move": [
+            0.1,
+            0,
+            -0.1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "jump_wall_close",
+      "spawn": [
+        414,
+        3.0,
+        2
+      ],
+      "commands": [
+        {
+          "ticks": 12,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 75,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "land_narrow_beam",
+      "spawn": [
+        438,
+        13.0,
+        0
+      ],
+      "commands": [
+        {
+          "ticks": 150,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_approach_0",
+      "spawn": [
+        462,
+        3.0,
+        0
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_approach_45",
+      "spawn": [
+        458,
+        3.0,
+        -2
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            0.7071068,
+            0,
+            -0.7071068
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_approach_90",
+      "spawn": [
+        457,
+        3.0,
+        -6
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            1,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_approach_135",
+      "spawn": [
+        458,
+        3.0,
+        -10
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            0.7071068,
+            0,
+            0.7071068
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_approach_angled",
+      "spawn": [
+        486,
+        3.0,
+        0
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_climb_up",
+      "spawn": [
+        462,
+        3.0,
+        -4
+      ],
+      "commands": [
+        {
+          "ticks": 22,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 120,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 1
+        }
+      ]
+    },
+    {
+      "name": "truss_climb_down",
+      "spawn": [
+        462,
+        7.0,
+        -4
+      ],
+      "commands": [
+        {
+          "ticks": 22,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 120,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": -1
+        }
+      ]
+    },
+    {
+      "name": "truss_exit_top",
+      "spawn": [
+        462,
+        8.0,
+        -4
+      ],
+      "commands": [
+        {
+          "ticks": 22,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 60,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 1
+        }
+      ]
+    },
+    {
+      "name": "truss_release",
+      "spawn": [
+        462,
+        5.0,
+        -4
+      ],
+      "commands": [
+        {
+          "ticks": 22,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 20,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_jump_off",
+      "spawn": [
+        462,
+        5.0,
+        -4
+      ],
+      "commands": [
+        {
+          "ticks": 22,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 1,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": true,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 75,
+          "move": [
+            0.5,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "fall_from_height_landed",
+      "spawn": [
+        558,
+        33.0,
+        -1
+      ],
+      "commands": [
+        {
+          "ticks": 240,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 0
+        }
+      ]
+    },
+    {
+      "name": "truss_next_to_ledge",
+      "spawn": [
+        590,
+        4.0,
+        2
+      ],
+      "commands": [
+        {
+          "ticks": 30,
+          "move": [
+            0,
+            0,
+            -1
+          ],
+          "jump": false,
+          "climb_axis": 0
+        },
+        {
+          "ticks": 90,
+          "move": [
+            0,
+            0,
+            0
+          ],
+          "jump": false,
+          "climb_axis": 1
+        }
+      ]
+    }
+  ]
+}

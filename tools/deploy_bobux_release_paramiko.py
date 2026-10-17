@@ -13,6 +13,7 @@ import shlex
 import stat
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 import paramiko
@@ -158,7 +159,7 @@ def build_remote_script(
     versioned_windows = f"Bobux-Windows-{version}-build{build}.zip"
     versioned_mobile = f"Bobux-Android-{mobile_version}-build{mobile_build}.apk"
     return f"""#!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 REMOTE_ROOT={q(remote_root)}
 WEB_ROOT={q(web_root)}
@@ -180,15 +181,88 @@ echo "{hashes['linux']}  /tmp/Bobux-Linux-x86_64.tar.gz" | sha256sum -c -
 echo "{hashes['desktop']}  /tmp/desktop-latest.json" | sha256sum -c -
 # Run the actual exported Linux binary before touching the running services.
 LINUX_SMOKE=$(mktemp -d /tmp/bobux-linux-smoke.XXXXXX)
-trap 'rm -rf -- "$LINUX_SMOKE"' EXIT
+STAGE=$(mktemp -d "$REMOTE_ROOT.release-stage.XXXXXX")
+BACKUP="/opt/bobux-release-rollback-{build}-$(date -u +%Y%m%dT%H%M%SZ)"
+RUNTIME_CHANGED=0
+TRANSACTION_HELPER="$STAGE/tools/server_release_transaction.py"
+cleanup() {{
+  case "$LINUX_SMOKE" in /tmp/bobux-linux-smoke.*) rm -rf -- "$LINUX_SMOKE";; esac
+  case "$STAGE" in "$REMOTE_ROOT.release-stage."*) rm -rf -- "$STAGE";; esac
+}}
+rollback() {{
+  status=$?
+  trap - ERR
+  if [ "$RUNTIME_CHANGED" = 1 ]; then
+    echo "Release failed; restoring the previous release from $BACKUP." >&2
+    pm2 stop bobux bobux-api >/dev/null 2>&1 || true
+    if python3 "$TRANSACTION_HELPER" restore --backup "$BACKUP"; then
+      "$GODOT_BIN" --headless --editor --import --quit --path "$REMOTE_ROOT" >"$BACKUP/rollback-import.log" 2>&1 || true
+      nginx -t && systemctl reload nginx || true
+      cd /opt/bobux-api
+      set -a
+      . /opt/bobux-api/.env
+      set +a
+      pm2 restart bobux-api bobux --update-env >/dev/null || true
+      pm2 save >/dev/null || true
+    else
+      echo "Automatic file rollback failed. Snapshot retained at $BACKUP." >&2
+    fi
+  fi
+  exit "$status"
+}}
+trap cleanup EXIT
+trap rollback ERR
 tar -xzf /tmp/Bobux-Linux-x86_64.tar.gz -C "$LINUX_SMOKE"
 (cd "$LINUX_SMOKE/Bobux" && timeout 90 ./Bobux.x86_64 --headless -- --verify-lua-runtime) > "$LINUX_SMOKE/smoke.log" 2>&1 || {{ tail -n 30 "$LINUX_SMOKE/smoke.log"; exit 1; }}
 grep -q BOBUX_LUA_SMOKE_OK "$LINUX_SMOKE/smoke.log"
 echo 'Linux exported Lua smoke passed'
 python3 "$LINUX_SMOKE/build_appimage.py" "$LINUX_SMOKE" /tmp
+# Both exported Linux smoke checks have completed. Release their generated
+# extraction before staging the server and its rollback snapshot.
+case "$LINUX_SMOKE" in /tmp/bobux-linux-smoke.*) rm -rf -- "$LINUX_SMOKE";; esac
 
+# Import and test the exact staged runtime before stopping either live service.
+tar -xzf /tmp/bobux-hotfix.tar.gz -C "$STAGE"
+python3 "$STAGE/tools/validate_server_release_archive.py" /tmp/bobux-hotfix.tar.gz
+GODOT_BIN=/usr/local/bin/godot
+test -x "$GODOT_BIN"
+if ! "$GODOT_BIN" --headless --editor --import --quit --path "$STAGE" >"$STAGE/preflight-import.log" 2>&1; then
+  tail -n 50 "$STAGE/preflight-import.log" >&2
+  exit 1
+fi
+if grep -Eq 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script' "$STAGE/preflight-import.log"; then
+  echo 'Godot staged server preflight failed; live services are unchanged.' >&2
+  tail -n 50 "$STAGE/preflight-import.log" >&2
+  exit 1
+fi
+if ! timeout 90 "$GODOT_BIN" --headless --path "$STAGE" -- --verify-lua-runtime >"$STAGE/preflight-luau.log" 2>&1; then
+  tail -n 50 "$STAGE/preflight-luau.log" >&2
+  exit 1
+fi
+grep -q BOBUX_LUA_SMOKE_OK "$STAGE/preflight-luau.log"
+cd "$STAGE/services/bobux_api"
+npm ci --omit=dev
+"$NODE_BIN" --check server.js
+if ! "$NODE_BIN" --test ./*.test.mjs >"$STAGE/preflight-api.log" 2>&1; then
+  tail -n 60 "$STAGE/preflight-api.log" >&2
+  exit 1
+fi
+pm2 describe bobux >/dev/null
+pm2 describe bobux-api >/dev/null
+test -f /opt/bobux-api/.env
+# Verify protected credentials exist without displaying their values.
+set -a
+. /opt/bobux-api/.env
+set +a
+test -n "${{BOBUX_SERVICE_KEY:-}}"
+python3 "$TRANSACTION_HELPER" snapshot --archive /tmp/bobux-hotfix.tar.gz \
+  --backup "$BACKUP" --server-root "$REMOTE_ROOT" --api-root /opt/bobux-api \
+  --web-root "$WEB_ROOT" --versioned-windows "$VERSIONED_WINDOWS" --versioned-mobile "$VERSIONED_MOBILE"
+RUNTIME_CHANGED=1
+pm2 stop bobux bobux-api >/dev/null
+python3 "$TRANSACTION_HELPER" retire-legacy --backup "$BACKUP"
 mkdir -p "$REMOTE_ROOT" "$WEB_ROOT/launcher" "$WEB_ROOT/downloads" "$WEB_ROOT/mobile" /var/log/bobux
-tar -xzf /tmp/bobux-hotfix.tar.gz -C "$REMOTE_ROOT"
+rsync -a --exclude='preflight-*.log' "$STAGE/" "$REMOTE_ROOT/"
 
 
 if [ -f "$REMOTE_ROOT/ops/vps/admin.html" ]; then
@@ -197,49 +271,45 @@ fi
 
 test -f "$REMOTE_ROOT/ops/vps/bobux_nginx.conf"
 install -m 0644 "$REMOTE_ROOT/ops/vps/bobux_nginx.conf" /etc/nginx/sites-available/bobux
-ln -sfn /etc/nginx/sites-available/bobux /etc/nginx/sites-enabled/bobux
-rm -f /etc/nginx/sites-enabled/default
+test -e /etc/nginx/sites-enabled/bobux
 nginx -t
 systemctl reload nginx
 
 test -d "$REMOTE_ROOT/services/bobux_api"
 mkdir -p /opt/bobux-api
-rsync -a --delete --exclude=.env --exclude=node_modules --exclude=data --exclude=storage --exclude=uploads --exclude='*.sqlite*' --exclude='*.db*' "$REMOTE_ROOT/services/bobux_api/" /opt/bobux-api/
-if [ ! -f /opt/bobux-api/.env ] && [ -f /opt/bobux-api/.env.example ]; then
-  cp /opt/bobux-api/.env.example /opt/bobux-api/.env
-fi
+rsync -a --delete --exclude='.env*' --exclude=data --exclude=storage --exclude=uploads --exclude='*.sqlite*' --exclude='*.db*' "$REMOTE_ROOT/services/bobux_api/" /opt/bobux-api/
 cd /opt/bobux-api
-npm install --omit=dev
 set -a
 if [ -f /opt/bobux-api/.env ]; then
   . /opt/bobux-api/.env
 fi
 set +a
-pm2 delete bobux-api >/dev/null 2>&1 || true
-pm2 start /opt/bobux-api/server.js --name bobux-api --interpreter "$NODE_BIN" --update-env
+pm2 restart bobux-api bobux --update-env
 
-GODOT_BIN=/usr/local/bin/godot
-if [ -x "$GODOT_BIN" ]; then
-  cd "$REMOTE_ROOT"
-  "$GODOT_BIN" --headless --editor --import --quit --path "$REMOTE_ROOT" >/var/log/bobux/import.log 2>&1
-  if grep -Eq 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script' /var/log/bobux/import.log; then
-    echo 'Godot server preflight failed; existing game process kept running.' >&2
-    tail -n 50 /var/log/bobux/import.log >&2
-    exit 1
+# PM2 reports the process online before its API initialization has completed.
+# Wait for actual readiness, retaining rollback on a bounded startup failure.
+API_READY=0
+for attempt in {{1..60}}; do
+  if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:3000/api/health 2>/dev/null | grep -q '"ok":true'; then
+    API_READY=1
+    break
   fi
-  pm2 delete bobux >/dev/null 2>&1 || true
-  PUBLIC_SERVER_WS_URL="ws://109.71.245.162/ws" \
-  GODOT_SERVER_PORT="9000" \
-  GODOT_SERVER_MAP="classic" \
-  BOBUX_API_URL="${{BOBUX_API_URL:-http://127.0.0.1:3000/api}}" \
-  BOBUX_SERVICE_KEY="${{BOBUX_SERVICE_KEY:?BOBUX_SERVICE_KEY is missing from the protected server environment}}" \
-  BOBUX_SERVER_HEARTBEAT_TOKEN="${{BOBUX_SERVER_HEARTBEAT_TOKEN:-}}" \
-  pm2 start "$GODOT_BIN" --name bobux -- \
-    --headless --path "$REMOTE_ROOT" --script res://server/server_main.gd
-fi
-
-sleep 3
-curl -fsS http://127.0.0.1:3000/api/health | grep -q '"ok":true'
+  sleep 1
+done
+test "$API_READY" = 1
+echo 'API readiness check passed'
+python3 - <<'PY'
+import socket, time
+for attempt in range(30):
+    try:
+        with socket.create_connection(('127.0.0.1', 9000), timeout=1):
+            break
+    except OSError:
+        if attempt == 29:
+            raise
+        time.sleep(1)
+print('Dedicated WebSocket server is listening')
+PY
 
 # Publish large artifacts first. Manifests are switched only after every hash matches.
 install -m 0644 "/tmp/$VERSIONED_WINDOWS" "$WEB_ROOT/downloads/Bobux-Windows.zip.new"
@@ -281,6 +351,8 @@ curl -fsS http://127.0.0.1/launcher/latest.json | grep -q '"build":[[:space:]]*{
 curl -fsS http://127.0.0.1/mobile/latest.json | grep -q '"build":[[:space:]]*{mobile_build}'
 curl -fsS http://127.0.0.1/api/health | grep -q '"ok":true'
 pm2 save
+RUNTIME_CHANGED=0
+trap - ERR
 echo "=== DEPLOY COMPLETE ==="
 """
 
@@ -305,11 +377,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--skip-upload", action="store_true")
+    parser.add_argument("--allow-redeploy", action="store_true", help="Explicit recovery only: permit replacing the same live build.")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if re.fullmatch(r"\d+\.\d+\.\d+", args.version) is None or re.fullmatch(r"\d+\.\d+\.\d+-mobile", args.mobile_version) is None:
+        raise RuntimeError("Release versions must use MAJOR.MINOR.PATCH and MAJOR.MINOR.PATCH-mobile.")
+    if args.build < 1 or args.mobile_build < 1:
+        raise RuntimeError("Release build numbers must be positive.")
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
     if hasattr(sys.stderr, "reconfigure"):
@@ -350,6 +427,19 @@ def main() -> int:
     for remote_path, local_path in files.items():
         minimum = 256 if local_path.suffix == ".json" else 1024 * 1024
         require_file(local_path, minimum)
+    from validate_server_release_archive import validate_archive
+    validate_archive(files["/tmp/bobux-hotfix.tar.gz"])
+    from validate_native_release_artifacts import validate_native_archive
+    validate_native_archive("server", files["/tmp/bobux-hotfix.tar.gz"], project_root)
+    windows_package = files[f"/tmp/Bobux-Windows-{args.version}-build{args.build}.zip"]
+    with zipfile.ZipFile(windows_package) as package:
+        windows_marker = json.loads(package.read("version.json"))
+    windows_architecture = windows_marker.get("arch")
+    if windows_architecture not in {"x86_32", "x86_64"}:
+        raise RuntimeError("Windows package is missing its native architecture marker.")
+    validate_native_archive("windows", windows_package, project_root, windows_architecture)
+    validate_native_archive("apk", files[f"/tmp/Bobux-Android-{args.mobile_version}-build{args.mobile_build}.apk"], project_root)
+    validate_native_archive("linux", files["/tmp/Bobux-Linux-x86_64.tar.gz"], project_root)
 
     launcher_manifest = json.loads(files["/tmp/latest.json"].read_text("utf-8"))
     mobile_manifest = json.loads(files["/tmp/mobile-latest.json"].read_text("utf-8"))
@@ -408,6 +498,16 @@ def main() -> int:
         run_remote(client, "df -h /tmp /opt /var/www | tail -n +2")
         sftp = client.open_sftp()
         try:
+            with sftp.open(posixpath.join(args.web_root, "launcher/latest.json"), "r") as remote_manifest:
+                current_windows = json.loads(remote_manifest.read().decode("utf-8"))
+            with sftp.open(posixpath.join(args.web_root, "mobile/latest.json"), "r") as remote_manifest:
+                current_mobile = json.loads(remote_manifest.read().decode("utf-8"))
+            if not args.allow_redeploy and (
+                args.build <= int(current_windows["build"]) or args.mobile_build <= int(current_mobile["build"])
+            ):
+                raise RuntimeError("Production PC and Android builds must be newer than the live manifests; use --allow-redeploy only for explicit recovery.")
+            if args.build < int(current_windows["build"]) or args.mobile_build < int(current_mobile["build"]):
+                raise RuntimeError("Deployment refuses to downgrade production builds.")
             if not args.skip_upload:
                 for remote_path, local_path in files.items():
                     print(f"Uploading {local_path.name} -> {remote_path}", flush=True)

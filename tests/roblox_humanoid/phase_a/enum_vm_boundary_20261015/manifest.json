@@ -1,0 +1,112 @@
+{
+  "date_local": "2026-10-15",
+  "timezone": "Europe/Kaliningrad",
+  "status": "PASS_MINIMAL_OPT_IN_SLICE",
+  "godot": "4.7.stable.official.5b4e0cb0f",
+  "luau_runtime": "0.719",
+  "results": {
+    "parity-first": {
+      "pass": 34,
+      "fail": 0,
+      "sha256": "3805da20eef367317395e3534df27be3ba3d8ab72939e04732149977bfda44f1"
+    },
+    "legacy-first": {
+      "pass": 34,
+      "fail": 0,
+      "sha256": "c731e771ee3c819274c8ed7dce27039bd6a6d04aabbc15ac85a3d51289957886"
+    },
+    "player": {
+      "pass": 40,
+      "fail": 0,
+      "sha256": "b95bfb6615ae01be892cfee871e17ed5ce7dd66b62ca3f283d2506a04f7e340f"
+    },
+    "npc": {
+      "pass": 16,
+      "fail": 0,
+      "sha256": "d8ae414abaa5e94885e4e9b6d1b2f6dbf3c3e4ac2f9ce2e4f1e924f613425a66"
+    }
+  },
+  "source_sha256": {
+    "autoload/lua_script_engine.gd": "1c964d1b1335328c76fa6f344a8eeea5f44a33384bb0fd043fed230fe59095e0",
+    "addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd": "335482af71b15209fe2cfd94376cc4f4709824ce42aa3c67840f2508f2b7dcdc",
+    "tools/character_parity/enum_vm_contract.luau": "6e7a8cdf28c68ad835524d245a441835e8365f72aca771c4ec5b557514802efe",
+    "tools/character_parity/validate_enum_vm_boundary.gd": "bf7418ca2bb1cf3083030435774881b638a36382c384198af42364eef2df1c37",
+    "tools/character_parity/check_enum_vm_sources.py": "c727419c739da9c29eef57082137dcd0d39cd3b533d1f00f5d8b899805a8eb9d"
+  },
+  "dirty_snapshot_sha256": "5f6bc6f95391354f5aaaefc8c97adf07046a7c213a99799731275a7f6e4f8ca9",
+  "development_failures": [
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r01.log",
+      "sha256": "e571661050df3c5c37f487df81c0a552bd28d2f0025960b7280b5c2f7fc4fa04"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r02.log",
+      "sha256": "ec57db01497fcb12146614e02879932f9e1f9298dec4550440cab6abbe02ae7f"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r03.log",
+      "sha256": "8a700c2547dcb39b905de4a26acdc667b1755f26d2e7f5adc85fd50f8e823300"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r03.json",
+      "sha256": "dcb73707f098c4f891c285016e15300869ed7d131ee16c0ed5f7fed3688b6a03"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r04.log",
+      "sha256": "8ef2fc8ba405dffece97d5c83f99e430190294cabedfd7b9bbf1a0ccf9e6895a"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r04.json",
+      "sha256": "282e18574f8b551fcca982d0fed5b939a4257c241b2e0b9e4c1032586cda1c76"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r06.log",
+      "sha256": "ba9a9a47337bb61ad0cf908777b120f3425390ba1d74a9aaddd0c2a196043192"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r06.json",
+      "sha256": "1665ecdaeb46dc24d22b82560c85ef4644ef4d3a43212f3732bb07d303f3ff4b"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r07.log",
+      "sha256": "ba9a9a47337bb61ad0cf908777b120f3425390ba1d74a9aaddd0c2a196043192"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r07.json",
+      "sha256": "1665ecdaeb46dc24d22b82560c85ef4644ef4d3a43212f3732bb07d303f3ff4b"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r08.log",
+      "sha256": "358bdd6dc6c014588e201058033ea98ed8e8e3076b5b533241e247faaa010ac1"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r08.json",
+      "sha256": "96c6d620f29b469fbea55530e7f6f2e4a71900a167f0a408c14e4cb9e44be918"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r10.log",
+      "sha256": "f553370768407e53f70a7a17552a998cfd45a0019616da1f19f7a29470aac615"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_20261015/development_failures/enum-vm-boundary-r10.json",
+      "sha256": "d332348c80b85adc7282faff1ed978dfc5c733c6fb3c7893a916d1f466c6a23c"
+    }
+  ],
+  "open": [
+    "complete enum namespace",
+    "typed boundaries for all other enum properties",
+    "native opaque-string/bool/receiver edge coercion",
+    "generic BindableEvent EnumItem interop between registries",
+    "tagged wire codec and explicit capability negotiation",
+    "generic BobuxEvent equality (rawequal identity verified; default Object equality remains unchanged)",
+    "Humanoid physical/default-state calibration"
+  ],
+  "unchanged": [
+    "ExistingNumericEnums default",
+    "protected production files",
+    "native C++",
+    "map sources",
+    "85-item registry kernel",
+    "historical 48 PASS / 5 FAIL / 18 SKIP calibration"
+  ]
+}

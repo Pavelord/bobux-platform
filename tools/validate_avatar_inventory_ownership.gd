@@ -77,6 +77,23 @@ func _initialize() -> void:
 		_restore_session(user_session, previous_user_id, previous_inventory)
 		quit(1)
 		return
+	# A phone may receive the first marketplace page while the complete owned
+	# inventory RPC times out. Unknown metadata must not delete the saved outfit.
+	ui._cloud_ownership_snapshot_complete = false
+	ui._user_avatar_data["equipped"] = ["owned_by_inventory", "metadata_not_arrived", "foreign_hat"]
+	var partial: Array = ui._get_owned_equipped_item_ids(true)
+	if partial != ["owned_by_inventory", "metadata_not_arrived"]:
+		push_error("[validate_avatar_inventory_ownership] Partial metadata erased a saved accessory or admitted a known foreign item: %s" % partial)
+		_restore_session(user_session, previous_user_id, previous_inventory)
+		quit(1)
+		return
+	ui._cloud_ownership_snapshot_complete = true
+	var complete: Array = ui._get_owned_equipped_item_ids(true)
+	if complete != ["owned_by_inventory"]:
+		push_error("[validate_avatar_inventory_ownership] Complete ownership snapshot retained an unavailable accessory")
+		_restore_session(user_session, previous_user_id, previous_inventory)
+		quit(1)
+		return
 
 	ui._user_avatar_data["saved_shirt_texture_paths"] = [
 		"user://avatar_templates/local_old.png",

@@ -1,0 +1,204 @@
+{
+	"checks": [
+		{
+			"detail": "",
+			"name": "reject invalid profile  before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile TypoParity before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile <null> before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile 77 before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile false before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": true, \"runtime_id\": 2, \"scheduled\": true, \"completed\": false }",
+			"name": "actual scheduled legacy VM started",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": false, \"error\": \"[LUA ERROR] [LUA_ERRRUN - runtime error ]\\nBobux:353: assertion failed!\", \"runtime_id\": 1 }",
+			"name": "actual scheduled parity VM started",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "both scripts reached listeners",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "legacy uses shared actual BobuxInstance and event",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to index nil with 'h'\n\n",
+			"name": "parity uses the same actual BobuxInstance and event",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "legacy actual callbacks/modules/coroutines/tasks",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to call a nil value\n\n",
+			"name": "parity actual callbacks/modules/coroutines/tasks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "cyclic operands keys writes method arguments and ignored extras stay Lua-side",
+			"status": "PASS"
+		},
+		{
+			"detail": "48.0",
+			"name": "all 48 cyclic-boundary assertions executed",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "native enabled-string and extracted-receiver contract",
+			"status": "PASS"
+		},
+		{
+			"detail": "95.0",
+			"name": "native edge contract completes including quiet event window",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to index nil with 'h'\n\n",
+			"name": "canonical state setter zero returns and scalar backend",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "internal Humanoid stores bool under scalar state key",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to index nil with 'h'\n\n",
+			"name": "canonical ChangeState calls actual motor and returns no values",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "both Wait paths receive converted arguments",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:459: assertion failed!\nBobux:459 function check_events\nBobux:1\n\n",
+			"name": "legacy event arguments remain numbers",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to call a nil value\n\n",
+			"name": "parity Connect extracted lowercase Once Wait module arguments",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "Connect and Wait preserve raw interior false and trailing nil",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:459: assertion failed!\nBobux:459 function check_events\nBobux:1\n\n",
+			"name": "legacy Once/Wait exactly once",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to call a nil value\n\n",
+			"name": "parity Once/Wait exactly once",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "install actual nested callback B to A to B",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: assertion failed!\nBobux:1\n\n",
+			"name": "nested callback preserves both VM profiles",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[]",
+			"name": "cross callbacks reached both native VM hooks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:460: assertion failed!\nBobux:460 function check_events\nBobux:1\n\n",
+			"name": "Disconnect prevents subsequent legacy event delivery",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "Once churn starts in actual scheduled coroutine",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "Once churn executes all 256 callbacks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "1",
+			"name": "VM owner does not retain unbounded Once history",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to index nil with 'h'\n\n",
+			"name": "drop namespace and collect GC retains VM registry",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: attempt to call a nil value\n\n",
+			"name": "closing legacy VM leaves parity profile live",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "Stop disconnects parity listeners on sibling Humanoid",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "parity VM teardown releases registry and adapter",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "deferred start retains immutable opt-in profile",
+			"status": "PASS"
+		},
+		{
+			"detail": "[\"[LUA_ERRRUN - runtime error ]\\nBobux:353: assertion failed!\", \"Bobux:328: legacy state expected Freefall/5, got number/8\", \"Bobux:1: attempt to index nil with \\'connections\\'\", \"Bobux:328: legacy state expected Freefall/5, got number/8\", \"Bobux:1: attempt to index nil with \\'h\\'\"]",
+			"name": "no Luau runtime errors",
+			"status": "FAIL"
+		}
+	],
+	"fail": 21,
+	"open": [
+		"complete enum namespace",
+		"other enum properties",
+		"native opaque strings and bool/receiver coercion",
+		"tagged wire codec and version negotiation",
+		"Humanoid physical calibration"
+	],
+	"pass": 17,
+	"scope": "opt-in production Humanoid EnumItem VM boundary"
+}

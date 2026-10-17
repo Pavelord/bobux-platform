@@ -1,0 +1,831 @@
+{
+  "schema": 1,
+  "fixture_version": "2026-10-14-climb-a2-life-safe",
+  "profile": "classic_humanoid",
+  "fixture_source_sha256": {
+    "common.luau": "2633991fc3f35917e64ad568011965bdd24ef5f648a875e2a500330f6183d7e3",
+    "enum_coercion.commandbar.luau": "0e672354c1287ce2b55db8b5bf9a467536b81b3d413ea380f18ba5fb468ff4e0",
+    "export.commandbar.luau": "19e53e53fb18022a86b0aef5c72cebfbf60f0e08b44255d3317aa9f805e6f2a4",
+    "export_yielding.commandbar.luau": "aa36eddbdba62188249ba9695511878f9eeff8d90d446a535989baead3e05898",
+    "measure.client.luau": "144dbb0c2d47c1de4cf5ffad3e89022a9effa10e318d946c21f6b8eb850b39d1",
+    "metadata_probe.luau": "0c7f7a9783a829710b7130e07867d42cdf6c67b51655203d8247053d9fe4db71",
+    "setup.server.luau": "23107af006cebc7065e8e68e9c14182e36560d867b010d3a63395a90c743a405",
+    "test_metadata_literals.luau": "08effb54e47a0adc2b4a0c9540c1baef20a3ae004c56e20cc2d7208eed718eb4"
+  },
+  "cases": [
+    {
+      "id": "r6_smooth_tall_block_ws16_r1",
+      "geometry": "smooth_tall_block",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_smooth_tall_block_ws16_r2",
+      "geometry": "smooth_tall_block",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_smooth_tall_block_ws16_r3",
+      "geometry": "smooth_tall_block",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_smooth_tall_block_ws16_r4",
+      "geometry": "smooth_tall_block",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_smooth_tall_block_ws16_r5",
+      "geometry": "smooth_tall_block",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_thin_part_ws16_r1",
+      "geometry": "thin_part",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_thin_part_ws16_r2",
+      "geometry": "thin_part",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_thin_part_ws16_r3",
+      "geometry": "thin_part",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_thin_part_ws16_r4",
+      "geometry": "thin_part",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_thin_part_ws16_r5",
+      "geometry": "thin_part",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws16_r1",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws16_r2",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws16_r3",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws16_r4",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws16_r5",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_single_ledge_ws16_r1",
+      "geometry": "single_ledge",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_single_ledge_ws16_r2",
+      "geometry": "single_ledge",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_single_ledge_ws16_r3",
+      "geometry": "single_ledge",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_single_ledge_ws16_r4",
+      "geometry": "single_ledge",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_single_ledge_ws16_r5",
+      "geometry": "single_ledge",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws16_r1",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws16_r2",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws16_r3",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws16_r4",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws16_r5",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 16,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws8_r1",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws8_r2",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws8_r3",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws8_r4",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws8_r5",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws32_r1",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws32_r2",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws32_r3",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws32_r4",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_regular_parts_ladder_ws32_r5",
+      "geometry": "regular_parts_ladder",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws8_r1",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws8_r2",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws8_r3",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws8_r4",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws8_r5",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 8,
+      "repeat": 5,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws32_r1",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 1,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws32_r2",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 2,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws32_r3",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 3,
+      "split": "train"
+    },
+    {
+      "id": "r6_truss_ws32_r4",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 4,
+      "split": "holdout"
+    },
+    {
+      "id": "r6_truss_ws32_r5",
+      "geometry": "truss",
+      "rig": "R6",
+      "WalkSpeed": 32,
+      "repeat": 5,
+      "split": "holdout"
+    }
+  ],
+  "durations": {
+    "active_sim_s": 6.0,
+    "settle_wall_s": 6.0,
+    "native_load_wall_s": 20.0,
+    "global_wall_s": 540
+  },
+  "support_geometry": {
+    "baseplate": {
+      "size": [
+        512,
+        1,
+        512
+      ],
+      "pos": [
+        0,
+        -0.5,
+        0
+      ],
+      "class_name": "Part",
+      "anchored": true,
+      "can_collide": true
+    },
+    "provenance": "Own fixture landing support, not an obstacle/ladders detection parameter"
+  },
+  "reset_policy": {
+    "stop_move_before_teleport": true,
+    "zero_linear_and_angular_velocity": true,
+    "native_reload_if_life_invalid": true,
+    "max_preprocessing_reloads_per_case": 2,
+    "no_measured_case_retries": true,
+    "forced_state": "Freefall only during preprocessing; never Climbing"
+  },
+  "tolerances": {
+    "speeds_relative": 0.1,
+    "distances_studs": 0.1,
+    "states": "exact observed sequence; durations compared as distributions/physical callback steps",
+    "sensor": "exact observed part/nil; no assertion of hidden internal sensor identity"
+  },
+  "noise_policy": "Five completed trials per condition. If trajectory/state spread indicates noise, BLOCKED for calibration until separately preregistered ten-repeat extension.",
+  "fixture_geometry": {
+    "smooth_tall_block": {
+      "x": -60,
+      "parts": [
+        {
+          "name": "SmoothBlock",
+          "size": [
+            12,
+            32,
+            8
+          ],
+          "pos": [
+            -60,
+            16,
+            0
+          ],
+          "class_name": "Part"
+        }
+      ]
+    },
+    "thin_part": {
+      "x": -30,
+      "parts": [
+        {
+          "name": "ThinPart",
+          "size": [
+            10,
+            32,
+            0.4
+          ],
+          "pos": [
+            -30,
+            16,
+            0
+          ],
+          "class_name": "Part"
+        }
+      ]
+    },
+    "regular_parts_ladder": {
+      "x": 0,
+      "parts": [
+        {
+          "name": "Rung00",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            0.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung01",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            2.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung02",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            3.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung03",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            5.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung04",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            6.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung05",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            8.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung06",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            9.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung07",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            11.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung08",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            12.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung09",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            14.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung10",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            15.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung11",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            17.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung12",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            18.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung13",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            20.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung14",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            21.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung15",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            23.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung16",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            24.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung17",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            26.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung18",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            27.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung19",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            29.0,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung20",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            30.5,
+            0
+          ],
+          "class_name": "Part"
+        },
+        {
+          "name": "Rung21",
+          "size": [
+            8,
+            0.5,
+            1
+          ],
+          "pos": [
+            0,
+            32.0,
+            0
+          ],
+          "class_name": "Part"
+        }
+      ]
+    },
+    "single_ledge": {
+      "x": 30,
+      "parts": [
+        {
+          "name": "SingleLedge",
+          "size": [
+            12,
+            4,
+            8
+          ],
+          "pos": [
+            30,
+            2,
+            0
+          ],
+          "class_name": "Part"
+        }
+      ]
+    },
+    "truss": {
+      "x": 60,
+      "parts": [
+        {
+          "name": "Truss",
+          "size": [
+            2,
+            32,
+            2
+          ],
+          "pos": [
+            60,
+            16,
+            0
+          ],
+          "class_name": "TrussPart"
+        }
+      ]
+    }
+  },
+  "sensor_settings": {
+    "SearchDistance": 3.0,
+    "LadderSearchHeight": 6.0,
+    "LadderSearchOffset": 0.0,
+    "provenance": "ENGINE_APPROXIMATION fixture settings, not inferred Humanoid thresholds",
+    "UpdateType": "OnRead"
+  },
+  "revision_reason": "run01 lost Character after leaving 100-stud-deep support plane; enlarge support only and make reset life-safe",
+  "previous_support_geometry": {
+    "size": [
+      220,
+      1,
+      100
+    ],
+    "pos": [
+      0,
+      -0.5,
+      0
+    ]
+  },
+  "superseded_run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+  "fixture_safety_status": "STATIC_CHECKED_ONLY; native 45-case replay required",
+  "case_obstacle_geometry_changed": false,
+  "support_geometry_changed": true
+}

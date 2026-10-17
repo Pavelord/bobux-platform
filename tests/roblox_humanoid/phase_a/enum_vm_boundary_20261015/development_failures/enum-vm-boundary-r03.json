@@ -1,0 +1,144 @@
+{
+	"checks": [
+		{
+			"detail": "",
+			"name": "reject invalid profile  before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile TypoParity before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile <null> before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile 77 before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "reject invalid profile false before allocation",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": true, \"runtime_id\": 1, \"scheduled\": true, \"completed\": false }",
+			"name": "actual scheduled legacy VM started",
+			"status": "PASS"
+		},
+		{
+			"detail": "{ \"ok\": true, \"runtime_id\": 2, \"scheduled\": true, \"completed\": false }",
+			"name": "actual scheduled parity VM started",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "both scripts reached listeners",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: assertion failed!\nBobux:1\n\n",
+			"name": "legacy uses shared actual BobuxInstance and event",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:1: assertion failed!\nBobux:1\n\n",
+			"name": "parity uses the same actual BobuxInstance and event",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:440: assertion failed!\nBobux:440 function check_tasks\nBobux:1\n\n",
+			"name": "legacy actual callbacks/modules/coroutines/tasks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:440: assertion failed!\nBobux:440 function check_tasks\nBobux:1\n\n",
+			"name": "parity actual callbacks/modules/coroutines/tasks",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "canonical state setter zero returns and scalar backend",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "internal Humanoid stores bool under scalar state key",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "both Wait paths receive converted arguments",
+			"status": "PASS"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:443: assertion failed!\nBobux:443 function check_events\nBobux:1\n\n",
+			"name": "legacy event arguments remain numbers",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "parity Connect extracted lowercase Once Wait module arguments",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "Connect and Wait preserve raw interior false and trailing nil",
+			"status": "FAIL"
+		},
+		{
+			"detail": "[LUA_ERRRUN - runtime error ]\nBobux:443: assertion failed!\nBobux:443 function check_events\nBobux:1\n\n",
+			"name": "legacy Once/Wait exactly once",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "parity Once/Wait exactly once",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "drop namespace and collect GC retains VM registry",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "closing legacy VM leaves parity profile live",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "Stop disconnects parity listeners on sibling Humanoid",
+			"status": "FAIL"
+		},
+		{
+			"detail": "",
+			"name": "parity VM teardown releases registry and adapter",
+			"status": "PASS"
+		},
+		{
+			"detail": "",
+			"name": "deferred start retains immutable opt-in profile",
+			"status": "PASS"
+		},
+		{
+			"detail": "[\"Bobux:328: legacy state expected Running/8, got nil/nil\", \"Bobux:326: assertion failed!\", \"Bobux:328: legacy state expected Running/8, got number/5\", \"Bobux:400: assertion failed!\", \"Bobux:400: assertion failed!\", \"Bobux:407: assertion failed!\", \"Bobux:326: assertion failed!\", \"Bobux:326: assertion failed!\", \"Bobux:407: assertion failed!\", \"Bobux:328: legacy state expected Running/8, got number/5\", \"Bobux:328: legacy state expected Running/8, got number/5\"]",
+			"name": "no Luau runtime errors",
+			"status": "FAIL"
+		}
+	],
+	"fail": 9,
+	"open": [
+		"complete enum namespace",
+		"other enum properties",
+		"native opaque strings and bool/receiver coercion",
+		"tagged wire codec and version negotiation",
+		"Humanoid physical calibration"
+	],
+	"pass": 17,
+	"scope": "opt-in production Humanoid EnumItem VM boundary"
+}

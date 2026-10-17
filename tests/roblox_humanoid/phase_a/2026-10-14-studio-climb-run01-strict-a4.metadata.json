@@ -1,0 +1,3438 @@
+{
+  "studio_version": "0.742.0.7421053",
+  "extractor_version": "standalone_single_line_literals_v2",
+  "rig": "R6",
+  "date_utc": "2026-10-14T21:29:31Z",
+  "source_policy": "No Roblox script source copied, only public Source-derived constants and dependency/API identifier sets",
+  "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+  "kind": "a4_standard_script_metadata",
+  "schema": 2,
+  "scripts": [
+    {
+      "path": "Players.pavelord332.PlayerScripts.BubbleChat",
+      "enum_identifiers": [
+        "Enum.ChatColor.Blue",
+        "Enum.ChatColor.Green",
+        "Enum.ChatColor.Red",
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Bounce",
+        "Enum.EasingStyle.Elastic",
+        "Enum.Font.SourceSans",
+        "Enum.FontSize.Size24",
+        "Enum.ScaleType.Slice",
+        "Enum.SizeConstraint.RelativeXX"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 97,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "LocalScript",
+      "literal_constants": {
+        "CHAT_BUBBLE_FADE_SPEED": 1.5,
+        "CHAT_BUBBLE_FONT_SIZE_INT": 24,
+        "CHAT_BUBBLE_PADDING": 12,
+        "NEAR_BUBBLE_DISTANCE": 65,
+        "BILLBOARD_MAX_HEIGHT": 250,
+        "CHAT_BUBBLE_TAIL_HEIGHT": 14,
+        "MaxChatMessageLength": 128,
+        "count": 0,
+        "BILLBOARD_MAX_WIDTH": 400,
+        "CHAT_BUBBLE_WIDTH_PADDING": 30,
+        "MAX_BUBBLE_DISTANCE": 100,
+        "timeBetween": 0
+      },
+      "source_length": 25100,
+      "dependencies": [
+        "Chat",
+        "DefaultChatSystemChatEvents",
+        "OnMessageDoneFiltering",
+        "OnNewMessage",
+        "PlayerGui",
+        "Players",
+        "ReplicatedStorage",
+        "TextService"
+      ],
+      "public_method_identifiers": [
+        "BubbleChatEnabled",
+        "CameraCFrameChanged",
+        "Clone",
+        "ComputeBubbleLifetime",
+        "Connect",
+        "CreateBillboardGuiHelper",
+        "CreateBubbleText",
+        "CreateChatLineRender",
+        "CreateSmallTalkBubble",
+        "Destroy",
+        "DestroyBubble",
+        "Empty",
+        "Erase",
+        "FindFirstChild",
+        "Fire",
+        "Front",
+        "Get",
+        "GetChildren",
+        "GetData",
+        "GetPlayers",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetTextSize",
+        "IsA",
+        "IsDescendantOf",
+        "IsUserFeatureEnabled",
+        "OnGameChatMessage",
+        "OnPlayerChatMessage",
+        "PopFront",
+        "PushBack",
+        "SanitizeChatLine",
+        "Set",
+        "SetBillboardGuiLOD",
+        "SetBillboardLODDistant",
+        "SetBillboardLODNear",
+        "SetBillboardLODVeryFar",
+        "ShowOwnFilteredMessage",
+        "Size",
+        "TweenPosition",
+        "TweenSizeAndPosition",
+        "UpdateChatLinesForOrigin",
+        "WaitForChild",
+        "connect",
+        "disconnect",
+        "wait"
+      ],
+      "signal_identifiers": [
+        "Changed"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 16,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "LocalScript",
+      "literal_constants": {
+        "MAX_COREGUI_CONNECTION_ATTEMPTS": 10,
+        "tries": 0
+      },
+      "source_length": 4380,
+      "dependencies": [
+        "Chat",
+        "ChatMain",
+        "ChatSettings",
+        "ClientChatModules",
+        "DefaultChatSystemChatEvents",
+        "GuiService",
+        "ReplicatedStorage",
+        "StarterGui"
+      ],
+      "public_method_identifiers": [
+        "Fire",
+        "GetService",
+        "InvokeServer",
+        "IsTenFootInterface",
+        "SetCore",
+        "WaitForChild",
+        "connect",
+        "fire"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain",
+      "enum_identifiers": [
+        "Enum.CoreGuiType.Chat",
+        "Enum.MouseBehavior.Default",
+        "Enum.MouseBehavior.LockCenter",
+        "Enum.SpecialKey.ChatHotkey",
+        "Enum.UserInputType.MouseMovement"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 111,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "lastTextFadeTime": 0,
+        "FFlagUserHandleFriendJoinNotifierOnClient": false,
+        "FILTER_MESSAGE_TIMEOUT": 60,
+        "numChildrenRemaining": 10,
+        "canChat": true,
+        "DidFirstChannelsLoads": false,
+        "FFlagUserIsChatTranslationEnabled": false,
+        "ChatDisplayOrder": 6,
+        "backgroundIsFaded": false,
+        "textIsFaded": false,
+        "lastBackgroundFadeTime": 0,
+        "startIndex": 1
+      },
+      "source_length": 34717,
+      "dependencies": [
+        "ChannelNameColorUpdated",
+        "ChannelsBar",
+        "Chat",
+        "ChatBar",
+        "ChatChannel",
+        "ChatConstants",
+        "ChatSettings",
+        "ChatWindow",
+        "ClientChatModules",
+        "CommandProcessor",
+        "ContextActionService",
+        "CurveUtil",
+        "DefaultChatSystemChatEvents",
+        "GuiService",
+        "MessageCreatorModules",
+        "MessageLabelCreator",
+        "MessageLogDisplay",
+        "MessageSender",
+        "PlayerGui",
+        "Players",
+        "ReplicatedStorage",
+        "RunService",
+        "StarterGui",
+        "UserInputService",
+        "Util"
+      ],
+      "public_method_identifiers": [
+        "AddChannel",
+        "AddMessageToChannel",
+        "AddMessagesToChannelByTimeStamp",
+        "CanUserChatAsync",
+        "CaptureFocus",
+        "Chat",
+        "Connect",
+        "CreateGuiObjects",
+        "CustomStateProcessCompletedMessage",
+        "DeltaTimeToTimescale",
+        "Destroy",
+        "Disconnect",
+        "EnterWhisperState",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "FindFirstChild",
+        "Fire",
+        "FireServer",
+        "FocusChatBar",
+        "FormatMessageToSend",
+        "Get",
+        "GetChannel",
+        "GetChildren",
+        "GetCore",
+        "GetCoreGuiEnabled",
+        "GetCurrentChannel",
+        "GetCustomMessage",
+        "GetEnabled",
+        "GetMessageCount",
+        "GetService",
+        "GetTargetMessageChannel",
+        "GetTextBox",
+        "GetVisibility",
+        "GetVisible",
+        "InvokeServer",
+        "IsA",
+        "IsFocused",
+        "IsFriendsWith",
+        "IsInCustomState",
+        "IsStudio",
+        "IsTenFootInterface",
+        "IsUserFeatureEnabled",
+        "ProcessCompletedChatMessage",
+        "RegisterChannelsBar",
+        "RegisterChatBar",
+        "RegisterChatWindow",
+        "RegisterMessageLogDisplay",
+        "RegisterSayMessageFunction",
+        "ReleaseFocus",
+        "RemoveChannel",
+        "ResetCustomState",
+        "SendMessage",
+        "SetChannelNameColor",
+        "SetCoreGuiEnabled",
+        "SetEnabled",
+        "SetTextLabelText",
+        "SetVisible",
+        "SpecialKeyPressed",
+        "SwitchCurrentChannel",
+        "ToggleVisibility",
+        "TopbarEnabledChanged",
+        "Update",
+        "UpdateMessageFiltered",
+        "UpdateMessagePostedInChannel",
+        "WaitForChild",
+        "connect",
+        "disconnect",
+        "fChatBarDisabled",
+        "fChatWindowPosition",
+        "fChatWindowSize",
+        "find",
+        "fire",
+        "sub",
+        "wait"
+      ],
+      "signal_identifiers": [
+        "ChildAdded",
+        "PlayerAdded"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ChannelsBar",
+      "enum_identifiers": [
+        "Enum.EasingDirection.In",
+        "Enum.EasingDirection.InOut",
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Quad",
+        "Enum.SizeConstraint.RelativeXY",
+        "Enum.SizeConstraint.RelativeYY"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 37,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "scale": 0.7,
+        "tweenTime": 0.15
+      },
+      "source_length": 14084,
+      "dependencies": [
+        "ChannelsTab",
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "CurveUtil",
+        "MessageSender",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "AddChannelTab",
+        "AnimGuiObjects",
+        "Clone",
+        "CreateGuiObjects",
+        "Destroy",
+        "Expt",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "GetChannelTab",
+        "GetService",
+        "InitializeAnimParams",
+        "IsDescendantOf",
+        "NormalizedDefaultExptValueInSeconds",
+        "OrganizeChannelTabs",
+        "RemoveChannelTab",
+        "ResizeChannelTabText",
+        "ScrollChannelsFrame",
+        "SendMessage",
+        "SetTextSize",
+        "TweenPosition",
+        "Update",
+        "UpdateMessagePostedInChannel",
+        "WaitForChild",
+        "WaitUntilParentedCorrectly",
+        "connect",
+        "lower",
+        "wait"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ChannelsTab",
+      "enum_identifiers": [
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Quad",
+        "Enum.Font.SourceSans",
+        "Enum.Font.SourceSansBold",
+        "Enum.ScaleType.Slice"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 29,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "gapOffsetY": 1,
+        "gapOffsetX": 1,
+        "blueBarYSize": 4,
+        "borderXOffset": 2,
+        "tweenTime": 0.15
+      },
+      "source_length": 11740,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "CurveUtil"
+      ],
+      "public_method_identifiers": [
+        "AnimGuiObjects",
+        "Clone",
+        "Destroy",
+        "Expt",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "GetService",
+        "InitializeAnimParams",
+        "NormalizedDefaultExptValueInSeconds",
+        "SetActive",
+        "SetTextSize",
+        "TweenPosition",
+        "Update",
+        "UpdateMessagePostedInChannel",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ChatBar",
+      "enum_identifiers": [
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Quad",
+        "Enum.KeyCode.Backspace",
+        "Enum.KeyCode.Escape",
+        "Enum.TextXAlignment.Left",
+        "Enum.TextYAlignment.Center",
+        "Enum.TextYAlignment.Top"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 41,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "backgroundImagePixelOffset": 7,
+        "textBoxPixelOffset": 5
+      },
+      "source_length": 18032,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "CommandModules",
+        "CurveUtil",
+        "MessageSender",
+        "Players",
+        "RunService",
+        "TextService",
+        "UserInputService",
+        "Whisper"
+      ],
+      "public_method_identifiers": [
+        "AnimGuiObjects",
+        "CalculateSize",
+        "CanUserChatAsync",
+        "CaptureFocus",
+        "ClearAllChildren",
+        "CreateGuiObjects",
+        "CustomStateProcessCompletedMessage",
+        "Destroy",
+        "DoLockChatBar",
+        "EnterWhisperState",
+        "Expt",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "Fire",
+        "Get",
+        "GetChannelNameColor",
+        "GetCustomMessage",
+        "GetDefaultChannelNameColor",
+        "GetEnabled",
+        "GetMessage",
+        "GetMessageModeTextButton",
+        "GetMessageModeTextLabel",
+        "GetService",
+        "GetTextBox",
+        "GetTextBoxText",
+        "GetTextSize",
+        "GetVisible",
+        "InitializeAnimParams",
+        "IsFocused",
+        "IsInCustomState",
+        "IsStudio",
+        "NormalizedDefaultExptValueInSeconds",
+        "ProcessCompletedMessage",
+        "ProcessInProgressChatMessage",
+        "ReleaseFocus",
+        "ResetCustomState",
+        "ResetSize",
+        "ResetText",
+        "SetChannelNameColor",
+        "SetChannelTarget",
+        "SetEnabled",
+        "SetText",
+        "SetTextBoxText",
+        "SetTextLabelText",
+        "SetTextSize",
+        "SetUpTextBoxEvents",
+        "TextUpdated",
+        "TweenSize",
+        "TweenToTargetYSize",
+        "Update",
+        "WaitForChild",
+        "connect",
+        "disconnect",
+        "tryLocalize",
+        "wait"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ChatChannel",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 11,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "userIsChatTranslationEnabled": false,
+        "searchIndex": 1
+      },
+      "source_length": 5434,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules"
+      ],
+      "public_method_identifiers": [
+        "AddMessage",
+        "AddMessageAtIndex",
+        "AddMessageToChannel",
+        "AddMessageToChannelByTimeStamp",
+        "AddMessagesToChannelByTimeStamp",
+        "Clear",
+        "ClearMessageLog",
+        "Connect",
+        "Destroy",
+        "Disconnect",
+        "FindFirstChild",
+        "GetService",
+        "InternalAddMessageAtTimeStamp",
+        "IsUserFeatureEnabled",
+        "RegisterChannelTab",
+        "RemoveLastMessage",
+        "RemoveLastMessageFromChannel",
+        "SetActive",
+        "SetCurrentChannelName",
+        "UpdateMessageFiltered",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "ChildAdded"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ChatWindow",
+      "enum_identifiers": [
+        "Enum.ChatCallbackType.OnCreatingChatWindow"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 64,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "needsChannelSwitch": false,
+        "PHONE_SCREEN_WIDTH": 640,
+        "useXOffset": 0,
+        "checkSizeLock": false,
+        "useXScale": 0,
+        "resizeLock": false,
+        "DEVICE_DESKTOP": 3,
+        "TABLET_SCREEN_WIDTH": 1024,
+        "DEVICE_TABLET": 2,
+        "DEVICE_PHONE": 1
+      },
+      "source_length": 19894,
+      "dependencies": [
+        "Chat",
+        "ChatChannel",
+        "ChatSettings",
+        "ClientChatModules",
+        "CurveUtil",
+        "PlayerGui",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "AddChannel",
+        "AddChannelTab",
+        "AnimGuiObjects",
+        "CreateGuiObjects",
+        "Destroy",
+        "DisableResizable",
+        "EnableResizable",
+        "Expt",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "GetChannel",
+        "GetChannelTab",
+        "GetChatBar",
+        "GetCoreGuiEnabled",
+        "GetCurrentChannel",
+        "GetFirstChannel",
+        "GetService",
+        "GetTargetMessageChannel",
+        "GetVisible",
+        "InitializeAnimParams",
+        "InvokeChatCallback",
+        "IsA",
+        "IsDescendantOf",
+        "NormalizedDefaultExptValueInSeconds",
+        "RegisterChannelTab",
+        "RegisterChannelsBar",
+        "RegisterChatBar",
+        "RegisterMessageLogDisplay",
+        "RemoveChannel",
+        "RemoveChannelTab",
+        "SetActive",
+        "SetChannelTarget",
+        "SetCoreGuiEnabled",
+        "SetVisible",
+        "SwitchCurrentChannel",
+        "Update",
+        "UpdateFrameVisibility",
+        "WaitForChild",
+        "connect",
+        "lower"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.CommandProcessor",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 15,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 2252,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "CommandModules",
+        "Util"
+      ],
+      "public_method_identifiers": [
+        "GetChildren",
+        "GetService",
+        "IsA",
+        "ProcessCompletedChatMessage",
+        "ProcessInProgressChatMessage",
+        "SetupCommandProcessors",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.CurveUtil",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 11,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "DEFAULT_THRESHOLD": 0.01
+      },
+      "source_length": 1845,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "BezierPt2ForT",
+        "BezierValForT",
+        "DeltaTimeToTimescale",
+        "Expt",
+        "ExptValueInSeconds",
+        "Expty",
+        "NormalizedDefaultExptValueInSeconds",
+        "SecondsToTick",
+        "Sign",
+        "YForPointOf2PtLine"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.MessageLabelCreator",
+      "enum_identifiers": [
+        "Enum.ChatCallbackType.OnClientFormattingMessage"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 29,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "OBJECT_POOL_SIZE": 50
+      },
+      "source_length": 5794,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "MessageCreatorModules",
+        "MessageSender",
+        "ObjectPool",
+        "Util"
+      ],
+      "public_method_identifiers": [
+        "CreateMessageLabel",
+        "CreateMessageLabel_Chat",
+        "Destroy",
+        "GetChildren",
+        "GetService",
+        "GetStringTextBounds",
+        "InvokeChatCallback",
+        "IsA",
+        "RegisterObjectPool",
+        "ReturnInstance",
+        "WaitForChild",
+        "WrapIntoMessageObject"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.MessageLogDisplay",
+      "enum_identifiers": [
+        "Enum.SortOrder.LayoutOrder"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 34,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "searchIndex"
+          },
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 3,
+            "name": "userIsChatTranslationEnabled"
+          },
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 3,
+            "name": "wasScrolledDown"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "layoutOrder": 1
+      },
+      "source_length": 9605,
+      "dependencies": [
+        "Chat",
+        "ChatSettings",
+        "ClientChatModules",
+        "CurveUtil",
+        "MessageLabelCreator",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "AddMessage",
+        "AddMessageAtIndex",
+        "Clear",
+        "Connect",
+        "CreateMessageLabel",
+        "CreateMessageLabel_Chat",
+        "Destroy",
+        "FadeInBackground",
+        "FadeInText",
+        "FadeOutBackground",
+        "FadeOutText",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "IsDescendantOf",
+        "IsScrolledDown",
+        "IsUserFeatureEnabled",
+        "PositionMessageLabelInWindow",
+        "RefreshMessagePlacement",
+        "RemoveLastMessage",
+        "RemoveMessageAtIndex",
+        "ReorderAllMessages",
+        "SetActive",
+        "SetCurrentChannelName",
+        "Update",
+        "UpdateMessageFiltered",
+        "UpdateMessageTextHeight",
+        "WaitForChild",
+        "WaitUntilParentedCorrectly",
+        "wait"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.MessageSender",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 3,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 807,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "FireServer",
+        "RegisterSayMessageFunction",
+        "SendMessage"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.ChatScript.ChatMain.ObjectPool",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 5,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 1475,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "Destroy",
+        "GetInstance",
+        "ReturnInstance"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 2,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 793,
+      "dependencies": [
+        "CameraModule",
+        "ControlModule"
+      ],
+      "public_method_identifiers": [
+        "GetCameras",
+        "GetClickToMoveController",
+        "GetControls",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule",
+      "enum_identifiers": [
+        "Enum.CameraMode.Classic",
+        "Enum.CameraMode.LockFirstPerson",
+        "Enum.CameraType.Attach",
+        "Enum.CameraType.Custom",
+        "Enum.CameraType.Fixed",
+        "Enum.CameraType.Follow",
+        "Enum.CameraType.Orbital",
+        "Enum.CameraType.Scriptable",
+        "Enum.CameraType.Track",
+        "Enum.CameraType.Watch",
+        "Enum.ComputerCameraMovementMode.CameraToggle",
+        "Enum.ComputerCameraMovementMode.Classic",
+        "Enum.ComputerCameraMovementMode.Default",
+        "Enum.ComputerCameraMovementMode.Follow",
+        "Enum.ComputerCameraMovementMode.Orbital",
+        "Enum.DevCameraOcclusionMode.Invisicam",
+        "Enum.DevCameraOcclusionMode.Zoom",
+        "Enum.DevComputerCameraMovementMode.UserChoice",
+        "Enum.MouseBehavior.LockCenter",
+        "Enum.PreferredInput.Touch",
+        "Enum.RenderPriority.Camera",
+        "Enum.TouchCameraMovementMode.Classic",
+        "Enum.TouchCameraMovementMode.Default",
+        "Enum.TouchCameraMovementMode.Follow"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 47,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 25338,
+      "dependencies": [
+        "CameraInput",
+        "CameraUtils",
+        "ClassicCamera",
+        "CommonUtils",
+        "ConnectionUtil",
+        "FlagUtil",
+        "Invisicam",
+        "LegacyCamera",
+        "MouseLockController",
+        "OrbitalCamera",
+        "PlayerScripts",
+        "Players",
+        "Poppercam",
+        "RunService",
+        "TransparencyController",
+        "UserGameSettings",
+        "UserInputService",
+        "VRCamera",
+        "VRService",
+        "VRVehicleCamera",
+        "VehicleCamera"
+      ],
+      "public_method_identifiers": [
+        "ActivateCameraController",
+        "ActivateOcclusionModule",
+        "BindToRenderStep",
+        "CharacterAdded",
+        "CharacterRemoving",
+        "Connect",
+        "Disconnect",
+        "Enable",
+        "GetBindableToggleEvent",
+        "GetCameraMovementModeFromSettings",
+        "GetEnabled",
+        "GetIsMouseLocked",
+        "GetModuleName",
+        "GetMouseLockOffset",
+        "GetOcclusionMode",
+        "GetPlayers",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "HandleSubjectDistance",
+        "IsA",
+        "OnCameraSubjectChanged",
+        "OnCameraTypeChanged",
+        "OnCharacterAdded",
+        "OnCharacterRemoving",
+        "OnCurrentCameraChanged",
+        "OnLocalPlayerCameraPropertyChanged",
+        "OnMouseLockToggled",
+        "OnPlayerAdded",
+        "OnPlayerRemoving",
+        "OnPreferredInputChanged",
+        "OnUserGameSettingsPropertyChanged",
+        "RegisterComputerCameraMovementMode",
+        "RegisterTouchCameraMovementMode",
+        "Reset",
+        "SetCameraMovementMode",
+        "SetCameraType",
+        "SetIsMouseLocked",
+        "SetMouseLockOffset",
+        "SetSubject",
+        "ShouldUseVehicleCamera",
+        "Update",
+        "UpdateForDistancePropertyChange",
+        "UpdateMouseBehavior",
+        "WaitForChild",
+        "disconnect",
+        "trackConnection"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "PlayerAdded",
+        "PlayerRemoving"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.BaseCamera",
+      "enum_identifiers": [
+        "Enum.CameraMode.LockFirstPerson",
+        "Enum.ComputerMovementMode.ClickToMove",
+        "Enum.HumanoidRigType.R15",
+        "Enum.HumanoidStateType.Dead",
+        "Enum.MouseBehavior.LockCenter",
+        "Enum.MouseBehavior.LockCurrentPosition",
+        "Enum.RotationType.CameraRelative"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 75,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "ZOOM_SENSITIVITY_CURVATURE": 0.5,
+        "FIRST_PERSON_DISTANCE_THRESHOLD": 1,
+        "FIRST_PERSON_DISTANCE_MIN": 0.5,
+        "DEFAULT_DISTANCE": 12.5
+      },
+      "source_length": 24180,
+      "dependencies": [
+        "CameraInput",
+        "CameraToggleStateController",
+        "CameraUI",
+        "CameraUtils",
+        "CommonUtils",
+        "ConnectionUtil",
+        "FlagUtil",
+        "Players",
+        "UserGameSettings",
+        "UserInputService",
+        "VRService",
+        "ZoomController"
+      ],
+      "public_method_identifiers": [
+        "CalculateNewLookCFrameFromArg",
+        "CalculateNewLookVectorFromArg",
+        "CalculateNewLookVectorVRFromArg",
+        "Cleanup",
+        "Connect",
+        "Disconnect",
+        "Enable",
+        "EnterFirstPerson",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "GamepadZoomPress",
+        "GetBodyPartToFollow",
+        "GetCameraHeight",
+        "GetCameraLookVector",
+        "GetCameraMovementMode",
+        "GetCameraToSubjectDistance",
+        "GetCameraType",
+        "GetEnabled",
+        "GetHumanoid",
+        "GetHumanoidPartToFollow",
+        "GetHumanoidRootPart",
+        "GetIsMouseLocked",
+        "GetMeasuredDistanceToFocus",
+        "GetModelCFrame",
+        "GetModuleName",
+        "GetMouseLockOffset",
+        "GetPrimaryPartCFrame",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetState",
+        "GetSubjectCFrame",
+        "GetSubjectPosition",
+        "GetSubjectRotVelocity",
+        "GetSubjectVelocity",
+        "InFirstPerson",
+        "InputTranslationToCameraAngleChange",
+        "IsA",
+        "IsInFirstPerson",
+        "LeaveFirstPerson",
+        "OnCharacterAdded",
+        "OnCurrentCameraChanged",
+        "OnEnabledChanged",
+        "OnNewCameraSubject",
+        "OnPlayerCameraPropertyChange",
+        "SetCameraMovementMode",
+        "SetCameraToSubjectDistance",
+        "SetCameraType",
+        "SetCameraYInvertVisible",
+        "SetGamepadCameraSensitivityVisible",
+        "SetIsMouseLocked",
+        "SetMouseLockOffset",
+        "StepZoom",
+        "Update",
+        "UpdateForDistancePropertyChange",
+        "UpdateMouseBehavior",
+        "WaitForChild",
+        "_setUpConfigurations",
+        "disconnectAll",
+        "lookAt",
+        "trackConnection",
+        "vectorToWorldSpace"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "gamepadZoomPress"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.BaseOcclusion",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 1,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 1408,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "Enable",
+        "GetOcclusionMode",
+        "OnCameraSubjectChanged",
+        "Update"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.CameraInput",
+      "enum_identifiers": [
+        "Enum.ContextActionPriority.Medium",
+        "Enum.ContextActionResult.Pass",
+        "Enum.KeyCode.ButtonL3",
+        "Enum.KeyCode.ButtonLeft",
+        "Enum.KeyCode.ButtonR3",
+        "Enum.KeyCode.ButtonRight",
+        "Enum.KeyCode.I",
+        "Enum.KeyCode.Left",
+        "Enum.KeyCode.O",
+        "Enum.KeyCode.Right",
+        "Enum.KeyCode.Thumbstick2",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputState.Change",
+        "Enum.UserInputState.End",
+        "Enum.UserInputType.MouseButton2",
+        "Enum.UserInputType.MouseMovement",
+        "Enum.UserInputType.Touch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 56,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "K_CURVATURE"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "K_DEADZONE": 0.1,
+        "lastRmbDown": 0,
+        "inputEnabled": false,
+        "ZOOM_SPEED_KEYS": 0.1,
+        "MB_TAP_LENGTH": 0.3,
+        "panInputCount": 0,
+        "MIN_TOUCH_SENSITIVITY_FRACTION": 0.25,
+        "togglePan": false,
+        "ZOOM_SPEED_TOUCH": 0.04,
+        "ZOOM_SPEED_MOUSE": 1,
+        "holdPan": false,
+        "touchPitchSensitivity": 1,
+        "cameraToggleInputEnabled": false
+      },
+      "source_length": 17552,
+      "dependencies": [
+        "CommonUtils",
+        "ContextActionService",
+        "FlagUtil",
+        "GuiService",
+        "Players",
+        "RunService",
+        "UserGameSettings",
+        "UserInputService",
+        "VRService"
+      ],
+      "public_method_identifiers": [
+        "BindAction",
+        "BindActionAtPriority",
+        "Connect",
+        "Disconnect",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "Fire",
+        "GetCameraYInvertValue",
+        "GetMouseDelta",
+        "GetService",
+        "ToEulerAnglesYXZ",
+        "UnbindAction",
+        "WaitForChild",
+        "connect"
+      ],
+      "signal_identifiers": [
+        "InputBegan",
+        "InputChanged",
+        "InputEnded",
+        "PointerAction",
+        "TextBoxFocusReleased",
+        "WindowFocusReleased",
+        "WindowFocused"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.CameraToggleStateController",
+      "enum_identifiers": [
+        "Enum.MouseBehavior.LockCenter",
+        "Enum.MouseBehavior.LockCurrentPosition",
+        "Enum.RotationType.CameraRelative",
+        "Enum.RotationType.MovementRelative"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 10,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "wasTogglePanOnTheLastTimeYouWentIntoFirstPerson": false,
+        "lastFirstPerson": false,
+        "lastTogglePan": false,
+        "lockStateDirty": false,
+        "toastTimeout": 3
+      },
+      "source_length": 2487,
+      "dependencies": [
+        "CameraInput",
+        "CameraUI",
+        "CameraUtils",
+        "Players",
+        "UserGameSettings",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "GetService",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.CameraUI",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 1,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "initialized": false
+      },
+      "source_length": 747,
+      "dependencies": [
+        "StarterGui"
+      ],
+      "public_method_identifiers": [
+        "GetService",
+        "SetCore"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.CameraUtils",
+      "enum_identifiers": [
+        "Enum.ComputerCameraMovementMode.CameraToggle",
+        "Enum.ComputerCameraMovementMode.Classic",
+        "Enum.ComputerCameraMovementMode.Default",
+        "Enum.ComputerCameraMovementMode.Follow",
+        "Enum.ComputerCameraMovementMode.Orbital",
+        "Enum.DevComputerCameraMovementMode.CameraToggle",
+        "Enum.DevComputerCameraMovementMode.Classic",
+        "Enum.DevComputerCameraMovementMode.Follow",
+        "Enum.DevComputerCameraMovementMode.Orbital",
+        "Enum.DevComputerCameraMovementMode.UserChoice",
+        "Enum.DevTouchCameraMovementMode.Classic",
+        "Enum.DevTouchCameraMovementMode.Follow",
+        "Enum.DevTouchCameraMovementMode.Orbital",
+        "Enum.DevTouchCameraMovementMode.UserChoice",
+        "Enum.MouseBehavior.Default",
+        "Enum.RotationType.MovementRelative",
+        "Enum.TouchCameraMovementMode.Classic",
+        "Enum.TouchCameraMovementMode.Default",
+        "Enum.TouchCameraMovementMode.Follow",
+        "Enum.TouchCameraMovementMode.Orbital"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 25,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "lowerK": 0.8,
+        "DEADZONE": 0.1,
+        "yDist": 0,
+        "zDist": 0,
+        "k": 0.35,
+        "sign": 1
+      },
+      "source_length": 9012,
+      "dependencies": [
+        "Players",
+        "UserGameSettings",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "GetMouse",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "Wait",
+        "step"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.ClassicCamera",
+      "enum_identifiers": [
+        "Enum.ComputerCameraMovementMode.CameraToggle",
+        "Enum.ComputerCameraMovementMode.Follow",
+        "Enum.HumanoidStateType.Climbing"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 42,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "ZOOM_SENSITIVITY_CURVATURE": 0.5,
+        "thetaCutoff": 0.4,
+        "FIRST_PERSON_DISTANCE_MIN": 0.5,
+        "TIME_BEFORE_AUTO_ROTATE": 2
+      },
+      "source_length": 8368,
+      "dependencies": [
+        "BaseCamera",
+        "CameraInput",
+        "CameraUtils",
+        "CommonUtils",
+        "FlagUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "CalculateNewLookCFrameFromArg",
+        "CalculateNewLookVectorFromArg",
+        "GetCameraHeight",
+        "GetCameraLookVector",
+        "GetCameraToSubjectDistance",
+        "GetCameraToggleOffset",
+        "GetHumanoid",
+        "GetHumanoidRootPart",
+        "GetIsMouseLocked",
+        "GetMouseLockOffset",
+        "GetService",
+        "GetState",
+        "GetSubjectPosition",
+        "IsA",
+        "IsInFirstPerson",
+        "SetCameraMovementMode",
+        "StepZoom",
+        "Update",
+        "WaitForChild",
+        "step"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.Invisicam",
+      "enum_identifiers": [
+        "Enum.DevCameraOcclusionMode.Invisicam",
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.RaycastFilterType.Include"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 83,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "hitPartCount"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "CHAR_OUTLINE_CASTS": 24,
+        "radius": 2.5,
+        "CIRCLE_CASTS": 10,
+        "TARGET_TRANSPARENCY_PERIPHERAL": 0.5,
+        "MOVE_CASTS": 3,
+        "TARGET_TRANSPARENCY": 0.75,
+        "USE_STACKING_TRANSPARENCY": true,
+        "SMART_CIRCLE_CASTS": 24
+      },
+      "source_length": 22534,
+      "dependencies": [
+        "BaseOcclusion",
+        "CommonUtils",
+        "FlagUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "CharacterAdded",
+        "CharacterOutlineBehavior",
+        "CheckTorsoReference",
+        "CircleBehavior",
+        "Cleanup",
+        "Connect",
+        "CornerBehavior",
+        "Cross",
+        "Disconnect",
+        "Dot",
+        "Enable",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "FindPartOnRayWithIgnoreList",
+        "FindPartOnRayWithWhitelist",
+        "GetChildren",
+        "GetExtentsSize",
+        "GetObscuredParts",
+        "GetOcclusionMode",
+        "GetPartsObscuringTarget",
+        "GetService",
+        "IsA",
+        "LimbBehavior",
+        "LimbMoveBehavior",
+        "MoveBehavior",
+        "Raycast",
+        "SetMode",
+        "SmartCircleBehavior",
+        "Update",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "AncestryChanged",
+        "ChildAdded",
+        "ChildRemoved"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.LegacyCamera",
+      "enum_identifiers": [
+        "Enum.CameraType.Attach",
+        "Enum.CameraType.Fixed",
+        "Enum.CameraType.Watch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 23,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 3858,
+      "dependencies": [
+        "BaseCamera",
+        "CameraInput",
+        "CameraUtils",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "CalculateNewLookVectorFromArg",
+        "GetCameraToSubjectDistance",
+        "GetHumanoid",
+        "GetModuleName",
+        "GetService",
+        "GetSubjectCFrame",
+        "GetSubjectPosition",
+        "SetCameraToSubjectDistance",
+        "StepZoom",
+        "ToEulerAnglesYXZ",
+        "Update",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.MouseLockController",
+      "enum_identifiers": [
+        "Enum.ComputerMovementMode.ClickToMove",
+        "Enum.ContextActionPriority.Medium",
+        "Enum.ContextActionResult.Pass",
+        "Enum.ContextActionResult.Sink",
+        "Enum.ControlMode.MouseLockSwitch",
+        "Enum.DevComputerMovementMode.Scriptable",
+        "Enum.KeyCode.LeftShift",
+        "Enum.KeyCode.RightShift",
+        "Enum.PreferredInput.KeyboardAndMouse",
+        "Enum.UserInputState.Begin"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 22,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 7109,
+      "dependencies": [
+        "CameraUtils",
+        "CommonUtils",
+        "ContextActionService",
+        "FlagUtil",
+        "Players",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "BindActionAtPriority",
+        "BindContextActions",
+        "Connect",
+        "Destroy",
+        "DoMouseLockSwitch",
+        "EnableMouseLock",
+        "FindFirstChild",
+        "Fire",
+        "GetBindableToggleEvent",
+        "GetEnumItems",
+        "GetIsMouseLocked",
+        "GetMouseLockOffset",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "IsA",
+        "IsMouseLocked",
+        "OnBoundKeysObjectChanged",
+        "OnMouseLockToggled",
+        "UnbindAction",
+        "UnbindContextActions",
+        "UpdateMouseLockAvailability",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "Changed"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.OrbitalCamera",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 35,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "MIN_ALLOWED_ELEVATION_DEG": -80,
+        "MAX_ALLOWED_ELEVATION_DEG": 80
+      },
+      "source_length": 12814,
+      "dependencies": [
+        "BaseCamera",
+        "CameraInput",
+        "CameraUtils",
+        "CommonUtils",
+        "FlagUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "CalculateNewLookVector",
+        "Connect",
+        "Disconnect",
+        "FindFirstChild",
+        "GetCameraLookVector",
+        "GetCameraToSubjectDistance",
+        "GetModuleName",
+        "GetService",
+        "GetSubjectPosition",
+        "IsA",
+        "LoadNumberValueParameters",
+        "LoadOrCreateNumberValueParameter",
+        "SetAndBoundsCheckAzimuthValues",
+        "SetAndBoundsCheckDistanceValues",
+        "SetAndBoundsCheckElevationValues",
+        "SetCameraToSubjectDistance",
+        "SetInitialOrientation",
+        "Update",
+        "UpdateMouseBehavior",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "Changed"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.Poppercam",
+      "enum_identifiers": [
+        "Enum.DevCameraOcclusionMode.Zoom"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 21,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 3487,
+      "dependencies": [
+        "BaseOcclusion",
+        "CommonUtils",
+        "FlagUtil",
+        "ZoomController"
+      ],
+      "public_method_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "Enable",
+        "GetComponents",
+        "GetOcclusionMode",
+        "OnCameraSubjectChanged",
+        "Reset",
+        "Step",
+        "ToAxisAngle",
+        "Update",
+        "WaitForChild",
+        "inverse"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.TransparencyController",
+      "enum_identifiers": [
+        "Enum.AccessoryType.Eyebrow",
+        "Enum.AccessoryType.Eyelash",
+        "Enum.AccessoryType.Face",
+        "Enum.AccessoryType.Hair",
+        "Enum.AccessoryType.Hat"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 12,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "MAX_TWEEN_RATE": 2.8
+      },
+      "source_length": 6715,
+      "dependencies": [
+        "CameraUtils",
+        "VRService"
+      ],
+      "public_method_identifiers": [
+        "CachePartsRecursive",
+        "Connect",
+        "Disconnect",
+        "Enable",
+        "GetChildren",
+        "GetService",
+        "HasToolAncestor",
+        "IsA",
+        "IsDescendantOf",
+        "IsValidPartToModify",
+        "SetSubject",
+        "SetupTransparency",
+        "TeardownTransparency",
+        "Update",
+        "WaitForChild",
+        "connect",
+        "disconnect"
+      ],
+      "signal_identifiers": [
+        "DescendantAdded",
+        "DescendantRemoving"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VRBaseCamera",
+      "enum_identifiers": [
+        "Enum.HumanoidStateType.Dead",
+        "Enum.ScaleType.Stretch",
+        "Enum.UserCFrame.Floor",
+        "Enum.UserCFrame.Head"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 49,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "VR_SCREEN_EGDE_BLEND_TIME": 0.14,
+        "VR_ZOOM": 7,
+        "VR_PANEL_SIZE": 512,
+        "VR_FADE_SPEED": 10,
+        "yawDelta": 0
+      },
+      "source_length": 11744,
+      "dependencies": [
+        "BaseCamera",
+        "CameraInput",
+        "CommonUtils",
+        "FlagUtil",
+        "Lighting",
+        "Players",
+        "RunService",
+        "UserGameSettings",
+        "VRService",
+        "ZoomController"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Disconnect",
+        "FindFirstChild",
+        "GamepadReset",
+        "GamepadZoomPress",
+        "GetCameraHeight",
+        "GetCameraToSubjectDistance",
+        "GetModuleName",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetState",
+        "GetSubjectCFrame",
+        "GetSubjectPosition",
+        "GetUserCFrame",
+        "GetVRFocus",
+        "HandleSubjectDistance",
+        "IsA",
+        "IsInFirstPerson",
+        "OnCurrentCameraChanged",
+        "OnEnabledChanged",
+        "OnHeadScaleChanged",
+        "Reset",
+        "ResetZoom",
+        "SetCameraToSubjectDistance",
+        "StartFadeFromBlack",
+        "StartVREdgeBlur",
+        "UpdateEdgeBlur",
+        "UpdateFadeFromBlack",
+        "WaitForChild",
+        "getRotation",
+        "vectorToWorldSpace"
+      ],
+      "signal_identifiers": [
+        "RenderStepped",
+        "UserCFrameChanged",
+        "gamepadReset"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VRCamera",
+      "enum_identifiers": [
+        "Enum.OrientationAlignmentMode.OneAttachment",
+        "Enum.UserCFrame.Head"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 83,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "FP_ZOOM": 0.5,
+        "NECK_OFFSET": -0.7,
+        "CAMERA_BLACKOUT_TIME": 0.1
+      },
+      "source_length": 17013,
+      "dependencies": [
+        "CameraInput",
+        "CameraUtils",
+        "CommonUtils",
+        "ControlModule",
+        "FlagUtil",
+        "PlayerScripts",
+        "Players",
+        "UserGameSettings",
+        "VRBaseCamera",
+        "VRCameraTeleportDetector",
+        "VRService"
+      ],
+      "public_method_identifiers": [
+        "CalculateNewLookVectorFromArg",
+        "FindFirstChild",
+        "GetAvatarFeetWorldYValue",
+        "GetCameraLookVector",
+        "GetCameraToSubjectDistance",
+        "GetEstimatedVRTorsoFrame",
+        "GetHumanoid",
+        "GetMoveVector",
+        "GetService",
+        "GetSubjectCFrame",
+        "GetSubjectPosition",
+        "GetUserCFrame",
+        "GetVRFocus",
+        "Inverse",
+        "IsA",
+        "IsInFirstPerson",
+        "IsLoaded",
+        "LeaveFirstPerson",
+        "Lerp",
+        "RecenterUserHeadCFrame",
+        "Reset",
+        "ResetZoom",
+        "StartFadeFromBlack",
+        "ToObjectSpace",
+        "ToWorldSpace",
+        "Update",
+        "UpdateFadeFromBlack",
+        "UpdateFirstPersonTransform",
+        "UpdateImmersionCamera",
+        "UpdateThirdPersonComfortTransform",
+        "UpdateThirdPersonFollowTransform",
+        "WaitForChild",
+        "getRotation"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VRCameraTeleportDetector",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 1,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 2031,
+      "dependencies": [],
+      "public_method_identifiers": [],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VRVehicleCamera",
+      "enum_identifiers": [
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.UserCFrame.Head"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 37,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "ZOOM_MINIMUM": 0.5,
+        "DRIFT_ANGLE": 0.05,
+        "MIN_ASSEMBLY_RADIUS": 5,
+        "DRIFT_TURN": 0.02,
+        "USE_ORBIT_CONTROL": false,
+        "DRIFT_MIN_VELOCITY": 2,
+        "DRIFT_BASE": 0.01,
+        "DRIFT_MAX": 0.15,
+        "OCCLUSION_VIGNETTE_MIN_INTENSITY": 0.15,
+        "USE_OCCLUSION_VIGNETTE": false,
+        "OCCLUSION_MIN_DIST": 0.5
+      },
+      "source_length": 11145,
+      "dependencies": [
+        "CameraInput",
+        "CameraUtils",
+        "Lighting",
+        "Players",
+        "RunService",
+        "VRBaseCamera",
+        "VRService",
+        "VehicleCamera"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Disconnect",
+        "Dot",
+        "FindFirstAncestorOfClass",
+        "FindFirstChild",
+        "GetCameraHeight",
+        "GetCameraToSubjectDistance",
+        "GetConnectedParts",
+        "GetPartBoundsInBox",
+        "GetService",
+        "GetSubjectCFrame",
+        "GetSubjectRotVelocity",
+        "GetSubjectVelocity",
+        "GetUserCFrame",
+        "Inverse",
+        "IsA",
+        "IsInFirstPerson",
+        "Lerp",
+        "Raycast",
+        "Reset",
+        "SetCameraToSubjectDistance",
+        "StartFadeFromBlack",
+        "StartVREdgeBlur",
+        "Update",
+        "UpdateEdgeBlur",
+        "UpdateFadeFromBlack",
+        "WaitForChild",
+        "_getFirstPersonLocalOffset",
+        "_getThirdPersonLocalOffset",
+        "_updateStepRotation",
+        "_vrOccludeVignette",
+        "getRotation"
+      ],
+      "signal_identifiers": [
+        "Stepped"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VehicleCamera",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 49,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "ZOOM_SENSITIVITY_CURVATURE": 0.5,
+        "ZOOM_MINIMUM": 0.5,
+        "EPSILON": 0.001,
+        "MIN_ASSEMBLY_RADIUS": 5
+      },
+      "source_length": 7001,
+      "dependencies": [
+        "BaseCamera",
+        "CameraInput",
+        "CameraUtils",
+        "Players",
+        "RunService",
+        "VehicleCameraConfig",
+        "VehicleCameraCore",
+        "ZoomController"
+      ],
+      "public_method_identifiers": [
+        "ApplyVRTransform",
+        "Connect",
+        "Dot",
+        "FindFirstChild",
+        "GetConnectedParts",
+        "GetService",
+        "GetSubjectCFrame",
+        "GetSubjectRotVelocity",
+        "GetSubjectVelocity",
+        "Inverse",
+        "IsA",
+        "Lerp",
+        "Reset",
+        "SetCameraToSubjectDistance",
+        "StepZoom",
+        "Update",
+        "WaitForChild",
+        "_GetFirstPersonLocalOffset",
+        "_GetThirdPersonLocalOffset",
+        "_StepRotation",
+        "setTransform",
+        "step"
+      ],
+      "signal_identifiers": [
+        "Stepped"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VehicleCamera.VehicleCameraConfig",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 1,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 1860,
+      "dependencies": [],
+      "public_method_identifiers": [],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.VehicleCamera.VehicleCameraCore",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 27,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 4678,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "getCFrame",
+        "setGoal",
+        "setTransform",
+        "step",
+        "toEulerAnglesYXZ"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.ZoomController",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 18,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "ZOOM_ACCELERATION": 0.0375,
+        "DIST_OPAQUE": 1,
+        "ZOOM_DEFAULT": 12.5,
+        "zoomDelta": 0,
+        "MIN_FOCUS_DIST": 0.5,
+        "ZOOM_STIFFNESS": 4.5
+      },
+      "source_length": 3598,
+      "dependencies": [
+        "Players",
+        "Popper"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "Step",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CameraModule.ZoomController.Popper",
+      "enum_identifiers": [
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.RaycastFilterType.Include"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 66,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "promote"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "SAMPLE_MAX_T": 1.25,
+        "QUERY_POINT_CAST_LIMIT": 64,
+        "numPierced": 0,
+        "SAMPLE_DT": 0.0625,
+        "n": 1
+      },
+      "source_length": 13497,
+      "dependencies": [
+        "CameraWrapper",
+        "CommonUtils",
+        "ConnectionUtil",
+        "FlagUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "AddToFilter",
+        "Connect",
+        "Enable",
+        "FindPartOnRayWithIgnoreList",
+        "FindPartOnRayWithWhitelist",
+        "GetPlayers",
+        "GetPropertyChangedSignal",
+        "GetRootPart",
+        "GetService",
+        "IsA",
+        "Raycast",
+        "ViewportPointToRay",
+        "WaitForChild",
+        "disconnect",
+        "getCamera",
+        "trackConnection"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "PlayerAdded",
+        "PlayerRemoving"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CommonUtils.CameraWrapper",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 2,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 2917,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "Connect",
+        "Disable",
+        "Disconnect",
+        "Enable",
+        "GetPropertyChangedSignal",
+        "_connectCallbacks",
+        "disconnect",
+        "disconnectAll",
+        "getCamera",
+        "trackConnection"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CommonUtils.CharacterUtil",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 14,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 5367,
+      "dependencies": [
+        "ConnectionUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "FindFirstChild",
+        "Fire",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "IsA",
+        "WaitForChild",
+        "trackConnection"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "ChildAdded",
+        "Event"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CommonUtils.ConnectionUtil",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 1,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 1804,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "Disconnect",
+        "disconnect",
+        "disconnectAll",
+        "trackBoundFunction",
+        "trackConnection"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.CommonUtils.FlagUtil",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 0,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 545,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "IsUserFeatureEnabled"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule",
+      "enum_identifiers": [
+        "Enum.ComputerMovementMode.ClickToMove",
+        "Enum.ComputerMovementMode.Default",
+        "Enum.ComputerMovementMode.KeyboardMouse",
+        "Enum.ContextActionPriority.Medium",
+        "Enum.DevComputerMovementMode.ClickToMove",
+        "Enum.DevComputerMovementMode.KeyboardMouse",
+        "Enum.DevComputerMovementMode.Scriptable",
+        "Enum.DevComputerMovementMode.UserChoice",
+        "Enum.DevTouchMovementMode.ClickToMove",
+        "Enum.DevTouchMovementMode.DPad",
+        "Enum.DevTouchMovementMode.DynamicThumbstick",
+        "Enum.DevTouchMovementMode.Scriptable",
+        "Enum.DevTouchMovementMode.Thumbpad",
+        "Enum.DevTouchMovementMode.Thumbstick",
+        "Enum.DevTouchMovementMode.UserChoice",
+        "Enum.HumanoidStateType.Swimming",
+        "Enum.KeyCode.Thumbstick2",
+        "Enum.PreferredInput.Gamepad",
+        "Enum.PreferredInput.KeyboardAndMouse",
+        "Enum.PreferredInput.MicroGamepad",
+        "Enum.PreferredInput.Touch",
+        "Enum.RenderPriority.Input",
+        "Enum.TouchMovementMode.ClickToMove",
+        "Enum.TouchMovementMode.DPad",
+        "Enum.TouchMovementMode.Default",
+        "Enum.TouchMovementMode.DynamicThumbstick",
+        "Enum.TouchMovementMode.Thumbpad",
+        "Enum.TouchMovementMode.Thumbstick",
+        "Enum.UserCFrame.Head",
+        "Enum.UserCFrame.LeftHand",
+        "Enum.UserCFrame.RightHand",
+        "Enum.UserInputType.Gamepad1",
+        "Enum.ZIndexBehavior.Sibling"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 58,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "vehicleConsumedInput": false,
+        "preferMicroGamepad": false,
+        "relativeAngleToUse": 0,
+        "NECK_OFFSET": -0.7,
+        "FIRST_PERSON_THRESHOLD_DISTANCE": 5
+      },
+      "source_length": 24195,
+      "dependencies": [
+        "ClickToMoveController",
+        "CommonUtils",
+        "DynamicThumbstick",
+        "Gamepad",
+        "GuiService",
+        "Keyboard",
+        "Players",
+        "RunService",
+        "TouchJump",
+        "TouchThumbstick",
+        "UserGameSettings",
+        "UserInputService",
+        "VRService",
+        "VehicleController",
+        "Workspace"
+      ],
+      "public_method_identifiers": [
+        "BindToRenderStep",
+        "CleanupPath",
+        "Connect",
+        "CreateTouchGuiContainer",
+        "Destroy",
+        "Disable",
+        "Disconnect",
+        "Enable",
+        "FindFirstChildOfClass",
+        "GetActiveController",
+        "GetClickToMoveController",
+        "GetComponents",
+        "GetEstimatedVRTorsoFrame",
+        "GetGamepadState",
+        "GetIsJumping",
+        "GetMoveVector",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetState",
+        "GetUserCFrame",
+        "GetUserCFrameEnabled",
+        "IsA",
+        "IsMoveVectorCameraRelative",
+        "IsUserFeatureEnabled",
+        "OnCharacterAdded",
+        "OnCharacterRemoving",
+        "OnHumanoidSeated",
+        "OnRenderStepped",
+        "SelectComputerMovementModule",
+        "SelectTouchModule",
+        "SwitchToController",
+        "ToEulerAnglesYXZ",
+        "Update",
+        "UpdateActiveControlModuleEnabled",
+        "UpdateMovementMode",
+        "UpdateTouchGuiVisibility",
+        "VectorToWorldSpace",
+        "WaitForChild",
+        "calculateRawMoveVector",
+        "updateVRMoveVector",
+        "wait"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "ChildAdded",
+        "Seated"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.AvatarAbilitiesInterface",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 10,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "initialized": false
+      },
+      "source_length": 2154,
+      "dependencies": [
+        "CommonUtils",
+        "FlagUtil",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Disconnect",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "Fire",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "WaitForChild",
+        "wait"
+      ],
+      "signal_identifiers": [
+        "characterAdded"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.BaseCharacterController",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 4,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 2040,
+      "dependencies": [
+        "CommonUtils",
+        "ConnectionUtil"
+      ],
+      "public_method_identifiers": [
+        "Enable",
+        "GetIsJumping",
+        "GetMoveVector",
+        "IsMoveVectorCameraRelative",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.ClickToMoveController",
+      "enum_identifiers": [
+        "Enum.HumanoidStateType.FallingDown",
+        "Enum.HumanoidStateType.Freefall",
+        "Enum.HumanoidStateType.Jumping",
+        "Enum.KeyCode.A",
+        "Enum.KeyCode.D",
+        "Enum.KeyCode.Down",
+        "Enum.KeyCode.S",
+        "Enum.KeyCode.Up",
+        "Enum.KeyCode.W",
+        "Enum.PathStatus.Success",
+        "Enum.PathWaypointAction.Jump",
+        "Enum.PathWaypointAction.Walk",
+        "Enum.PreferredInput.Touch",
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputType.Keyboard",
+        "Enum.UserInputType.MouseButton2",
+        "Enum.UserInputType.Touch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 85,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "THRESHOLD_COS": 0.996,
+        "AgentSizeIncreaseFactor": 1,
+        "agentCanJump": true,
+        "UnreachableWaypointTimeout": 8,
+        "agentRadius": 2,
+        "PlayFailureAnimation": true,
+        "ShowPath": true,
+        "reached": false,
+        "ALMOST_ZERO": 1e-06,
+        "UseDirectPathForVehicle": true,
+        "UseDirectPath": false,
+        "agentHeight": 5,
+        "encounteredCollider": true
+      },
+      "source_length": 38016,
+      "dependencies": [
+        "ClickToMoveDisplay",
+        "CollectionService",
+        "CommonUtils",
+        "Debris",
+        "FlagUtil",
+        "GuiService",
+        "Keyboard",
+        "PathfindingService",
+        "Players",
+        "StarterGui",
+        "UserInputService",
+        "Workspace"
+      ],
+      "public_method_identifiers": [
+        "Activate",
+        "AddItem",
+        "Cancel",
+        "Cleanup",
+        "CleanupPath",
+        "ComputeAsync",
+        "ComputePath",
+        "Connect",
+        "CreatePath",
+        "Destroy",
+        "Disconnect",
+        "DisconnectEvents",
+        "Dot",
+        "Enable",
+        "FindFirstAncestorOfClass",
+        "FindFirstChildOfClass",
+        "FindPartOnRayWithIgnoreList",
+        "Fire",
+        "GetAgentSizeIncreaseFactor",
+        "GetChildren",
+        "GetCore",
+        "GetDescendants",
+        "GetEndWaypointTexture",
+        "GetExtentsSize",
+        "GetFailureAnimationEnabled",
+        "GetIgnoredPartsTag",
+        "GetInstanceAddedSignal",
+        "GetInstanceRemovedSignal",
+        "GetPlayerFromCharacter",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetShowPath",
+        "GetState",
+        "GetTagged",
+        "GetUnreachableWaypointTimeout",
+        "GetUseDirectPath",
+        "GetUserJumpEnabled",
+        "GetWaypointRadius",
+        "GetWaypointTexture",
+        "GetWaypoints",
+        "GetWaypointsAlwaysOnTop",
+        "Inverse",
+        "IsA",
+        "IsActive",
+        "IsCurrentWaypointReached",
+        "IsUserFeatureEnabled",
+        "IsValidPath",
+        "MoveTo",
+        "MoveToNextWayPoint",
+        "OnCharacterAdded",
+        "OnPathBlocked",
+        "OnPathInterrupted",
+        "OnPointReached",
+        "OnPreferredInputChanged",
+        "OnRenderStepped",
+        "OnTouchBegan",
+        "OnTouchChanged",
+        "OnTouchEnded",
+        "Raycast",
+        "ScreenPointToRay",
+        "SetAgentSizeIncreaseFactor",
+        "SetEndWaypointTexture",
+        "SetFailureAnimationEnabled",
+        "SetIgnoredPartsTag",
+        "SetShowPath",
+        "SetUnreachableWaypointTimeout",
+        "SetUseDirectPath",
+        "SetUserJumpEnabled",
+        "SetWaypointRadius",
+        "SetWaypointTexture",
+        "SetWaypointsAlwaysOnTop",
+        "Start",
+        "Stop",
+        "UpdateJump",
+        "UpdateMovement",
+        "Wait",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "Blocked",
+        "CharacterAdded",
+        "ChildAdded",
+        "ChildRemoved",
+        "Died",
+        "Event",
+        "InputBegan",
+        "InputChanged",
+        "InputEnded",
+        "MenuOpened",
+        "Seated",
+        "TouchTap"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.ClickToMoveDisplay",
+      "enum_identifiers": [
+        "Enum.AnimationPriority.Action",
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Sine",
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.RenderPriority.Camera"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 80,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "LAST_DOT_DISTANCE": 3,
+        "TRAIL_DOT_MIN_SCALE": 1,
+        "TWEEN_WAYPOINT_THRESHOLD": 5,
+        "TRAIL_DOT_MIN_DISTANCE": 10,
+        "FAILURE_TWEEN_COUNT": 4,
+        "TRAIL_DOT_MAX_SCALE": 2.5,
+        "WAYPOINT_INCLUDE_FACTOR": 2,
+        "createPathCount": 0,
+        "FAILURE_TWEEN_LENGTH": 0.125,
+        "TRAIL_DOT_MAX_DISTANCE": 100,
+        "count": 1,
+        "WaypointsAlwaysOnTop": false
+      },
+      "source_length": 17784,
+      "dependencies": [
+        "CommonUtils",
+        "FlagUtil",
+        "Players",
+        "RunService",
+        "TweenService",
+        "Workspace"
+      ],
+      "public_method_identifiers": [
+        "BindToRenderStep",
+        "Cancel",
+        "Clone",
+        "Create",
+        "CreateTween",
+        "Destroy",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "FindPartOnRayWithIgnoreList",
+        "GetService",
+        "Hide",
+        "LoadAnimation",
+        "NewDisplayModel",
+        "Play",
+        "Raycast",
+        "RunFailureTween",
+        "Stop",
+        "TweenInFrom",
+        "UnbindFromRenderStep",
+        "Wait",
+        "WaitForChild",
+        "wait"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.DynamicThumbstick",
+      "enum_identifiers": [
+        "Enum.ContextActionPriority.High",
+        "Enum.ContextActionResult.Pass",
+        "Enum.ContextActionResult.Sink",
+        "Enum.EasingDirection.InOut",
+        "Enum.EasingDirection.Out",
+        "Enum.EasingStyle.Quad",
+        "Enum.ScreenOrientation.LandscapeLeft",
+        "Enum.ScreenOrientation.LandscapeRight",
+        "Enum.ScreenOrientation.Portrait",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputState.Change",
+        "Enum.UserInputState.End",
+        "Enum.UserInputType.Touch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 59,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "scaledOuterRingSize": 120,
+        "SAFE_AREA_INSET_MAX": 100,
+        "hasFadedBackgroundInOrientation": false,
+        "FADE_IN_OUT_BALANCE_DEFAULT": 0.5,
+        "DEFAULT_MIDDLE_SIZE": 10,
+        "DEFAULT_RING_SIZE": 20,
+        "DEFAULT_THUMBSTICK_SIZE": 45,
+        "RADIUS_OF_DEAD_ZONE": 2,
+        "FADE_IN_OUT_BACKGROUND": true,
+        "RADIUS_OF_MAX_SPEED": 20,
+        "FADE_IN_OUT_HALF_DURATION_DEFAULT": 0.3,
+        "FADE_IN_OUT_MAX_ALPHA": 0.35,
+        "DEFAULT_OUTER_RING_SIZE": 74
+      },
+      "source_length": 22216,
+      "dependencies": [
+        "AvatarAbilitiesInterface",
+        "BaseCharacterController",
+        "CommonUtils",
+        "ContextActionService",
+        "FlagUtil",
+        "GuiService",
+        "Players",
+        "RunService",
+        "TweenService",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "BindActionAtPriority",
+        "BindContextActions",
+        "Cancel",
+        "Connect",
+        "Create",
+        "Destroy",
+        "Disconnect",
+        "DoFadeInBackground",
+        "DoMove",
+        "Enable",
+        "FadeThumbstick",
+        "FadeThumbstickFrame",
+        "FindFirstChildOfClass",
+        "GetIsJumping",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "InputInFrame",
+        "IsLoaded",
+        "IsUserFeatureEnabled",
+        "LayoutMiddleImages",
+        "MoveStick",
+        "OnInputEnded",
+        "Play",
+        "UnbindAction",
+        "UnbindContextActions",
+        "Wait",
+        "WaitForChild",
+        "connect",
+        "disconnect",
+        "wait"
+      ],
+      "signal_identifiers": [
+        "RenderStepped",
+        "TouchMoved"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.Gamepad",
+      "enum_identifiers": [
+        "Enum.ContextActionResult.Pass",
+        "Enum.ContextActionResult.Sink",
+        "Enum.KeyCode.ButtonA",
+        "Enum.KeyCode.ButtonCenter",
+        "Enum.KeyCode.ButtonDown",
+        "Enum.KeyCode.ButtonR2",
+        "Enum.KeyCode.ButtonUp",
+        "Enum.KeyCode.Thumbstick1",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputType.Gamepad1",
+        "Enum.UserInputType.None"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 16,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "thumbstickDeadzone": 0.2,
+        "inputValue": 0
+      },
+      "source_length": 8635,
+      "dependencies": [
+        "BaseCharacterController",
+        "CommonUtils",
+        "ContextActionService",
+        "FlagUtil",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "BindActionAtPriority",
+        "BindActivate",
+        "BindContextActions",
+        "Connect",
+        "ConnectGamepadConnectionListeners",
+        "Disconnect",
+        "DisconnectGamepadConnectionListeners",
+        "Enable",
+        "GetConnectedGamepads",
+        "GetHighestPriorityGamepad",
+        "GetService",
+        "OnCurrentGamepadDisconnected",
+        "OnNewGamepadConnected",
+        "UnbindAction",
+        "UnbindActivate",
+        "UnbindContextActions",
+        "UpdateMovement",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "GamepadConnected",
+        "GamepadDisconnected"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.Keyboard",
+      "enum_identifiers": [
+        "Enum.ContextActionResult.Pass",
+        "Enum.PlayerActions.CharacterBackward",
+        "Enum.PlayerActions.CharacterForward",
+        "Enum.PlayerActions.CharacterJump",
+        "Enum.PlayerActions.CharacterLeft",
+        "Enum.PlayerActions.CharacterRight",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputState.Cancel"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 12,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 5858,
+      "dependencies": [
+        "BaseCharacterController",
+        "CommonUtils",
+        "ContextActionService",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "BindActionAtPriority",
+        "BindContextActions",
+        "Connect",
+        "ConnectFocusEventListeners",
+        "Enable",
+        "GetService",
+        "UnbindAction",
+        "UpdateJump",
+        "UpdateMovement",
+        "WaitForChild",
+        "disconnectAll",
+        "trackBoundFunction",
+        "trackConnection"
+      ],
+      "signal_identifiers": [
+        "TextBoxFocusReleased",
+        "TextBoxFocused",
+        "WindowFocused"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.PathDisplay",
+      "enum_identifiers": [
+        "Enum.RaycastFilterType.Exclude"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 25,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "poolTop": 30,
+        "distanceBudget": 0
+      },
+      "source_length": 4010,
+      "dependencies": [
+        "CommonUtils",
+        "FlagUtil"
+      ],
+      "public_method_identifiers": [
+        "FindPartOnRayWithIgnoreList",
+        "Raycast",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.TouchJump",
+      "enum_identifiers": [
+        "Enum.HumanoidStateType.Jumping",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputType.Touch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 23,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": [],
+      "source_length": 9237,
+      "dependencies": [
+        "AvatarAbilitiesInterface",
+        "BaseCharacterController",
+        "CharacterUtil",
+        "CommonUtils",
+        "ConnectionUtil",
+        "FlagUtil",
+        "GuiService",
+        "Players"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Create",
+        "Destroy",
+        "Disconnect",
+        "Enable",
+        "EnableButton",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "GetStateEnabled",
+        "UpdateEnabled",
+        "WaitForChild",
+        "_reset",
+        "_setupConfigurations",
+        "connect",
+        "disconnect",
+        "disconnectAll",
+        "trackConnection"
+      ],
+      "signal_identifiers": [
+        "InputEnded",
+        "MenuOpened",
+        "StateEnabledChanged"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.TouchThumbstick",
+      "enum_identifiers": [
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputType.Touch"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 26,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "deadZone": 0.05
+      },
+      "source_length": 8962,
+      "dependencies": [
+        "AvatarAbilitiesInterface",
+        "BaseCharacterController",
+        "CommonUtils",
+        "FlagUtil",
+        "GuiService",
+        "Players",
+        "UserGameSettings",
+        "UserInputService"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Create",
+        "Destroy",
+        "Disconnect",
+        "Enable",
+        "GetPropertyChangedSignal",
+        "GetService",
+        "OnInputEnded",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "InputBegan",
+        "MenuOpened",
+        "TouchEnded",
+        "TouchMoved"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.VRNavigation",
+      "enum_identifiers": [
+        "Enum.ContextActionResult.Sink",
+        "Enum.KeyCode.ButtonA",
+        "Enum.KeyCode.ButtonR2",
+        "Enum.KeyCode.Thumbstick1",
+        "Enum.PathStatus.ClosestNoPath",
+        "Enum.PathStatus.ClosestOutOfRange",
+        "Enum.PathStatus.FailFinishNotEmpty",
+        "Enum.PathStatus.FailStartNotEmpty",
+        "Enum.RaycastFilterType.Exclude",
+        "Enum.UserCFrame.LeftHand",
+        "Enum.UserCFrame.RightHand",
+        "Enum.UserInputState.Begin",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputState.End",
+        "Enum.UserInputType.Gamepad1",
+        "Enum.VRTouchpad.Left",
+        "Enum.VRTouchpad.Right",
+        "Enum.VRTouchpadMode.ABXY",
+        "Enum.VRTouchpadMode.VirtualThumbstick"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 53,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "estimatedTimeRemaining"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "OFFTRACK_TIME_THRESHOLD": 2,
+        "POINT_REACHED_THRESHOLD": 1,
+        "NO_PATH_THRESHOLD": 12,
+        "THUMBSTICK_DEADZONE": 0.22,
+        "numAttempts": 0,
+        "RECALCULATE_PATH_THRESHOLD": 4,
+        "MAX_PATHING_DISTANCE": 200
+      },
+      "source_length": 14122,
+      "dependencies": [
+        "BaseCharacterController",
+        "CommonUtils",
+        "ContextActionService",
+        "FlagUtil",
+        "PathDisplay",
+        "PathfindingService",
+        "Players",
+        "RunService",
+        "StarterGui",
+        "UserInputService",
+        "VRService"
+      ],
+      "public_method_identifiers": [
+        "BindAction",
+        "BindActionAtPriority",
+        "BindActivate",
+        "BindJumpAction",
+        "ComputeSmoothPathAsync",
+        "Connect",
+        "ControlCharacterGamepad",
+        "Disconnect",
+        "Enable",
+        "FindPartOnRayWithIgnoreList",
+        "Fire",
+        "GetChildren",
+        "GetLocalHumanoid",
+        "GetPointCoordinates",
+        "GetService",
+        "GetUserCFrameEnabled",
+        "GoToPoint",
+        "HasAnyHandControllers",
+        "HasBothHandControllers",
+        "HasGamepad",
+        "IsA",
+        "IsMobileVR",
+        "Lerp",
+        "OnHeartbeat",
+        "OnJumpAction",
+        "OnNavigationRequest",
+        "OnUserCFrameEnabled",
+        "Raycast",
+        "SetCore",
+        "SetLaserPointerMode",
+        "SetTouchpadMode",
+        "ShouldUseNavigationLaser",
+        "StartFollowingPath",
+        "StopFollowingPath",
+        "TryComputePath",
+        "UnbindAction",
+        "UnbindActivate",
+        "WaitForChild"
+      ],
+      "signal_identifiers": [
+        "Heartbeat",
+        "NavigationRequested",
+        "UserCFrameEnabled"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerModule.ControlModule.VehicleController",
+      "enum_identifiers": [
+        "Enum.ContextActionResult.Pass",
+        "Enum.KeyCode.ButtonL2",
+        "Enum.KeyCode.ButtonR2",
+        "Enum.KeyCode.Left",
+        "Enum.KeyCode.Right",
+        "Enum.UserInputState.Cancel",
+        "Enum.UserInputState.End"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 7,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "onlyTriggersForThrottle": false,
+        "AUTO_PILOT_DEFAULT_MAX_STEERING_ANGLE": 35,
+        "useTriggersForThrottle": true
+      },
+      "source_length": 6320,
+      "dependencies": [
+        "ContextActionService"
+      ],
+      "public_method_identifiers": [
+        "BindActionAtPriority",
+        "BindContextActions",
+        "ComputeSteer",
+        "ComputeThrottle",
+        "Enable",
+        "GetService",
+        "OnSteerLeft",
+        "OnSteerRight",
+        "OnThrottleAccel",
+        "OnThrottleDeccel",
+        "SetupAutoPilot",
+        "UnbindAction",
+        "Update",
+        "VectorToObjectSpace"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.PlayerScriptsLoader",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 0,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "LocalScript",
+      "literal_constants": [],
+      "source_length": 193,
+      "dependencies": [
+        "PlayerModule"
+      ],
+      "public_method_identifiers": [
+        "WaitForChild"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.RbxCharacterSounds",
+      "enum_identifiers": [
+        "Enum.HumanoidStateType.Climbing",
+        "Enum.HumanoidStateType.Dead",
+        "Enum.HumanoidStateType.FallingDown",
+        "Enum.HumanoidStateType.Freefall",
+        "Enum.HumanoidStateType.GettingUp",
+        "Enum.HumanoidStateType.Jumping",
+        "Enum.HumanoidStateType.Landed",
+        "Enum.HumanoidStateType.Running",
+        "Enum.HumanoidStateType.RunningNoPhysics",
+        "Enum.HumanoidStateType.Seated",
+        "Enum.HumanoidStateType.Swimming",
+        "Enum.RolloutState.Enabled"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 34,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "LocalScript",
+      "literal_constants": [],
+      "source_length": 13029,
+      "dependencies": [
+        "AtomicBinding",
+        "Players",
+        "RunService",
+        "SoundService"
+      ],
+      "public_method_identifiers": [
+        "Connect",
+        "Destroy",
+        "Disconnect",
+        "FindFirstChild",
+        "GetPlayers",
+        "GetService",
+        "GetState",
+        "GetVelocityAtPosition",
+        "IsA",
+        "IsUserFeatureEnabled",
+        "Play",
+        "SetDistanceAttenuation",
+        "Stop",
+        "WaitForChild",
+        "bindRoot",
+        "unbindRoot"
+      ],
+      "signal_identifiers": [
+        "CharacterAdded",
+        "CharacterRemoving",
+        "PlayerAdded",
+        "PlayerRemoving",
+        "StateChanged",
+        "Stepped"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Players.pavelord332.PlayerScripts.RbxCharacterSounds.AtomicBinding",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 40,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 2,
+            "name": "manifestSizeTarget"
+          }
+        ]
+      },
+      "class": "ModuleScript",
+      "literal_constants": {
+        "manifestSize": 0
+      },
+      "source_length": 7469,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "Connect",
+        "Disconnect",
+        "FindFirstChild",
+        "GetChildren",
+        "_startBoundFn",
+        "_stopBoundFn",
+        "bindRoot",
+        "destroy",
+        "unbindRoot"
+      ],
+      "signal_identifiers": [
+        "ChildAdded",
+        "ChildRemoved"
+      ],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "ReplicatedStorage.CharacterExperimentStockMetadataCache.R6.Animate",
+      "enum_identifiers": [
+        "Enum.AnimationPriority.Action",
+        "Enum.AnimationPriority.Core",
+        "Enum.AnimationPriority.Idle"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 42,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 3,
+            "name": "idx"
+          }
+        ]
+      },
+      "class": "LocalScript",
+      "literal_constants": {
+        "lastTick": 0,
+        "jumpMaxLimbVelocity": 0.75,
+        "setAngles": false,
+        "fallTransitionTime": 0.3,
+        "climbFudge": 0,
+        "toolAnimTime": 0,
+        "jumpAnimTime": 0,
+        "currentAnimSpeed": 1,
+        "amplitude": 1,
+        "jumpAnimDuration": 0.3,
+        "toolTransitionTime": 0.1,
+        "EMOTE_TRANSITION_TIME": 0.1,
+        "frequency": 1
+      },
+      "source_length": 15630,
+      "dependencies": [
+        "Humanoid",
+        "Neck",
+        "PlayEmote",
+        "Players",
+        "Torso"
+      ],
+      "public_method_identifiers": [
+        "AdjustSpeed",
+        "Destroy",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "GetChildren",
+        "GetPlayingAnimationTracks",
+        "GetScale",
+        "GetService",
+        "IsA",
+        "IsUserFeatureEnabled",
+        "LoadAnimation",
+        "Play",
+        "SetDesiredAngle",
+        "Stop",
+        "WaitForChild",
+        "connect",
+        "disconnect"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Workspace.pavelord332.Animate",
+      "enum_identifiers": [
+        "Enum.AnimationPriority.Action",
+        "Enum.AnimationPriority.Core",
+        "Enum.AnimationPriority.Idle"
+      ],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 42,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": [
+          {
+            "status": "EXCLUDED_SCOPE_AMBIGUITY",
+            "declarations": 3,
+            "name": "idx"
+          }
+        ]
+      },
+      "class": "LocalScript",
+      "literal_constants": {
+        "lastTick": 0,
+        "jumpMaxLimbVelocity": 0.75,
+        "setAngles": false,
+        "fallTransitionTime": 0.3,
+        "climbFudge": 0,
+        "toolAnimTime": 0,
+        "jumpAnimTime": 0,
+        "currentAnimSpeed": 1,
+        "amplitude": 1,
+        "jumpAnimDuration": 0.3,
+        "toolTransitionTime": 0.1,
+        "EMOTE_TRANSITION_TIME": 0.1,
+        "frequency": 1
+      },
+      "source_length": 15630,
+      "dependencies": [
+        "Humanoid",
+        "Neck",
+        "PlayEmote",
+        "Players",
+        "Torso"
+      ],
+      "public_method_identifiers": [
+        "AdjustSpeed",
+        "Destroy",
+        "FindFirstChild",
+        "FindFirstChildOfClass",
+        "GetChildren",
+        "GetPlayingAnimationTracks",
+        "GetScale",
+        "GetService",
+        "IsA",
+        "IsUserFeatureEnabled",
+        "LoadAnimation",
+        "Play",
+        "SetDesiredAngle",
+        "Stop",
+        "WaitForChild",
+        "connect",
+        "disconnect"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    },
+    {
+      "path": "Workspace.pavelord332.Health",
+      "enum_identifiers": [],
+      "literal_extraction": {
+        "behavior_claim": "Static exact local initializer literals, not runtime configuration or behavior proof; statements restricted to single-line standalone declarations",
+        "version": "standalone_single_line_literals_v2",
+        "excluded_nonliteral_RHS": 5,
+        "status": "EXACT_LITERAL_DECLARATIONS_ONLY",
+        "repeated_names": []
+      },
+      "class": "Script",
+      "literal_constants": {
+        "REGEN_STEP": 1
+      },
+      "source_length": 703,
+      "dependencies": [],
+      "public_method_identifiers": [
+        "Wait"
+      ],
+      "signal_identifiers": [],
+      "status": "OBSERVED"
+    }
+  ]
+}

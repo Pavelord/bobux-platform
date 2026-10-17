@@ -1,0 +1,63 @@
+{
+  "scope": "Independent preregistration and own geometry consistency; no Bobux fit or parity PASS",
+  "run_id": "2b50dc06-d10c-417f-b0aa-084a589ac02d",
+  "studio_version": "0.743.0.7431133",
+  "date_utc": "2026-10-15T10:58:44Z",
+  "raw_sha256": "2e52e496a1b363d5fcc7807452d3ac0cfbe9fb5947179d93654d7ef55126fafd",
+  "prereg_path": "tests/roblox_humanoid/phase_a/climb_run02.splits.json",
+  "prereg_sha256": "a1b02b4b1053613e0a001fb377af6c39a4ca938af7a25921764c3fa786762763",
+  "embedded_matrix_equals_preregistered_matrix": true,
+  "matrix_case_count": 45,
+  "case_begin_count": 45,
+  "train_count": 27,
+  "holdout_count": 18,
+  "character_generation_result_counts": {
+    "1": 45
+  },
+  "runtime_geometry_max_size_or_position_delta_studs": 5.960464455334602e-09,
+  "runtime_geometry_check_tolerance_studs": 1e-06,
+  "runtime_geometry_issues": [],
+  "source_checks": {
+    "common.luau": {
+      "expected_sha256": "2633991fc3f35917e64ad568011965bdd24ef5f648a875e2a500330f6183d7e3",
+      "current_sha256": "2633991fc3f35917e64ad568011965bdd24ef5f648a875e2a500330f6183d7e3",
+      "matches": true
+    },
+    "enum_coercion.commandbar.luau": {
+      "expected_sha256": "0e672354c1287ce2b55db8b5bf9a467536b81b3d413ea380f18ba5fb468ff4e0",
+      "current_sha256": "0e672354c1287ce2b55db8b5bf9a467536b81b3d413ea380f18ba5fb468ff4e0",
+      "matches": true
+    },
+    "export.commandbar.luau": {
+      "expected_sha256": "19e53e53fb18022a86b0aef5c72cebfbf60f0e08b44255d3317aa9f805e6f2a4",
+      "current_sha256": "19e53e53fb18022a86b0aef5c72cebfbf60f0e08b44255d3317aa9f805e6f2a4",
+      "matches": true
+    },
+    "export_yielding.commandbar.luau": {
+      "expected_sha256": "aa36eddbdba62188249ba9695511878f9eeff8d90d446a535989baead3e05898",
+      "current_sha256": "aa36eddbdba62188249ba9695511878f9eeff8d90d446a535989baead3e05898",
+      "matches": true
+    },
+    "measure.client.luau": {
+      "expected_sha256": "144dbb0c2d47c1de4cf5ffad3e89022a9effa10e318d946c21f6b8eb850b39d1",
+      "current_sha256": "144dbb0c2d47c1de4cf5ffad3e89022a9effa10e318d946c21f6b8eb850b39d1",
+      "matches": true
+    },
+    "metadata_probe.luau": {
+      "expected_sha256": "0c7f7a9783a829710b7130e07867d42cdf6c67b51655203d8247053d9fe4db71",
+      "current_sha256": "0c7f7a9783a829710b7130e07867d42cdf6c67b51655203d8247053d9fe4db71",
+      "matches": true
+    },
+    "setup.server.luau": {
+      "expected_sha256": "23107af006cebc7065e8e68e9c14182e36560d867b010d3a63395a90c743a405",
+      "current_sha256": "23107af006cebc7065e8e68e9c14182e36560d867b010d3a63395a90c743a405",
+      "matches": true
+    },
+    "test_metadata_literals.luau": {
+      "expected_sha256": "08effb54e47a0adc2b4a0c9540c1baef20a3ae004c56e20cc2d7208eed718eb4",
+      "current_sha256": "08effb54e47a0adc2b4a0c9540c1baef20a3ae004c56e20cc2d7208eed718eb4",
+      "matches": true
+    }
+  },
+  "status": "PASS"
+}

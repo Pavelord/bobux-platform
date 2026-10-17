@@ -1,0 +1,74 @@
+{
+  "date_local": "2026-10-15",
+  "timezone": "Europe/Kaliningrad",
+  "status": "PASS_MINIMAL_OPT_IN_SLICE",
+  "godot": "4.7.stable.official.5b4e0cb0f",
+  "luau_runtime": "0.719",
+  "results": {
+    "parity-first": {
+      "pass": 38,
+      "fail": 0,
+      "sha256": "441d37fffe8e876e8f67a2cd144c70bc7836a3b50e7dd9154c7ad6498f838ab3"
+    },
+    "legacy-first": {
+      "pass": 38,
+      "fail": 0,
+      "sha256": "a2b5f132dca2ca3b32d77aa1b0f4ad17ca824062f3a32ac197cf9d5ee615334f"
+    },
+    "player": {
+      "pass": 40,
+      "fail": 0,
+      "sha256": "b95bfb6615ae01be892cfee871e17ed5ce7dd66b62ca3f283d2506a04f7e340f"
+    },
+    "npc": {
+      "pass": 16,
+      "fail": 0,
+      "sha256": "d8ae414abaa5e94885e4e9b6d1b2f6dbf3c3e4ac2f9ce2e4f1e924f613425a66"
+    }
+  },
+  "source_sha256": {
+    "autoload/lua_script_engine.gd": "34e78ea0845bd2ab9eb38e6493c0e3671871016c6b07736f906d0a2f1bc803ca",
+    "addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd": "0b6b8d4ecd672c49895ec35f315888584a60604b1865bb994612f4e71fafcfcc",
+    "tools/character_parity/enum_vm_contract.luau": "bdb0a71ce1fc2103d5f7b7e0cb897e0e6c77c10cc836fababf2093947d652ad2",
+    "tools/character_parity/validate_enum_vm_boundary.gd": "d93134108219138b69a2c3eb35caa449882b900aeedd4e512b9983f5befb1ff7",
+    "tools/character_parity/check_enum_vm_sources.py": "59f95ccca2f8ba0195681272e48bedaf14de143307a6abc2ab8042395897287d",
+    "tools/character_parity/enum_vm_cyclic_contract.luau": "bdd9f749c6d93e6ec7264c96aa0fcb2fec0429e319f1d8809fc7cb3b6febf5e2",
+    "tools/character_parity/enum_vm_humanoid_edges_contract.luau": "aeebfb7fad5cfbdff48b09fadb159cf3553bb2effe6cb56dfa9c4db88cca6bed",
+    "addons/roblox_runtime/enums/roblox_enum_registry.gd": "1890840aa27c4d8a5dd359d0d974218b393371c2537c814ba792d9440b96423d",
+    "addons/roblox_runtime/enums/roblox_enum_item.gd": "cfd948a81327a5b889129fb2b92fe39634334f61add26553a74cd36e5b2772a9",
+    "addons/roblox_runtime/enums/roblox_enum_type.gd": "5a7459bd4aa149baca7784cef824a6fd232d67919d8e9270fde56aabf9a093c2",
+    "addons/roblox_runtime/enums/roblox_enums.gd": "971893889865abf25cde50e16dd34b72570ee361866227f6c21b697861667f06"
+  },
+  "native_reference_sha256": {
+    "tests/roblox_humanoid/phase_a/2026-10-14-studio-enum-coercion-run01.raw.json": "bf6f00d2dd18a509353347852a76aec14ae5778e81e23eb2773923961e154e19",
+    "tests/roblox_humanoid/phase_a/2026-10-15-studio-humanoid-edges-run01.raw.json": "22772eaa9965b6711656ab67f231c440c8a9dbcaca57b3e990824af9bdb28b9e"
+  },
+  "dirty_snapshot_sha256": "5f6bc6f95391354f5aaaefc8c97adf07046a7c213a99799731275a7f6e4f8ca9",
+  "development_failures": [
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_edges_20261015/development_failures/enum-vm-boundary-r15.log",
+      "sha256": "9ce90c37c8c3fe4b4ab5f8e8a43f586f192cfdf5ddf0ce2f2c23ed2205bc335b"
+    },
+    {
+      "path": "tests/roblox_humanoid/phase_a/enum_vm_boundary_edges_20261015/development_failures/enum-vm-boundary-r15.json",
+      "sha256": "2088ac14b942f0dad0c409440ae98db2fcd78b1d78c3f86ddfa52daf7b27c239"
+    }
+  ],
+  "open": [
+    "complete enum namespace",
+    "typed boundaries for all other enum properties",
+    "native opaque-string/bool/receiver edge coercion",
+    "generic BindableEvent EnumItem interop between registries",
+    "tagged wire codec and explicit capability negotiation",
+    "generic BobuxEvent equality (rawequal identity verified; default Object equality remains unchanged)",
+    "Humanoid physical/default-state calibration"
+  ],
+  "unchanged": [
+    "ExistingNumericEnums default",
+    "protected production files",
+    "native C++",
+    "map sources",
+    "85-item registry kernel",
+    "historical 48 PASS / 5 FAIL / 18 SKIP calibration"
+  ]
+}

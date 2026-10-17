@@ -1,0 +1,135 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[LuaScriptEngine] Runtime: Luau 0.719
+[enum-vm] PASS reject invalid profile  before allocation 
+[enum-vm] PASS reject invalid profile TypoParity before allocation 
+[enum-vm] PASS reject invalid profile <null> before allocation 
+[enum-vm] PASS reject invalid profile 77 before allocation 
+[enum-vm] PASS reject invalid profile false before allocation 
+[LUA] [LUA_ERRRUN - runtime error ]
+Bobux:353: assertion failed!
+WARNING: [LuaScriptEngine] EnumVmParity: [LUA_ERRRUN - runtime error ]
+Bobux:353: assertion failed!
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _resume_script_runtime (res://autoload/lua_script_engine.gd:3982)
+       [1] start_script (res://autoload/lua_script_engine.gd:3591)
+       [2] run_script (res://autoload/lua_script_engine.gd:3311)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:75)
+[enum-vm] PASS actual scheduled legacy VM started { "ok": true, "runtime_id": 2, "scheduled": true, "completed": false }
+[enum-vm] FAIL actual scheduled parity VM started { "ok": false, "error": "[LUA ERROR] [LUA_ERRRUN - runtime error ]\nBobux:353: assertion failed!", "runtime_id": 1 }
+[enum-vm] FAIL both scripts reached listeners 
+[enum-vm] PASS legacy uses shared actual BobuxInstance and event 
+[enum-vm] FAIL parity uses the same actual BobuxInstance and event [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] PASS legacy actual callbacks/modules/coroutines/tasks 
+[enum-vm] FAIL parity actual callbacks/modules/coroutines/tasks [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[enum-vm] PASS cyclic operands keys writes method arguments and ignored extras stay Lua-side 
+[enum-vm] PASS all 48 cyclic-boundary assertions executed 48.0
+[enum-vm] PASS native enabled-string and extracted-receiver contract 
+[enum-vm] PASS native edge contract completes including quiet event window 95.0
+[enum-vm] FAIL canonical state setter zero returns and scalar backend [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] FAIL internal Humanoid stores bool under scalar state key 
+[enum-vm] FAIL canonical ChangeState calls actual motor and returns no values [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] FAIL both Wait paths receive converted arguments 
+[enum-vm] FAIL legacy event arguments remain numbers [LUA_ERRRUN - runtime error ]
+Bobux:459: assertion failed!
+Bobux:459 function check_events
+Bobux:1
+
+
+[enum-vm] FAIL parity Connect extracted lowercase Once Wait module arguments [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[LUA] Bobux:328: legacy state expected Freefall/5, got number/8
+WARNING: [LuaScriptEngine] Task failed: Bobux:328: legacy state expected Freefall/5, got number/8
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4433)
+       [2] _invoke_connection (res://autoload/lua_script_engine.gd:154)
+       [3] _invoke_connection (res://autoload/lua_script_engine.gd:147)
+       [4] FireArgs (res://autoload/lua_script_engine.gd:116)
+       [5] Fire (res://autoload/lua_script_engine.gd:112)
+       [6] _fire_existing_runtime_event (res://autoload/lua_script_engine.gd:7149)
+       [7] run (res://tools/character_parity/validate_enum_vm_boundary.gd:117)
+[enum-vm] FAIL Connect and Wait preserve raw interior false and trailing nil 
+[enum-vm] FAIL legacy Once/Wait exactly once [LUA_ERRRUN - runtime error ]
+Bobux:459: assertion failed!
+Bobux:459 function check_events
+Bobux:1
+
+
+[enum-vm] FAIL parity Once/Wait exactly once [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[LUA] Bobux:1: attempt to index nil with 'connections'
+WARNING: [LuaScriptEngine] Task failed: Bobux:1: attempt to index nil with 'connections'
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4433)
+       [2] lua_check (res://tools/character_parity/validate_enum_vm_boundary.gd:18)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:135)
+[enum-vm] PASS install actual nested callback B to A to B 
+[LUA] Bobux:328: legacy state expected Freefall/5, got number/8
+WARNING: [LuaScriptEngine] Task failed: Bobux:328: legacy state expected Freefall/5, got number/8
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4433)
+       [2] _invoke_connection (res://autoload/lua_script_engine.gd:154)
+       [3] _invoke_connection (res://autoload/lua_script_engine.gd:147)
+       [4] FireArgs (res://autoload/lua_script_engine.gd:116)
+       [5] Fire (res://autoload/lua_script_engine.gd:112)
+       [6] _fire_existing_runtime_event (res://autoload/lua_script_engine.gd:7149)
+       [7] run (res://tools/character_parity/validate_enum_vm_boundary.gd:136)
+[enum-vm] FAIL nested callback preserves both VM profiles [LUA_ERRRUN - runtime error ]
+Bobux:1: assertion failed!
+Bobux:1
+
+
+[enum-vm] FAIL cross callbacks reached both native VM hooks []
+[enum-vm] FAIL Disconnect prevents subsequent legacy event delivery [LUA_ERRRUN - runtime error ]
+Bobux:460: assertion failed!
+Bobux:460 function check_events
+Bobux:1
+
+
+[LUA] Bobux:1: attempt to index nil with 'h'
+WARNING: [LuaScriptEngine] Task failed: Bobux:1: attempt to index nil with 'h'
+   at: push_warning (core/variant/variant_utility.cpp:1033)
+   GDScript backtrace (most recent call first):
+       [0] _report_task_error (res://autoload/lua_script_engine.gd:3906)
+       [1] <anonymous lambda> (res://autoload/lua_script_engine.gd:4433)
+       [2] lua_check (res://tools/character_parity/validate_enum_vm_boundary.gd:18)
+       [3] run (res://tools/character_parity/validate_enum_vm_boundary.gd:144)
+[enum-vm] PASS Once churn starts in actual scheduled coroutine 
+[enum-vm] FAIL Once churn executes all 256 callbacks 
+[enum-vm] PASS VM owner does not retain unbounded Once history 1
+[enum-vm] FAIL drop namespace and collect GC retains VM registry [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to index nil with 'h'
+
+
+[enum-vm] FAIL closing legacy VM leaves parity profile live [LUA_ERRRUN - runtime error ]
+Bobux:1: attempt to call a nil value
+
+
+[enum-vm] FAIL Stop disconnects parity listeners on sibling Humanoid 
+[enum-vm] PASS parity VM teardown releases registry and adapter 
+[enum-vm] PASS deferred start retains immutable opt-in profile 
+[enum-vm] FAIL no Luau runtime errors ["[LUA_ERRRUN - runtime error ]\nBobux:353: assertion failed!", "Bobux:328: legacy state expected Freefall/5, got number/8", "Bobux:1: attempt to index nil with \'connections\'", "Bobux:328: legacy state expected Freefall/5, got number/8", "Bobux:1: attempt to index nil with \'h\'"]
+[enum-vm] PASS=17 FAIL=21

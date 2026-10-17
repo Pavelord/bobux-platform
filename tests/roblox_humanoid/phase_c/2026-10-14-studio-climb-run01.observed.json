@@ -1,0 +1,2171 @@
+{
+  "schema": 1,
+  "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+  "studio_version": "0.742.0.7421053",
+  "date_utc": "2026-10-14T21:07:42Z",
+  "mode": "climb_baseline",
+  "raw_sha256": "ec3c3102bf06d6e87cd52777412c4f0efbfd5d163be75f205ed55596ee29302a",
+  "raw_records": 36674,
+  "parser_issues": [],
+  "status": "BLOCKED",
+  "parity_status": "NOT_IMPLEMENTED_NOT_CALIBRATED",
+  "units": {
+    "velocity": "studs/s",
+    "time": "seconds",
+    "position": "studs"
+  },
+  "run_result": {
+    "coverage": "Foundation inventory / preregistered minimal climbing only; phases A-J not complete",
+    "wall_s": 282.83526640000036,
+    "errors": [
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_regular_parts_ladder_ws32_r2"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_regular_parts_ladder_ws32_r3"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_regular_parts_ladder_ws32_r4"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_regular_parts_ladder_ws32_r5"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws8_r1"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws8_r2"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws8_r3"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws8_r4"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws8_r5"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws32_r1"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws32_r2"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws32_r3"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws32_r4"
+      },
+      {
+        "reason": "timeout 6s: quiet standing after reset",
+        "case": "r6_truss_ws32_r5"
+      }
+    ],
+    "sim_s": 280.9458479899913,
+    "frame": 16820,
+    "cases": [
+      {
+        "climbing": false,
+        "duration_sim_s": 6.016666980460286,
+        "max_root_rise": 0.00011014938354492188,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 6.600000345148146,
+        "case": "r6_smooth_tall_block_ws16_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 7.849184300000161,
+        "frame": 378,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_smooth_tall_block_ws16_r1",
+          "repeat": 1,
+          "geometry": "smooth_tall_block",
+          "rig": "R6"
+        },
+        "seq": 1185,
+        "duration_wall_s": 6.017303999999967,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00013399124145507812,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 12.916667341254652,
+        "case": "r6_smooth_tall_block_ws16_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 14.1645010000002,
+        "frame": 757,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_smooth_tall_block_ws16_r2",
+          "repeat": 2,
+          "geometry": "smooth_tall_block",
+          "rig": "R6"
+        },
+        "seq": 2360,
+        "duration_wall_s": 6.0002574000000095,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 19.233334337361157,
+        "case": "r6_smooth_tall_block_ws16_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 20.48063490000004,
+        "frame": 1136,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_smooth_tall_block_ws16_r3",
+          "repeat": 3,
+          "geometry": "smooth_tall_block",
+          "rig": "R6"
+        },
+        "seq": 3535,
+        "duration_wall_s": 5.99974659999998,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.004166979342699,
+        "max_root_rise": 8.273124694824219e-05,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 25.566668001003563,
+        "case": "r6_smooth_tall_block_ws16_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 26.81407180000042,
+        "frame": 1516,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_smooth_tall_block_ws16_r4",
+          "repeat": 4,
+          "geometry": "smooth_tall_block",
+          "rig": "R6"
+        },
+        "seq": 4710,
+        "duration_wall_s": 6.000234300000102,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011324882507324219,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 31.88333499711007,
+        "case": "r6_smooth_tall_block_ws16_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 33.13178590000007,
+        "frame": 1895,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_smooth_tall_block_ws16_r5",
+          "repeat": 5,
+          "geometry": "smooth_tall_block",
+          "rig": "R6"
+        },
+        "seq": 5885,
+        "duration_wall_s": 6.001016800000343,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.016666980460286,
+        "max_root_rise": 0.00013065338134765625,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 38.2333353292197,
+        "case": "r6_thin_part_ws16_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 39.480592700000216,
+        "frame": 2276,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_thin_part_ws16_r1",
+          "repeat": 1,
+          "geometry": "thin_part",
+          "rig": "R6"
+        },
+        "seq": 7064,
+        "duration_wall_s": 6.016198000000259,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.012500314041972,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 44.56250232644379,
+        "case": "r6_thin_part_ws16_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 45.8136956000003,
+        "frame": 2656,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_thin_part_ws16_r2",
+          "repeat": 2,
+          "geometry": "thin_part",
+          "rig": "R6"
+        },
+        "seq": 8243,
+        "duration_wall_s": 6.0176103999997395,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00019216537475585938,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 50.8958359900862,
+        "case": "r6_thin_part_ws16_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 52.14694840000038,
+        "frame": 3036,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_thin_part_ws16_r3",
+          "repeat": 3,
+          "geometry": "thin_part",
+          "rig": "R6"
+        },
+        "seq": 9418,
+        "duration_wall_s": 5.999881299999743,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00014925003051757812,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 57.2125029861927,
+        "case": "r6_thin_part_ws16_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 58.462007200000244,
+        "frame": 3415,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_thin_part_ws16_r4",
+          "repeat": 4,
+          "geometry": "thin_part",
+          "rig": "R6"
+        },
+        "seq": 10593,
+        "duration_wall_s": 5.999269899999945,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00014925003051757812,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 63.52916998229921,
+        "case": "r6_thin_part_ws16_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 64.78011450000031,
+        "frame": 3794,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_thin_part_ws16_r5",
+          "repeat": 5,
+          "geometry": "thin_part",
+          "rig": "R6"
+        },
+        "seq": 11768,
+        "duration_wall_s": 6.001169799999843,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.23515176773071,
+        "duration_wall_s": 5.999332800000047,
+        "status": "OBSERVED",
+        "sim_s": 69.89583698194474,
+        "case": "r6_regular_parts_ladder_ws16_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 71.14504500000021,
+        "frame": 4174,
+        "seq": 12959,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws16_r1",
+          "repeat": 1,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": -1.8233020305633545,
+            "frame": 3831,
+            "sim_s": 64.17917001713067
+          },
+          {
+            "speed": 10.948053359985352,
+            "frame": 3832,
+            "sim_s": 64.19583668466657
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 3998,
+            "sim_s": 66.96667016204447
+          }
+        ],
+        "climbing_samples": 167,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 65.44585500000039,
+            "new": "Climbing",
+            "frame": 3831,
+            "sim_s": 64.17917001713067,
+            "old": "Running"
+          },
+          {
+            "wall_s": 68.22865340000044,
+            "new": "Running",
+            "frame": 3998,
+            "sim_s": 66.96667016204447,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 68.24517130000004,
+            "new": "Freefall",
+            "frame": 3999,
+            "sim_s": 66.97917016316205,
+            "old": "Running"
+          },
+          {
+            "wall_s": 68.29620440000008,
+            "new": "Landed",
+            "frame": 4002,
+            "sim_s": 67.02917016576976,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 68.32983150000018,
+            "new": "Running",
+            "frame": 4004,
+            "sim_s": 67.06250350084156,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 68.5118395000004,
+            "new": "Freefall",
+            "frame": 4015,
+            "sim_s": 67.24583684373647,
+            "old": "Running"
+          },
+          {
+            "wall_s": 68.96312260000013,
+            "new": "Landed",
+            "frame": 4042,
+            "sim_s": 67.6958368672058,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 68.99595260000024,
+            "new": "Running",
+            "frame": 4044,
+            "sim_s": 67.7291702022776,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.23470425605774,
+        "duration_wall_s": 5.999231799999961,
+        "status": "OBSERVED",
+        "sim_s": 76.21250397805125,
+        "case": "r6_regular_parts_ladder_ws16_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 77.4616933000002,
+        "frame": 4553,
+        "seq": 14150,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws16_r2",
+          "repeat": 2,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.016033411026001,
+            "frame": 4211,
+            "sim_s": 70.51250368077308
+          },
+          {
+            "speed": 10.839040756225586,
+            "frame": 4212,
+            "sim_s": 70.52917034830898
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 4378,
+            "sim_s": 73.29583715926856
+          }
+        ],
+        "climbing_samples": 167,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 71.77885650000007,
+            "new": "Climbing",
+            "frame": 4211,
+            "sim_s": 70.51250368077308,
+            "old": "Running"
+          },
+          {
+            "wall_s": 74.56264250000004,
+            "new": "Running",
+            "frame": 4378,
+            "sim_s": 73.29583715926856,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 74.57922120000012,
+            "new": "Freefall",
+            "frame": 4379,
+            "sim_s": 73.31250382680446,
+            "old": "Running"
+          },
+          {
+            "wall_s": 74.62812080000003,
+            "new": "Landed",
+            "frame": 4382,
+            "sim_s": 73.36250382941216,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 74.66157870000006,
+            "new": "Running",
+            "frame": 4384,
+            "sim_s": 73.39583716448396,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 74.84500450000041,
+            "new": "Freefall",
+            "frame": 4395,
+            "sim_s": 73.57917050737888,
+            "old": "Running"
+          },
+          {
+            "wall_s": 75.29556890000003,
+            "new": "Landed",
+            "frame": 4422,
+            "sim_s": 74.0291705308482,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 75.32857400000012,
+            "new": "Running",
+            "frame": 4424,
+            "sim_s": 74.06250386592001,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.23470425605774,
+        "duration_wall_s": 5.998418599999695,
+        "status": "OBSERVED",
+        "sim_s": 82.52917097415775,
+        "case": "r6_regular_parts_ladder_ws16_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 83.77784400000019,
+        "frame": 4932,
+        "seq": 15341,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws16_r3",
+          "repeat": 3,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.016033411026001,
+            "frame": 4590,
+            "sim_s": 76.82917067687958
+          },
+          {
+            "speed": 10.839040756225586,
+            "frame": 4591,
+            "sim_s": 76.84583734441549
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 4757,
+            "sim_s": 79.61250415537506
+          }
+        ],
+        "climbing_samples": 167,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 78.09560320000037,
+            "new": "Climbing",
+            "frame": 4590,
+            "sim_s": 76.82917067687958,
+            "old": "Running"
+          },
+          {
+            "wall_s": 80.87856710000005,
+            "new": "Running",
+            "frame": 4757,
+            "sim_s": 79.61250415537506,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 80.89554570000018,
+            "new": "Freefall",
+            "frame": 4758,
+            "sim_s": 79.62917082291096,
+            "old": "Running"
+          },
+          {
+            "wall_s": 80.94493860000011,
+            "new": "Landed",
+            "frame": 4761,
+            "sim_s": 79.67917082551867,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 80.97866120000026,
+            "new": "Running",
+            "frame": 4763,
+            "sim_s": 79.71250416059047,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 81.16111620000038,
+            "new": "Freefall",
+            "frame": 4774,
+            "sim_s": 79.89583750348538,
+            "old": "Running"
+          },
+          {
+            "wall_s": 81.61209700000018,
+            "new": "Landed",
+            "frame": 4801,
+            "sim_s": 80.34583752695471,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 81.64626350000026,
+            "new": "Running",
+            "frame": 4803,
+            "sim_s": 80.37917086202651,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.23470425605774,
+        "duration_wall_s": 5.999338200000238,
+        "status": "OBSERVED",
+        "sim_s": 88.84583797026426,
+        "case": "r6_regular_parts_ladder_ws16_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 90.09445790000018,
+        "frame": 5311,
+        "seq": 16532,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_regular_parts_ladder_ws16_r4",
+          "repeat": 4,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.016033411026001,
+            "frame": 4969,
+            "sim_s": 83.14583767298609
+          },
+          {
+            "speed": 10.839040756225586,
+            "frame": 4970,
+            "sim_s": 83.16250434052199
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 5136,
+            "sim_s": 85.92917115148157
+          }
+        ],
+        "climbing_samples": 167,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 84.41117230000009,
+            "new": "Climbing",
+            "frame": 4969,
+            "sim_s": 83.14583767298609,
+            "old": "Running"
+          },
+          {
+            "wall_s": 87.19610420000026,
+            "new": "Running",
+            "frame": 5136,
+            "sim_s": 85.92917115148157,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 87.2116361000003,
+            "new": "Freefall",
+            "frame": 5137,
+            "sim_s": 85.94583781901747,
+            "old": "Running"
+          },
+          {
+            "wall_s": 87.26277320000008,
+            "new": "Landed",
+            "frame": 5140,
+            "sim_s": 85.99583782162517,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 87.29476580000028,
+            "new": "Running",
+            "frame": 5142,
+            "sim_s": 86.02917115669698,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 87.47780360000024,
+            "new": "Freefall",
+            "frame": 5153,
+            "sim_s": 86.21250449959189,
+            "old": "Running"
+          },
+          {
+            "wall_s": 87.92905860000019,
+            "new": "Landed",
+            "frame": 5180,
+            "sim_s": 86.66250452306122,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 87.96087410000018,
+            "new": "Running",
+            "frame": 5182,
+            "sim_s": 86.69583785813302,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.23470425605774,
+        "duration_wall_s": 6.000829799999792,
+        "status": "OBSERVED",
+        "sim_s": 95.16250496637076,
+        "case": "r6_regular_parts_ladder_ws16_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 96.41155020000042,
+        "frame": 5690,
+        "seq": 17723,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_regular_parts_ladder_ws16_r5",
+          "repeat": 5,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.016033411026001,
+            "frame": 5348,
+            "sim_s": 89.4625046690926
+          },
+          {
+            "speed": 10.839040756225586,
+            "frame": 5349,
+            "sim_s": 89.4791713366285
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 5515,
+            "sim_s": 92.24583814758807
+          }
+        ],
+        "climbing_samples": 167,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 90.72778000000017,
+            "new": "Climbing",
+            "frame": 5348,
+            "sim_s": 89.4625046690926,
+            "old": "Running"
+          },
+          {
+            "wall_s": 93.5105165,
+            "new": "Running",
+            "frame": 5515,
+            "sim_s": 92.24583814758807,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 93.5280316000003,
+            "new": "Freefall",
+            "frame": 5516,
+            "sim_s": 92.26250481512398,
+            "old": "Running"
+          },
+          {
+            "wall_s": 93.57801410000002,
+            "new": "Landed",
+            "frame": 5519,
+            "sim_s": 92.31250481773168,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 93.61151050000035,
+            "new": "Running",
+            "frame": 5521,
+            "sim_s": 92.34583815280348,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 93.79396320000023,
+            "new": "Freefall",
+            "frame": 5532,
+            "sim_s": 92.52917149569839,
+            "old": "Running"
+          },
+          {
+            "wall_s": 94.24447540000028,
+            "new": "Landed",
+            "frame": 5559,
+            "sim_s": 92.97917151916772,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 94.27793310000015,
+            "new": "Running",
+            "frame": 5561,
+            "sim_s": 93.01250485423952,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00013756752014160156,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 101.53333863150328,
+        "case": "r6_single_ledge_ws16_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 102.81154900000001,
+        "frame": 6069,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_single_ledge_ws16_r1",
+          "repeat": 1,
+          "geometry": "single_ledge",
+          "rig": "R6"
+        },
+        "seq": 18898,
+        "duration_wall_s": 6.0001515000003565,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 107.85000562760979,
+        "case": "r6_single_ledge_ws16_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 109.12726460000022,
+        "frame": 6448,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_single_ledge_ws16_r2",
+          "repeat": 2,
+          "geometry": "single_ledge",
+          "rig": "R6"
+        },
+        "seq": 20073,
+        "duration_wall_s": 5.999558900000011,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 114.1666726237163,
+        "case": "r6_single_ledge_ws16_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 115.44392420000031,
+        "frame": 6827,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_single_ledge_ws16_r3",
+          "repeat": 3,
+          "geometry": "single_ledge",
+          "rig": "R6"
+        },
+        "seq": 21248,
+        "duration_wall_s": 6.000061300000198,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 120.4833396198228,
+        "case": "r6_single_ledge_ws16_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 121.76024460000008,
+        "frame": 7206,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_single_ledge_ws16_r4",
+          "repeat": 4,
+          "geometry": "single_ledge",
+          "rig": "R6"
+        },
+        "seq": 22423,
+        "duration_wall_s": 5.9989339999997355,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": false,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 0.00011658668518066406,
+        "climb_events": [],
+        "status": "OBSERVED",
+        "sim_s": 126.8000066159293,
+        "case": "r6_single_ledge_ws16_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 128.07715860000008,
+        "frame": 7585,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_single_ledge_ws16_r5",
+          "repeat": 5,
+          "geometry": "single_ledge",
+          "rig": "R6"
+        },
+        "seq": 23598,
+        "duration_wall_s": 6.000651700000162,
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "climbing_samples": 0,
+        "schema": 1,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": []
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 31.999975442886353,
+        "duration_wall_s": 5.998902100000123,
+        "status": "OBSERVED",
+        "sim_s": 133.1750069493428,
+        "case": "r6_truss_ws16_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 134.49265460000015,
+        "frame": 7965,
+        "seq": 24783,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_truss_ws16_r1",
+          "repeat": 1,
+          "geometry": "truss",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 0,
+            "frame": 7620,
+            "sim_s": 127.4208399830386
+          },
+          {
+            "speed": 10.639410018920898,
+            "frame": 7621,
+            "sim_s": 127.44167331699282
+          },
+          {
+            "speed": 11.189228057861328,
+            "frame": 7622,
+            "sim_s": 127.45833998452872
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 7790,
+            "sim_s": 130.2583401305601
+          }
+        ],
+        "climbing_samples": 170,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 128.76080420000017,
+            "new": "Climbing",
+            "frame": 7620,
+            "sim_s": 127.4208399830386,
+            "old": "Running"
+          },
+          {
+            "wall_s": 131.5939413000001,
+            "new": "Running",
+            "frame": 7790,
+            "sim_s": 130.2583401305601,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 131.8930059000004,
+            "new": "Freefall",
+            "frame": 7808,
+            "sim_s": 130.55834014620632,
+            "old": "Running"
+          },
+          {
+            "wall_s": 132.34362340000007,
+            "new": "Landed",
+            "frame": 7835,
+            "sim_s": 131.00417350325733,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 132.3760913000001,
+            "new": "Running",
+            "frame": 7837,
+            "sim_s": 131.04167350474745,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 31.999964237213135,
+        "duration_wall_s": 6.000439299999925,
+        "status": "OBSERVED",
+        "sim_s": 139.4916739454493,
+        "case": "r6_truss_ws16_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 140.81037570000035,
+        "frame": 8344,
+        "seq": 25974,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_truss_ws16_r2",
+          "repeat": 2,
+          "geometry": "truss",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": -1.9789921045303345,
+            "frame": 7999,
+            "sim_s": 133.7375069791451
+          },
+          {
+            "speed": 11.101723670959473,
+            "frame": 8000,
+            "sim_s": 133.75834031309932
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 8169,
+            "sim_s": 136.5708404602483
+          }
+        ],
+        "climbing_samples": 170,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 135.0767406,
+            "new": "Climbing",
+            "frame": 7999,
+            "sim_s": 133.7375069791451,
+            "old": "Running"
+          },
+          {
+            "wall_s": 137.9097670000001,
+            "new": "Running",
+            "frame": 8169,
+            "sim_s": 136.5708404602483,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 137.9261359000002,
+            "new": "Freefall",
+            "frame": 8170,
+            "sim_s": 136.5916737942025,
+            "old": "Running"
+          },
+          {
+            "wall_s": 137.9761368000004,
+            "new": "Landed",
+            "frame": 8173,
+            "sim_s": 136.6416737968102,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 138.01052180000033,
+            "new": "Running",
+            "frame": 8175,
+            "sim_s": 136.6708404654637,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 138.24268340000026,
+            "new": "Freefall",
+            "frame": 8189,
+            "sim_s": 136.9041738109663,
+            "old": "Running"
+          },
+          {
+            "wall_s": 138.69306610000012,
+            "new": "Landed",
+            "frame": 8216,
+            "sim_s": 137.35417383443564,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 138.72581260000015,
+            "new": "Running",
+            "frame": 8218,
+            "sim_s": 137.39167383592576,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.00001001358032,
+        "duration_wall_s": 5.999616399999923,
+        "status": "OBSERVED",
+        "sim_s": 145.8083409415558,
+        "case": "r6_truss_ws16_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 147.12599020000016,
+        "frame": 8723,
+        "seq": 27165,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "train",
+          "id": "r6_truss_ws16_r3",
+          "repeat": 3,
+          "geometry": "truss",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 0,
+            "frame": 8378,
+            "sim_s": 140.05834064166993
+          },
+          {
+            "speed": 10.971320152282715,
+            "frame": 8379,
+            "sim_s": 140.07500730920583
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 8548,
+            "sim_s": 142.8916741227731
+          }
+        ],
+        "climbing_samples": 170,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 141.3925988000001,
+            "new": "Climbing",
+            "frame": 8378,
+            "sim_s": 140.05834064166993,
+            "old": "Running"
+          },
+          {
+            "wall_s": 144.2257069000002,
+            "new": "Running",
+            "frame": 8548,
+            "sim_s": 142.8916741227731,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 144.24175840000044,
+            "new": "Freefall",
+            "frame": 8549,
+            "sim_s": 142.908340790309,
+            "old": "Running"
+          },
+          {
+            "wall_s": 144.29276580000032,
+            "new": "Landed",
+            "frame": 8552,
+            "sim_s": 142.95834079291672,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 144.32619120000027,
+            "new": "Running",
+            "frame": 8554,
+            "sim_s": 142.99167412798852,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 144.55882940000038,
+            "new": "Freefall",
+            "frame": 8568,
+            "sim_s": 143.22084080707282,
+            "old": "Running"
+          },
+          {
+            "wall_s": 145.00910590000012,
+            "new": "Landed",
+            "frame": 8595,
+            "sim_s": 143.67500749696046,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 145.05972040000006,
+            "new": "Running",
+            "frame": 8598,
+            "sim_s": 143.72084083314985,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.04071021080017,
+        "duration_wall_s": 6.000463700000182,
+        "status": "OBSERVED",
+        "sim_s": 152.1375079387799,
+        "case": "r6_truss_ws16_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 153.4588844,
+        "frame": 9103,
+        "seq": 28356,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_truss_ws16_r4",
+          "repeat": 4,
+          "geometry": "truss",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 0,
+            "frame": 8757,
+            "sim_s": 146.37084097135812
+          },
+          {
+            "speed": 11.116943359375,
+            "frame": 8758,
+            "sim_s": 146.39167430531234
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 8927,
+            "sim_s": 149.20834111887962
+          }
+        ],
+        "climbing_samples": 170,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 147.7094535000001,
+            "new": "Climbing",
+            "frame": 8757,
+            "sim_s": 146.37084097135812,
+            "old": "Running"
+          },
+          {
+            "wall_s": 150.54254040000023,
+            "new": "Running",
+            "frame": 8927,
+            "sim_s": 149.20834111887962,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 150.55999610000026,
+            "new": "Freefall",
+            "frame": 8928,
+            "sim_s": 149.22500778641552,
+            "old": "Running"
+          },
+          {
+            "wall_s": 150.6089023000004,
+            "new": "Landed",
+            "frame": 8931,
+            "sim_s": 149.27500778902322,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 150.65923680000014,
+            "new": "Running",
+            "frame": 8934,
+            "sim_s": 149.3208411252126,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 150.89172180000014,
+            "new": "Freefall",
+            "frame": 8948,
+            "sim_s": 149.55417447071522,
+            "old": "Running"
+          },
+          {
+            "wall_s": 151.34177660000023,
+            "new": "Landed",
+            "frame": 8975,
+            "sim_s": 150.00834116060287,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 151.3925234000003,
+            "new": "Running",
+            "frame": 8978,
+            "sim_s": 150.05417449679226,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.016666980460286,
+        "max_root_rise": 32.00228023529053,
+        "duration_wall_s": 6.017649200000051,
+        "status": "OBSERVED",
+        "sim_s": 158.4750082688406,
+        "case": "r6_truss_ws16_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 159.79313000000002,
+        "frame": 9483,
+        "seq": 29550,
+        "parameters": {
+          "WalkSpeed": 16,
+          "split": "holdout",
+          "id": "r6_truss_ws16_r5",
+          "repeat": 5,
+          "geometry": "truss",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 0,
+            "frame": 9135,
+            "sim_s": 152.67084129992872
+          },
+          {
+            "speed": 10.978515625,
+            "frame": 9136,
+            "sim_s": 152.68750796746463
+          },
+          {
+            "speed": 11.199999809265137,
+            "frame": 9305,
+            "sim_s": 155.5041747810319
+          }
+        ],
+        "climbing_samples": 170,
+        "vertical_speed_median": 11.199999809265137,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": [
+          {
+            "wall_s": 154.00807730000042,
+            "new": "Climbing",
+            "frame": 9135,
+            "sim_s": 152.67084129992872,
+            "old": "Running"
+          },
+          {
+            "wall_s": 156.84168690000024,
+            "new": "Running",
+            "frame": 9305,
+            "sim_s": 155.5041747810319,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 156.8582505000004,
+            "new": "Freefall",
+            "frame": 9306,
+            "sim_s": 155.5208414485678,
+            "old": "Running"
+          },
+          {
+            "wall_s": 156.92519720000018,
+            "new": "Landed",
+            "frame": 9310,
+            "sim_s": 155.5875081187114,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 156.95829250000043,
+            "new": "Running",
+            "frame": 9312,
+            "sim_s": 155.6208414537832,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 157.19142230000034,
+            "new": "Freefall",
+            "frame": 9326,
+            "sim_s": 155.85417479928583,
+            "old": "Running"
+          },
+          {
+            "wall_s": 157.64239300000008,
+            "new": "Landed",
+            "frame": 9353,
+            "sim_s": 156.30417482275516,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 157.67550610000035,
+            "new": "Running",
+            "frame": 9355,
+            "sim_s": 156.33750815782696,
+            "old": "Landed"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.012500314041972,
+        "max_root_rise": 30.938652276992798,
+        "duration_wall_s": 6.017604099999971,
+        "status": "OBSERVED",
+        "sim_s": 164.8541752686724,
+        "case": "r6_regular_parts_ladder_ws8_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 166.25980909999998,
+        "frame": 9863,
+        "seq": 30730,
+        "parameters": {
+          "WalkSpeed": 8,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws8_r1",
+          "repeat": 1,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.274543285369873,
+            "frame": 9532,
+            "sim_s": 159.33750831428915
+          },
+          {
+            "speed": 5.554013252258301,
+            "frame": 9533,
+            "sim_s": 159.35417498182505
+          }
+        ],
+        "climbing_samples": 331,
+        "vertical_speed_median": 5.599999904632568,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": [
+          {
+            "wall_s": 160.75927050000018,
+            "new": "Climbing",
+            "frame": 9532,
+            "sim_s": 159.33750831428915,
+            "old": "Running"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.012500314041972,
+        "max_root_rise": 30.93862795829773,
+        "duration_wall_s": 6.014933800000108,
+        "status": "OBSERVED",
+        "sim_s": 171.1875089323148,
+        "case": "r6_regular_parts_ladder_ws8_r2",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 172.59122109999998,
+        "frame": 10243,
+        "seq": 31911,
+        "parameters": {
+          "WalkSpeed": 8,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws8_r2",
+          "repeat": 2,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.274543285369873,
+            "frame": 9912,
+            "sim_s": 165.67084197793156
+          },
+          {
+            "speed": 5.554013252258301,
+            "frame": 9913,
+            "sim_s": 165.68750864546746
+          }
+        ],
+        "climbing_samples": 331,
+        "vertical_speed_median": 5.599999904632568,
+        "kind": "case_result",
+        "post_frames": 361,
+        "states": [
+          {
+            "wall_s": 167.09167370000023,
+            "new": "Climbing",
+            "frame": 9912,
+            "sim_s": 165.67084197793156,
+            "old": "Running"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 30.84530758857727,
+        "duration_wall_s": 5.9994667999999365,
+        "status": "OBSERVED",
+        "sim_s": 177.50417592842132,
+        "case": "r6_regular_parts_ladder_ws8_r3",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 178.90765610000017,
+        "frame": 10622,
+        "seq": 33089,
+        "parameters": {
+          "WalkSpeed": 8,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws8_r3",
+          "repeat": 3,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.274543285369873,
+            "frame": 10292,
+            "sim_s": 172.00417564157397
+          },
+          {
+            "speed": 5.554013252258301,
+            "frame": 10293,
+            "sim_s": 172.02084230910987
+          }
+        ],
+        "climbing_samples": 330,
+        "vertical_speed_median": 5.599999904632568,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 173.42489010000008,
+            "new": "Climbing",
+            "frame": 10292,
+            "sim_s": 172.00417564157397,
+            "old": "Running"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 30.84530758857727,
+        "duration_wall_s": 5.999881600000208,
+        "status": "OBSERVED",
+        "sim_s": 183.82084292452782,
+        "case": "r6_regular_parts_ladder_ws8_r4",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 185.22451580000006,
+        "frame": 11001,
+        "seq": 34267,
+        "parameters": {
+          "WalkSpeed": 8,
+          "split": "holdout",
+          "id": "r6_regular_parts_ladder_ws8_r4",
+          "repeat": 4,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.274543285369873,
+            "frame": 10671,
+            "sim_s": 178.32084263768047
+          },
+          {
+            "speed": 5.554013252258301,
+            "frame": 10672,
+            "sim_s": 178.33750930521637
+          }
+        ],
+        "climbing_samples": 330,
+        "vertical_speed_median": 5.599999904632568,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 179.74137690000043,
+            "new": "Climbing",
+            "frame": 10671,
+            "sim_s": 178.32084263768047,
+            "old": "Running"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 30.84530758857727,
+        "duration_wall_s": 5.999790999999732,
+        "status": "OBSERVED",
+        "sim_s": 190.13750992063433,
+        "case": "r6_regular_parts_ladder_ws8_r5",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 191.54128830000036,
+        "frame": 11380,
+        "seq": 35445,
+        "parameters": {
+          "WalkSpeed": 8,
+          "split": "holdout",
+          "id": "r6_regular_parts_ladder_ws8_r5",
+          "repeat": 5,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 3.274543285369873,
+            "frame": 11050,
+            "sim_s": 184.63750963378698
+          },
+          {
+            "speed": 5.554013252258301,
+            "frame": 11051,
+            "sim_s": 184.65417630132288
+          }
+        ],
+        "climbing_samples": 330,
+        "vertical_speed_median": 5.599999904632568,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 186.05763330000036,
+            "new": "Climbing",
+            "frame": 11050,
+            "sim_s": 184.63750963378698,
+            "old": "Running"
+          }
+        ]
+      },
+      {
+        "climbing": true,
+        "duration_sim_s": 6.000000312924385,
+        "max_root_rise": 32.33453989028931,
+        "duration_wall_s": 5.999996600000031,
+        "status": "OBSERVED",
+        "sim_s": 196.50834358576685,
+        "case": "r6_regular_parts_ladder_ws32_r1",
+        "conclusion": "Observed behavior; no expected state imposed and no production calibration/PASS claim",
+        "wall_s": 198.00724580000042,
+        "frame": 11759,
+        "seq": 36641,
+        "parameters": {
+          "WalkSpeed": 32,
+          "split": "train",
+          "id": "r6_regular_parts_ladder_ws32_r1",
+          "repeat": 1,
+          "geometry": "regular_parts_ladder",
+          "rig": "R6"
+        },
+        "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+        "schema": 1,
+        "climb_events": [
+          {
+            "speed": 7.956923007965088,
+            "frame": 11411,
+            "sim_s": 190.70834328327328
+          },
+          {
+            "speed": 22.112850189208984,
+            "frame": 11412,
+            "sim_s": 190.72500995080918
+          },
+          {
+            "speed": 22.399999618530273,
+            "frame": 11494,
+            "sim_s": 192.09167668875307
+          }
+        ],
+        "climbing_samples": 83,
+        "vertical_speed_median": 22.399999618530273,
+        "kind": "case_result",
+        "post_frames": 360,
+        "states": [
+          {
+            "wall_s": 192.22430120000035,
+            "new": "Climbing",
+            "frame": 11411,
+            "sim_s": 190.70834328327328,
+            "old": "Running"
+          },
+          {
+            "wall_s": 193.60718410000027,
+            "new": "Running",
+            "frame": 11494,
+            "sim_s": 192.09167668875307,
+            "old": "Climbing"
+          },
+          {
+            "wall_s": 193.62362740000026,
+            "new": "Freefall",
+            "frame": 11495,
+            "sim_s": 192.10834335628897,
+            "old": "Running"
+          },
+          {
+            "wall_s": 193.72422860000006,
+            "new": "Landed",
+            "frame": 11501,
+            "sim_s": 192.20834336150438,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 193.75685390000035,
+            "new": "Running",
+            "frame": 11503,
+            "sim_s": 192.24167669657618,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 193.84120540000004,
+            "new": "Freefall",
+            "frame": 11508,
+            "sim_s": 192.32501003425568,
+            "old": "Running"
+          },
+          {
+            "wall_s": 194.2913384000003,
+            "new": "Landed",
+            "frame": 11535,
+            "sim_s": 192.775010057725,
+            "old": "Freefall"
+          },
+          {
+            "wall_s": 194.32402120000006,
+            "new": "Running",
+            "frame": 11537,
+            "sim_s": 192.80834339279681,
+            "old": "Landed"
+          },
+          {
+            "wall_s": 195.4408287000001,
+            "new": "Freefall",
+            "frame": 11604,
+            "sim_s": 193.9250101177022,
+            "old": "Running"
+          },
+          {
+            "wall_s": 197.65788380000004,
+            "new": "Dead",
+            "frame": 11737,
+            "sim_s": 196.14167689997703,
+            "old": "Freefall"
+          }
+        ]
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_regular_parts_ladder_ws32_r2"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_regular_parts_ladder_ws32_r3"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_regular_parts_ladder_ws32_r4"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_regular_parts_ladder_ws32_r5"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws8_r1"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws8_r2"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws8_r3"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws8_r4"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws8_r5"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws32_r1"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws32_r2"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws32_r3"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws32_r4"
+      },
+      {
+        "status": "BLOCKED",
+        "reason": "reset did not settle",
+        "case": "r6_truss_ws32_r5"
+      }
+    ],
+    "reason": "autonomous matrix completed",
+    "schema": 1,
+    "seq": 36674,
+    "count": 45,
+    "run_id": "d21f12ca-b480-4585-b6b0-8f0ce98732a0",
+    "status": "BLOCKED",
+    "kind": "run_result",
+    "no_parity_pass_claim": true,
+    "case": "r6_truss_ws32_r5"
+  },
+  "baseline_summary": [
+    {
+      "geometry": "regular_parts_ladder",
+      "WalkSpeed": 8,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "True": 5
+      },
+      "vertical_speed": {
+        "n": 5,
+        "median": 5.599999904632568,
+        "min": 5.599999904632568,
+        "max": 5.599999904632568
+      },
+      "max_root_rise": {
+        "n": 5,
+        "median": 30.84530758857727,
+        "min": 30.84530758857727,
+        "max": 30.938652276992798
+      },
+      "holdout_ids": [
+        "r6_regular_parts_ladder_ws8_r4",
+        "r6_regular_parts_ladder_ws8_r5"
+      ],
+      "train_ids": [
+        "r6_regular_parts_ladder_ws8_r1",
+        "r6_regular_parts_ladder_ws8_r2",
+        "r6_regular_parts_ladder_ws8_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    },
+    {
+      "geometry": "regular_parts_ladder",
+      "WalkSpeed": 16,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "True": 5
+      },
+      "vertical_speed": {
+        "n": 5,
+        "median": 11.199999809265137,
+        "min": 11.199999809265137,
+        "max": 11.199999809265137
+      },
+      "max_root_rise": {
+        "n": 5,
+        "median": 32.23470425605774,
+        "min": 32.23470425605774,
+        "max": 32.23515176773071
+      },
+      "holdout_ids": [
+        "r6_regular_parts_ladder_ws16_r4",
+        "r6_regular_parts_ladder_ws16_r5"
+      ],
+      "train_ids": [
+        "r6_regular_parts_ladder_ws16_r1",
+        "r6_regular_parts_ladder_ws16_r2",
+        "r6_regular_parts_ladder_ws16_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    },
+    {
+      "geometry": "regular_parts_ladder",
+      "WalkSpeed": 32,
+      "rig": "R6",
+      "completed_trials": 1,
+      "statuses": {
+        "OBSERVED": 1
+      },
+      "climb_outcomes": {
+        "True": 1
+      },
+      "vertical_speed": {
+        "n": 1,
+        "median": 22.399999618530273,
+        "min": 22.399999618530273,
+        "max": 22.399999618530273
+      },
+      "max_root_rise": {
+        "n": 1,
+        "median": 32.33453989028931,
+        "min": 32.33453989028931,
+        "max": 32.33453989028931
+      },
+      "holdout_ids": [],
+      "train_ids": [
+        "r6_regular_parts_ladder_ws32_r1"
+      ],
+      "calibration_status": "BLOCKED: fewer than five completed trials"
+    },
+    {
+      "geometry": "single_ledge",
+      "WalkSpeed": 16,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "False": 5
+      },
+      "vertical_speed": null,
+      "max_root_rise": {
+        "n": 5,
+        "median": 0.00011658668518066406,
+        "min": 0.00011658668518066406,
+        "max": 0.00013756752014160156
+      },
+      "holdout_ids": [
+        "r6_single_ledge_ws16_r4",
+        "r6_single_ledge_ws16_r5"
+      ],
+      "train_ids": [
+        "r6_single_ledge_ws16_r1",
+        "r6_single_ledge_ws16_r2",
+        "r6_single_ledge_ws16_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    },
+    {
+      "geometry": "smooth_tall_block",
+      "WalkSpeed": 16,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "False": 5
+      },
+      "vertical_speed": null,
+      "max_root_rise": {
+        "n": 5,
+        "median": 0.00011324882507324219,
+        "min": 8.273124694824219e-05,
+        "max": 0.00013399124145507812
+      },
+      "holdout_ids": [
+        "r6_smooth_tall_block_ws16_r4",
+        "r6_smooth_tall_block_ws16_r5"
+      ],
+      "train_ids": [
+        "r6_smooth_tall_block_ws16_r1",
+        "r6_smooth_tall_block_ws16_r2",
+        "r6_smooth_tall_block_ws16_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    },
+    {
+      "geometry": "thin_part",
+      "WalkSpeed": 16,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "False": 5
+      },
+      "vertical_speed": null,
+      "max_root_rise": {
+        "n": 5,
+        "median": 0.00014925003051757812,
+        "min": 0.00011658668518066406,
+        "max": 0.00019216537475585938
+      },
+      "holdout_ids": [
+        "r6_thin_part_ws16_r4",
+        "r6_thin_part_ws16_r5"
+      ],
+      "train_ids": [
+        "r6_thin_part_ws16_r1",
+        "r6_thin_part_ws16_r2",
+        "r6_thin_part_ws16_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    },
+    {
+      "geometry": "truss",
+      "WalkSpeed": 16,
+      "rig": "R6",
+      "completed_trials": 5,
+      "statuses": {
+        "OBSERVED": 5
+      },
+      "climb_outcomes": {
+        "True": 5
+      },
+      "vertical_speed": {
+        "n": 5,
+        "median": 11.199999809265137,
+        "min": 11.199999809265137,
+        "max": 11.199999809265137
+      },
+      "max_root_rise": {
+        "n": 5,
+        "median": 32.00001001358032,
+        "min": 31.999964237213135,
+        "max": 32.04071021080017
+      },
+      "holdout_ids": [
+        "r6_truss_ws16_r4",
+        "r6_truss_ws16_r5"
+      ],
+      "train_ids": [
+        "r6_truss_ws16_r1",
+        "r6_truss_ws16_r2",
+        "r6_truss_ws16_r3"
+      ],
+      "calibration_status": "OBSERVED_BASELINE_ONLY: no Bobux implementation comparison"
+    }
+  ],
+  "a2_counts": {
+    "fresh_instances": 5,
+    "official_models": {
+      "R6": 5,
+      "R15": 5
+    },
+    "native_getter_observations": {}
+  },
+  "source_provenance": "Real official Studio public APIs; raw output is immutable evidence once saved; no original assets/source exported"
+}

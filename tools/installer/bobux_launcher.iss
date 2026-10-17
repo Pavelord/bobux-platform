@@ -24,7 +24,7 @@ OutputBaseFilename=BobuxSetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\..\icon.ico
+SetupIconFile=..\..\assets\branding\halloween\bobux_app_icon.ico
 UninstallDisplayIcon={app}\{#LauncherExe}
 
 [Languages]

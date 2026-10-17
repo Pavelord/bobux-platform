@@ -23,14 +23,20 @@ def main():
     converter = stage / 'addons/rbxl_importer/rbxl_converter.py'
     converter.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / 'addons/rbxl_importer/rbxl_converter.py', converter)
-    shutil.copyfile(root / 'assets/branding/bobux_logo_ui.png', stage / 'bobux.png')
+    shutil.copyfile(root / 'assets/branding/halloween/bobux_app_icon.png', stage / 'bobux.png')
     runtime = root / 'dist/release/appimage-runtime-x86_64'
     # Use an immutable versioned release. The `continuous` asset is replaced in
     # place upstream, so its bytes stop matching a pinned digest over time.
     runtime_url = 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64'
     runtime_hash = '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d'
-    if not runtime.exists():
-        urllib.request.urlretrieve(runtime_url, runtime)
+    if not runtime.exists() or hashlib.sha256(runtime.read_bytes()).hexdigest() != runtime_hash:
+        # Old builders cached the moving continuous release at this filename.
+        # Verify the replacement before touching the cache or packaging it.
+        temporary = runtime.with_suffix('.download')
+        urllib.request.urlretrieve(runtime_url, temporary)
+        if hashlib.sha256(temporary.read_bytes()).hexdigest() != runtime_hash:
+            raise RuntimeError('Downloaded AppImage runtime checksum mismatch')
+        temporary.replace(runtime)
     assert hashlib.sha256(runtime.read_bytes()).hexdigest() == runtime_hash, 'AppImage runtime checksum mismatch'
     (stage / 'AppRun').write_text("""#!/bin/sh
 set -eu
@@ -81,6 +87,8 @@ printf '%s\\n' 'Bobux installed. Open Bobux from your applications menu.'
         tar.add(stage, arcname='Bobux', filter=mode)
         tar.add(runtime, arcname='appimage-runtime-x86_64', filter=mode)
         tar.add(root / 'tools/build_appimage.py', arcname='build_appimage.py', filter=mode)
+    from validate_native_release_artifacts import validate_native_archive
+    validate_native_archive('linux', archive, root)
     manifest = {'version': args.version, 'build': args.build, 'platforms': {}}
     for platform, filename in [('windows', 'BobuxSetup.exe'), ('linux', archive.name)]:
         path = out / filename

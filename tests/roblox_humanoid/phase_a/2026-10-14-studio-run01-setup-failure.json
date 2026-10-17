@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "status": "FAILED_SETUP",
+  "stage": "LocalScript compilation before measurement",
+  "date_utc": "2026-10-14T16:00:16.244Z",
+  "studio_version": "0.742.0.7421053",
+  "run_id": null,
+  "run_id_status": "NOT_OBSERVABLE: client script failed to compile",
+  "source_log": "C:\\Users\\Pavel\\AppData\\Local\\Roblox\\logs\\0.742.0.7421053_20261014T153346Z_Studio_6880B_last.log",
+  "evidence_log": "2026-10-14-studio-run01-setup-failure.log",
+  "evidence_sha256": "f2dbedaef8184a32c1885743bc8219bbc9f8cba189d8fdb913a9efe48f7c9810",
+  "error": "Malformed number: numeric literal adjacent to end in enum write probe",
+  "correction": "Added lexical whitespace in own probe; no measurement or production values changed",
+  "valid_measurement_records": 0
+}

@@ -37,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File C:\robloxclone\ops\vps\deploy_admin_pan
 Fast path on the VPS:
 
 ```bash
-POCKETBASE_SUPERUSER_EMAIL="admin@bobux.local" POCKETBASE_SUPERUSER_PASSWORD="<secure-password>" bash /opt/bobux-server/ops/vps/bootstrap_pocketbase_admin.sh
+POCKETBASE_SUPERUSER_EMAIL="admin@bobux.local" POCKETBASE_SUPERUSER_PASSWORD="<SET_YOUR_OWN_PASSWORD>" bash /opt/bobux-server/ops/vps/bootstrap_pocketbase_admin.sh
 ```
 
 The script creates or updates `admin@bobux.local`, verifies login against PocketBase, and prints the credentials.

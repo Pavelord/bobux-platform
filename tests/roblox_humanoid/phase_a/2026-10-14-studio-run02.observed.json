@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "run_id": "56d7b7d5-beac-4f26-ba3e-d771a14ece51",
+  "studio_version": "0.742.0.7421053",
+  "date_utc": "2026-10-14T16:09:45Z",
+  "mode": "phase_a",
+  "raw_sha256": "36226a4f7dde505e224e5fbccefb26c8584ffd4ef752a02f9d5e9a771243237b",
+  "raw_records": 2401,
+  "parser_issues": [
+    "malformed export line 2680: Extra data: line 1 column 77 (char 76)",
+    "malformed export line 2684: Extra data: line 1 column 41 (char 40)"
+  ],
+  "status": "BLOCKED",
+  "parity_status": "NOT_IMPLEMENTED_NOT_CALIBRATED",
+  "units": {
+    "velocity": "studs/s",
+    "time": "seconds",
+    "position": "studs"
+  },
+  "run_result": {
+    "coverage": "Foundation inventory / preregistered minimal climbing only; phases A-J not complete",
+    "wall_s": 15.827066099999684,
+    "errors": [],
+    "sim_s": 14.595834095962346,
+    "frame": 856,
+    "cases": [
+      {
+        "profile": "default",
+        "status": "OBSERVED",
+        "rig": "R6",
+        "getters": 5,
+        "case": "a2_R6_default"
+      },
+      {
+        "profile": "modified",
+        "status": "OBSERVED",
+        "rig": "R6",
+        "getters": 5,
+        "case": "a2_R6_modified"
+      },
+      {
+        "profile": "default",
+        "status": "OBSERVED",
+        "rig": "R15",
+        "getters": 5,
+        "case": "a2_R15_default"
+      },
+      {
+        "profile": "modified",
+        "status": "OBSERVED",
+        "rig": "R15",
+        "getters": 5,
+        "case": "a2_R15_modified"
+      }
+    ],
+    "reason": "autonomous matrix completed",
+    "schema": 1,
+    "seq": 2401,
+    "count": 4,
+    "run_id": "56d7b7d5-beac-4f26-ba3e-d771a14ece51",
+    "status": "OBSERVED",
+    "kind": "run_result",
+    "no_parity_pass_claim": true,
+    "case": "a2_R15_modified"
+  },
+  "baseline_summary": [],
+  "a2_counts": {
+    "fresh_instances": 5,
+    "official_models": {
+      "R6": 5,
+      "R15": 5
+    },
+    "native_getter_observations": {
+      "R6_default": 5,
+      "R6_modified": 5,
+      "R15_default": 5,
+      "R15_modified": 5
+    }
+  },
+  "source_provenance": "Real official Studio public APIs; raw output is immutable evidence once saved; no original assets/source exported"
+}
