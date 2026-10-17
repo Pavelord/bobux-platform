@@ -25,6 +25,7 @@ static func _remove_part(index: Dictionary, id: int) -> void:
 		if index.grid[cell].is_empty(): index.grid.erase(cell)
 	index.large.erase(id)
 	index.cells.erase(id)
+	index.ranges.erase(id)
 	index.all.erase(id)
 	index.dirty.erase(id)
 
@@ -39,7 +40,9 @@ static func invalidate(changed: Node = null) -> void:
 
 static func bounds(part: Node3D) -> AABB:
 	if bool(part.get_meta("bobux_character_part_proxy", false)):
-		var size_: Vector3 = part.get_meta("Size", Vector3.ONE)
+		# Proxy transforms are in world units, while their public Size remains
+		# in studs. Match the visible body instead of doubling query volumes.
+		var size_: Vector3 = part.get_meta("Size", Vector3.ONE) * float(part.get_meta("bobux_character_part_stud_scale", 0.5))
 		return AABB(-size_ * 0.5, size_)
 
 	# SpecialMesh changes the drawing, not the Part's contact/query volume.
@@ -49,14 +52,20 @@ static func bounds(part: Node3D) -> AABB:
 
 static func _index_part(index: Dictionary, part: MeshInstance3D) -> void:
 	var id := part.get_instance_id()
-	_remove_part(index, id)
 	if not part.visibility_changed.is_connected(_visibility_changed.bind(id)):
 		part.visibility_changed.connect(_visibility_changed.bind(id))
-	if part.mesh == null or not part.is_visible_in_tree() or part.is_queued_for_deletion() or not is_part(part): return
-	index.all[id] = true
+	if part.mesh == null or not part.is_visible_in_tree() or part.is_queued_for_deletion() or not is_part(part):
+		_remove_part(index, id)
+		return
 	var box: AABB = part.global_transform * bounds(part)
 	var low := Vector3i((box.position / CELL).floor())
 	var high := Vector3i((box.end / CELL).floor())
+	# Falling bricks invalidate each physics frame, but usually stay in the
+	# same cells. Avoid rebuilding every bucket on each Fire region query.
+	if index.all.has(id) and index.ranges.get(id) == [low, high]: return
+	_remove_part(index, id)
+	index.all[id] = true
+	index.ranges[id] = [low, high]
 	var span := high - low + Vector3i.ONE
 	if span.x * span.y * span.z > 512:
 		index.large.append(id)
@@ -83,7 +92,7 @@ static func _candidates_bounds(root: Node, query_bounds: AABB) -> Array:
 		if not tree.node_added.is_connected(_node_added):
 			tree.node_added.connect(_node_added)
 			tree.node_removed.connect(_node_removed)
-		index = {"grid": {}, "large": [], "cells": {}, "dirty": {}, "all": {}}
+		index = {"grid": {}, "large": [], "cells": {}, "ranges": {}, "dirty": {}, "all": {}}
 		full_builds += 1
 		for part in root.find_children("*", "MeshInstance3D", true, false):
 			_index_part(index, part)
@@ -150,6 +159,7 @@ static func in_box(root: Node, frame: Transform3D, size_: Vector3, filters: Arra
 	if not is_instance_valid(root) or not root.is_inside_tree() or not size_.is_finite() or not frame.is_finite(): return result
 	var half := size_.abs() * 0.5
 	var basis := frame.basis.orthonormalized()
+	var aligned_query := _axis_aligned(basis)
 	# A cyclone is tall and narrow. Its enclosing sphere used to query almost
 	# the whole island and run 15 separating axes against every distant brick.
 	var query_bounds := Transform3D(basis, frame.origin) * AABB(-half, half * 2.0)
@@ -166,6 +176,12 @@ static func in_box(root: Node, frame: Transform3D, size_: Vector3, filters: Arra
 			if is_instance_valid(filter) and (filter == part or filter.is_ancestor_of(part)): filtered = true; break
 		if filtered != include or is_zero_approx(part.global_basis.determinant()): continue
 		var part_basis: Basis = part.global_basis.orthonormalized()
+		# Axis-aligned boxes already passed the exact AABB overlap above.
+		# Keep the full separating-axis test for rotated boxes.
+		if aligned_query and _axis_aligned(part_basis):
+			result.append(part)
+			if max_parts > 0 and result.size() >= max_parts: break
+			continue
 		var extent: Vector3 = box.size * part.global_basis.get_scale().abs() * 0.5
 		var offset: Vector3 = part.to_global(box.get_center()) - frame.origin
 		var axes: Array[Vector3] = [basis.x, basis.y, basis.z, part_basis.x, part_basis.y, part_basis.z]
@@ -184,6 +200,11 @@ static func in_box(root: Node, frame: Transform3D, size_: Vector3, filters: Arra
 			result.append(part)
 			if max_parts > 0 and result.size() >= max_parts: break
 	return result
+
+static func _axis_aligned(basis: Basis) -> bool:
+	for axis in [basis.x.abs(), basis.y.abs(), basis.z.abs()]:
+		if axis.x + axis.y + axis.z - maxf(axis.x, maxf(axis.y, axis.z)) > 0.0000001: return false
+	return true
 
 
 static func collision_shape(part: MeshInstance3D) -> Shape3D:

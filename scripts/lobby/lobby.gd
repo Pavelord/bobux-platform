@@ -4,8 +4,9 @@ const AVATAR_UI_SCRIPT: Script = preload("res://scripts/lobby/avatar_ui.gd")
 const LOBBY_STYLER_SCRIPT: Script = preload("res://scripts/lobby/lobby_styler.gd")
 const AVATAR_TEMPLATE_PROCESSOR: Script = preload("res://scripts/avatar/avatar_template_processor.gd")
 const AVATAR_PREVIEW_INPUT_OVERLAY_SCRIPT: Script = preload("res://scripts/ui/avatar_preview_input_overlay.gd")
-const CREATION_HUB_SCENE: PackedScene = preload("res://scenes/creation_hub/creation_hub.tscn")
-const MODEL_EDITOR_SCENE: PackedScene = preload("res://scenes/model_editor/model_editor.tscn")
+const IMAGE_BYTE_DECODER: Script = preload("res://scripts/ui/image_byte_decoder.gd")
+const CREATION_HUB_SCENE_PATH := "res://scenes/creation_hub/creation_hub.tscn"
+const MODEL_EDITOR_SCENE_PATH := "res://scenes/model_editor/model_editor.tscn"
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
 const BOBLOX_SHOP_SCRIPT := preload("res://scripts/lobby/boblox_shop.gd")
 var _boblox_shop: Control
@@ -37,6 +38,20 @@ var profile_status_label: Label = null
 var profile_friends_count_label: Label = null
 var profile_followers_count_label: Label = null
 var profile_following_count_label: Label = null
+var profile_visited_count_label: Label = null
+var profile_about_label: Label = null
+var profile_about_edit_button: Button = null
+var profile_about_editor: Control = null
+var profile_about_input: TextEdit = null
+var profile_about_status: Label = null
+var profile_about_save_button: Button = null
+var profile_creations_container: Container = null
+var profile_preview_orbit: Control = null
+var _profile_refresh_generation := 0
+var _profile_refresh_in_flight_generation := -1
+var _profile_about_save_in_flight := false
+var _profile_header_avatar_signature := ""
+var _profile_wearing_signature := ""
 
 # Avatar Editor
 @onready var btn_head: Button = %BtnHead
@@ -71,6 +86,12 @@ var all_status_label: Label = null
 var bobux_creator_cards_grid: Control = null
 var bobux_creator_status_label: Label = null
 var _loading_overlay: ColorRect = null
+var _lobby_auth_in_flight := false
+var _lobby_notice: HBoxContainer
+var _lobby_notice_text: Label
+var _lobby_notice_action: Button
+var _lobby_notice_signin: Button
+var _lobby_notice_retry_auth := false
 var _loading_progress_bar: ProgressBar = null
 var _loading_title_label: Label = null
 var _loading_subtitle_label: Label = null
@@ -87,6 +108,7 @@ var _home_friends_cache: Array = []
 var _home_friends_active_lookup_cache: Dictionary = {}
 var _home_friends_cache_loaded: bool = false
 var _home_friends_cache_expires_msec: int = 0
+var _home_friend_render_generation: int = 0
 var _discover_result_stale: bool = false
 var _friends_view_last_refresh_msec: int = -100000
 var _friends_view_refresh_in_flight: bool = false
@@ -168,7 +190,7 @@ const HOME_FRIENDS_ACTIVE_SERVER_LIMIT: int = 16
 const HOME_FRIENDS_RENDER_LIMIT: int = 16
 const HOME_CONTINUE_RENDER_LIMIT: int = 6
 const DISCOVER_ACTIVE_SERVER_LIMIT: int = 64
-const DISCOVER_PUBLISHED_MAP_LIMIT: int = 1000
+const DISCOVER_PUBLISHED_MAP_LIMIT: int = -1 # All metadata pages, without map scene data.
 const HOME_DISCOVER_RENDER_LIMIT: int = 12
 const HOME_RECOMMENDED_RENDER_LIMIT: int = 6
 const HOME_NEW_RENDER_LIMIT: int = 4
@@ -227,6 +249,9 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	var trailer := get_node_or_null("/root/UpdateTrailer")
+	if trailer != null and trailer.has_method("maybe_play_first_visit"):
+		trailer.call("maybe_play_first_visit", UserSession.user_id)
 	_lobby_bootstrap_active = true
 	_lobby_bootstrap_finished = false
 	_ensure_all_tabs_exist()
@@ -253,7 +278,7 @@ func _ready() -> void:
 		greeting_label.text = "Hello, %s!" % uname
 
 	profile_username_label.text = uname
-	join_date_label.text = "Join Date: %s" % UserSession.join_date
+	_prepare_profile_view()
 
 	# Nav signals
 	nav_home_btn.pressed.connect(func(): _switch_tab(Tab.HOME); Analytics.log_button_click("nav_home"))
@@ -346,15 +371,18 @@ func _ready() -> void:
 	# Ensure maps directory exists and build game discovery
 	_ensure_maps_dir()
 	_build_home_dashboard()
-	_show_loading_overlay("Loading Bobux", "Preparing cached lobby data...", 0.08)
 	_render_home_startup_skeletons()
 	if mobile_beta:
 		_apply_mobile_beta_lobby_mode()
 	call_deferred("_install_button_micro_interactions")
+	_install_seasonal_theme()
 	call_deferred("_bootstrap_cloud_lobby")
 	var pending_network_error: String = GameState.pop_network_error()
 	if not pending_network_error.is_empty():
 		call_deferred("_show_loading_error", "Connection Failed", pending_network_error)
+
+func _install_seasonal_theme() -> void:
+	preload("res://scripts/ui/seasonal_theme.gd").mount(self)
 
 
 func _is_mobile_beta() -> bool:
@@ -368,7 +396,8 @@ func _apply_mobile_beta_lobby_mode() -> void:
 	_configure_mobile_scroll_containers(self)
 	for tab_index in range(main_tabs.get_tab_count()):
 		main_tabs.set_tab_hidden(tab_index, false)
-	_add_mobile_beta_home_banner()
+	if not get_tree().node_added.is_connected(_configure_new_mobile_scroll):
+		get_tree().node_added.connect(_configure_new_mobile_scroll)
 
 
 func _disable_mobile_gameplay_controls() -> void:
@@ -378,44 +407,25 @@ func _disable_mobile_gameplay_controls() -> void:
 
 
 func _configure_mobile_scroll_containers(root: Node) -> void:
+	if root is SubViewport:
+		return
 	if root is ScrollContainer:
 		var scroll := root as ScrollContainer
 		scroll.mouse_filter = Control.MOUSE_FILTER_STOP
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-		scroll.follow_focus = true
+		# A horizontal experience/friend shelf keeps its axis. Forcing every
+		# nested shelf to vertical made it capture page swipes without moving.
+		if scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
+			scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		scroll.follow_focus = false
 		scroll.scroll_deadzone = 8
 	for child in root.get_children():
 		_configure_mobile_scroll_containers(child)
 
 
-func _add_mobile_beta_home_banner() -> void:
-	var home_content: VBoxContainer = get_node_or_null("Body/HBox/MainTabs/HomeView/Content") as VBoxContainer
-	if home_content == null or home_content.get_node_or_null("MobileBetaBanner") != null:
-		return
-	var banner := PanelContainer.new()
-	banner.name = "MobileBetaBanner"
-	banner.custom_minimum_size = Vector2(0, 54)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.33, 0.58, 0.92)
-	style.border_color = Color(0.0, 0.16, 0.28, 0.75)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	banner.add_theme_stylebox_override("panel", style)
-	var label := Label.new()
-	label.text = "Bobux Mobile Beta: play places, edit your avatar, browse catalog, open profiles, friends, and develop tools."
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", Color.WHITE)
-	label.add_theme_font_size_override("font_size", 15)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	margin.add_child(label)
-	banner.add_child(margin)
-	home_content.add_child(banner)
-	home_content.move_child(banner, 1)
+func _configure_new_mobile_scroll(node: Node) -> void:
+	if node is ScrollContainer and is_ancestor_of(node):
+		_configure_mobile_scroll_containers.call_deferred(node)
 
 func _process(delta: float) -> void:
 	_poll_home_network_retries()
@@ -460,6 +470,9 @@ func _sweep_smart_play_hover_cards(delta: float) -> void:
 			overlay.modulate.a = 0.0
 			continue
 		var pointer_inside := Rect2(Vector2.ZERO, panel.size).grow(2.0).has_point(panel.get_local_mouse_position())
+		if bool(entry.get("hovered", false)) == pointer_inside:
+			continue
+		entry["hovered"] = pointer_inside
 		overlay.modulate.a = 1.0 if pointer_inside else 0.0
 		var normal_style: StyleBoxFlat = entry.get("normal_style", null) as StyleBoxFlat
 		var hover_style: StyleBoxFlat = entry.get("hover_style", null) as StyleBoxFlat
@@ -644,6 +657,9 @@ func _on_button_pressed_up(button: Button) -> void:
 func _tween_button_scale(button: Control, target_scale: Vector2) -> void:
 	if button == null:
 		return
+	if not bool(ClientPreferences.values.get("interface_animations", true)):
+		button.scale = Vector2.ONE
+		return
 	var tween := create_tween()
 	tween.tween_property(button, "scale", target_scale, 0.08)
 
@@ -663,10 +679,10 @@ func _enhance_button_shadow_styles(button: Button) -> void:
 
 
 func _switch_tab(idx: int) -> void:
-	main_tabs.current_tab = idx
 	if idx == Tab.HOME:
 		_schedule_home_dashboard_refresh()
 	elif idx == Tab.PROFILE:
+		_prepare_profile_view()
 		call_deferred("_refresh_selected_profile_async")
 	elif idx == Tab.AVATAR:
 		_ensure_avatar_ui_initialized()
@@ -684,6 +700,10 @@ func _switch_tab(idx: int) -> void:
 		_ensure_catalog_ui_initialized()
 	elif is_instance_valid(_boblox_shop) and idx == _boblox_shop.get_index():
 		_boblox_shop.call("refresh")
+	var seasonal := get_node_or_null("SeasonalTheme")
+	if seasonal != null and idx >= 0 and idx < main_tabs.get_tab_count():
+		seasonal.prepare_page(main_tabs.get_tab_control(idx))
+	main_tabs.current_tab = idx
 
 func _install_boblox_shop() -> void:
 	_boblox_shop = BOBLOX_SHOP_SCRIPT.new()
@@ -1017,8 +1037,9 @@ func _create_inventory_item_card(item: Dictionary, category: String) -> Control:
 	var preview := _create_profile_wearing_item_preview(item)
 	preview.custom_minimum_size = Vector2(150, 142)
 	box.add_child(preview)
+	_add_limited_item_badge(preview, item)
 	var title := Label.new()
-	title.text = str(item.get("name", "Item")).strip_edges()
+	title.text = preload("res://scripts/ui/halloween_event_data.gd").display_name(item).strip_edges()
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.add_theme_font_size_override("font_size", 13)
@@ -1030,6 +1051,18 @@ func _create_inventory_item_card(item: Dictionary, category: String) -> Control:
 	kind.add_theme_color_override("font_color", Color(0.47, 0.49, 0.53, 1))
 	box.add_child(kind)
 	return panel
+
+func _add_limited_item_badge(preview: Control, item: Dictionary) -> void:
+	var data: Dictionary = item.get("data", {}) if item.get("data", {}) is Dictionary else {}
+	if not bool(data.get("limited", false)) and not str(item.get("id", item.get("item_id", ""))).begins_with("event_halloween_2026_"): return
+	var halloween := str(item.get("id", item.get("item_id", ""))) in ["event_halloween_2026_gift", "event_halloween_2026_pumpkin"]
+	var badge := CatalogBuilder.limited_badge(halloween)
+	preview.add_child(badge)
+	badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	badge.offset_left = 5
+	badge.offset_right = 137 if halloween else 77
+	badge.offset_top = -29
+	badge.offset_bottom = -5
 
 func _select_part(part_name: String) -> void:
 	selected_part = part_name
@@ -1268,41 +1301,83 @@ func _refresh_lobby_presence() -> void:
 		_next_lobby_presence_heartbeat_msec = Time.get_ticks_msec() + LOBBY_PRESENCE_HEARTBEAT_MSEC
 
 func _bootstrap_cloud_lobby() -> void:
+	if _lobby_auth_in_flight or _lobby_exiting: return
+	_lobby_auth_in_flight = true
 	_lobby_bootstrap_active = true
-	_show_loading_overlay("Loading Bobux", "Opening lobby shell...", 0.12)
 	await get_tree().process_frame
 	if NetworkManager != null and NetworkManager.has_method("prepare_for_lobby"):
 		NetworkManager.prepare_for_lobby()
 	GameState.clear_launch_mode()
 	if CloudAPI.is_configured():
-		_update_loading_overlay("Signing in", "Checking your Bobux session...", 0.32)
 		var preferred_username: String = UserSession.username if UserSession.is_logged_in else CloudAPI.get_current_username()
 		var auth_result: Dictionary = await CloudAPI.authenticate_or_create_profile(preferred_username)
+		if _lobby_exiting or not is_inside_tree(): return
 		if bool(auth_result.get("ok", false)):
-			_update_loading_overlay("Loading profile", "Applying your avatar and session cache...", 0.58)
 			var display_username: String = str(auth_result.get("username", preferred_username)).strip_edges()
 			UserSession.begin_cloud_session(CloudAPI.get_current_user_id(), display_username)
 			sidebar_username.text = display_username
 			profile_username_label.text = display_username
 			join_date_label.text = "Join Date: %s" % UserSession.join_date
 			_update_preview_colors()
+			if is_instance_valid(_lobby_notice): _lobby_notice.hide()
 			call_deferred("_refresh_lobby_presence")
 		else:
 			push_warning("[Lobby] Bootstrap auth failed softly: %s" % str(auth_result.get("error", "Unknown auth error")))
-	_update_loading_overlay("Loading lobby", "Drawing cached pages before network sections...", 0.82)
-	await get_tree().process_frame
+			_show_lobby_notice("Не удалось обновить профиль", "Сохранённые данные доступны. Проверь соединение и повтори попытку.", true)
+	preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
+	_lobby_auth_in_flight = false
 	_lobby_bootstrap_active = false
 	_lobby_bootstrap_finished = true
 	_home_friends_refresh_pending = false
 	_discover_refresh_pending = false
 	_next_lobby_friend_request_poll_msec = Time.get_ticks_msec() + 9000
 	_next_lobby_presence_heartbeat_msec = Time.get_ticks_msec() + 2500
-	_hide_loading_overlay()
 	# Only refresh the data-dependent sections (friends/discover), not the whole
 	# dashboard, because _ready() already called _build_home_dashboard +
 	# _switch_tab(HOME) which triggers a full _refresh_home_dashboard. Calling
 	# it again here was the root cause of the freeze and friend duplication.
 	_schedule_home_dashboard_refresh(true)
+
+func _show_lobby_notice(title: String, message: String, retry_auth: bool = false) -> void:
+	var page := main_tabs.get_current_tab_control()
+	var content := page.get_node_or_null("Content") as Container
+	if content == null:
+		var columns := page.find_children("*", "VBoxContainer", true, false)
+		if not columns.is_empty(): content = columns[0] as Container
+	if content == null: content = get_node_or_null("Body/HBox/MainTabs/HomeView/Content") as Container
+	if content == null: return
+	if not is_instance_valid(_lobby_notice):
+		_lobby_notice = HBoxContainer.new()
+		_lobby_notice.name = "ConnectionNotice"
+		_lobby_notice.add_theme_constant_override("separation", 12)
+		_lobby_notice.custom_minimum_size.y = 48
+		content.add_child(_lobby_notice)
+		content.move_child(_lobby_notice, 0)
+		_lobby_notice_text = Label.new()
+		_lobby_notice_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_lobby_notice_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_lobby_notice_text.add_theme_font_size_override("font_size", 13)
+		_lobby_notice.add_child(_lobby_notice_text)
+		_lobby_notice_action = Button.new()
+		_lobby_notice_action.custom_minimum_size = Vector2(104, 44)
+		_lobby_notice_action.pressed.connect(func():
+			_lobby_notice.hide()
+			if _lobby_notice_retry_auth: _bootstrap_cloud_lobby.call_deferred()
+		)
+		_lobby_notice.add_child(_lobby_notice_action)
+		_lobby_notice_signin = Button.new()
+		_lobby_notice_signin.text = "Войти"
+		_lobby_notice_signin.custom_minimum_size = Vector2(68, 44)
+		_lobby_notice_signin.pressed.connect(func(): GameSceneLoader.get_tree().change_scene_to_file("res://scenes/login/login.tscn"))
+		_lobby_notice.add_child(_lobby_notice_signin)
+	elif _lobby_notice.get_parent() != content:
+		_lobby_notice.reparent(content)
+		content.move_child(_lobby_notice, 0)
+	_lobby_notice_retry_auth = retry_auth
+	_lobby_notice_text.text = "%s. %s" % [title, message]
+	_lobby_notice_action.text = "Повторить" if retry_auth else "Закрыть"
+	_lobby_notice_signin.visible = retry_auth and not CloudAPI.has_authenticated_session()
+	_lobby_notice.show()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
@@ -1472,8 +1547,6 @@ func _build_home_dashboard() -> void:
 	# Backward-compatible aliases for helpers that still refer to Discover.
 	discover_cards_grid = all_cards_grid
 	discover_status_label = all_status_label
-
-	_ensure_loading_overlay()
 
 func _create_home_game_grid(columns: int = 3) -> GridContainer:
 	var grid := GridContainer.new()
@@ -1802,7 +1875,11 @@ func _open_creation_hub() -> void:
 
 func _show_develop_hub_page() -> void:
 	_clear_studio_overlay()
-	var hub := CREATION_HUB_SCENE.instantiate() as Control
+	var scene := load(CREATION_HUB_SCENE_PATH) as PackedScene
+	if scene == null:
+		_show_lobby_notice("Не удалось открыть Develop", "Повтори попытку.")
+		return
+	var hub := scene.instantiate() as Control
 	if hub == null:
 		push_error("[Lobby] Failed to instantiate Creation Hub.")
 		return
@@ -1893,7 +1970,11 @@ func _open_creation_catalog_from_hub() -> void:
 
 func _open_model_editor_page(source_path: String = "") -> void:
 	_clear_studio_overlay()
-	var editor := MODEL_EDITOR_SCENE.instantiate() as Control
+	var scene := load(MODEL_EDITOR_SCENE_PATH) as PackedScene
+	if scene == null:
+		_show_lobby_notice("Не удалось открыть редактор", "Повтори попытку.")
+		return
+	var editor := scene.instantiate() as Control
 	if editor == null:
 		push_error("[Lobby] Failed to instantiate Model Editor.")
 		return
@@ -2081,13 +2162,8 @@ func _write_inline_model_preview_to_cache(data_uri: String, model_id: String) ->
 	var bytes := Marshalls.base64_to_raw(encoded)
 	if bytes.is_empty():
 		return ""
-	var image := Image.new()
-	var load_error := image.load_png_from_buffer(bytes)
-	if load_error != OK:
-		load_error = image.load_jpg_from_buffer(bytes)
-	if load_error != OK:
-		load_error = image.load_webp_from_buffer(bytes)
-	if load_error != OK or image.is_empty():
+	var image: Image = IMAGE_BYTE_DECODER.decode(bytes)
+	if image == null:
 		return ""
 	var preview_dir := "user://studio_drafts/model_previews"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(preview_dir))
@@ -5266,7 +5342,10 @@ func _refresh_home_friends_section() -> void:
 		
 	var rendered_friend_keys: Dictionary = {}
 	var rendered_count: int = 0
+	_home_friend_render_generation += 1
+	var render_generation := _home_friend_render_generation
 	for friend_variant in friends:
+		if not is_inside_tree() or not is_instance_valid(home_friends_container) or render_generation != _home_friend_render_generation: return
 		if not (friend_variant is Dictionary):
 			continue
 		var friend_profile: Dictionary = friend_variant
@@ -5411,6 +5490,8 @@ func _find_parent_vertical_scroll_container(node: Node) -> ScrollContainer:
 func _render_home_friend_cards_from_cache() -> void:
 	if home_friends_container == null:
 		return
+	_home_friend_render_generation += 1
+	var render_generation := _home_friend_render_generation
 	_clear_children_immediate(home_friends_container)
 	if home_friends_status:
 		home_friends_status.text = "%d friends" % _home_friends_cache.size()
@@ -5441,7 +5522,9 @@ func _render_home_friend_cards_from_cache() -> void:
 		_queue_home_friends_clip_layout()
 		return
 	var rendered_friend_keys: Dictionary = {}
+	var rendered_count := 0
 	for friend_variant in _home_friends_cache:
+		if not is_inside_tree() or not is_instance_valid(home_friends_container) or render_generation != _home_friend_render_generation: return
 		if not (friend_variant is Dictionary):
 			continue
 		var friend_profile: Dictionary = friend_variant
@@ -5452,6 +5535,10 @@ func _render_home_friend_cards_from_cache() -> void:
 			continue
 		rendered_friend_keys[friend_key] = true
 		home_friends_container.add_child(_create_home_friend_avatar(friend_profile, _home_friends_active_lookup_cache))
+		rendered_count += 1
+		if rendered_count % 2 == 0:
+			_queue_home_friends_clip_layout()
+			await get_tree().process_frame
 	_queue_home_friends_clip_layout()
 
 func _refresh_home_friend_active_statuses_async() -> void:
@@ -5665,6 +5752,9 @@ func _create_profile_avatar_snapshot(profile_data: Dictionary, size_px: int = 10
 func _refresh_profile_header_avatar_snapshot(profile_data: Dictionary) -> void:
 	if profile_header_avatar_holder == null or not is_instance_valid(profile_header_avatar_holder):
 		return
+	var signature := JSON.stringify([profile_data.get("id", ""), profile_data.get("avatar_data", {}), profile_data.get("avatar_outfit", {})]).sha256_text()
+	if signature == _profile_header_avatar_signature and profile_header_avatar_holder.get_child_count() > 0: return
+	_profile_header_avatar_signature = signature
 	_clear_container(profile_header_avatar_holder)
 	profile_header_avatar_holder.add_child(_create_profile_avatar_snapshot(profile_data, 100))
 
@@ -6330,12 +6420,7 @@ func _open_profile_for_user(user_id: String, username: String, profile_snapshot:
 	if not selected_profile_username.is_empty():
 		selected_profile_snapshot["username"] = selected_profile_username
 	selected_profile_active_server = active_server.duplicate(true)
-	if profile_username_label:
-		profile_username_label.text = selected_profile_username if not selected_profile_username.is_empty() else (UserSession.username if UserSession.is_logged_in else "Player")
-	_apply_profile_snapshot_to_ui(selected_profile_snapshot, selected_profile_active_server)
-	_update_profile_social_counts(selected_profile_snapshot)
 	_switch_tab(Tab.PROFILE)
-	call_deferred("_refresh_selected_profile_async")
 
 func _show_external_profile_popup(profile_data: Dictionary, active_server: Dictionary = {}) -> void:
 	_ensure_home_friend_popup()
@@ -6561,10 +6646,20 @@ func _apply_profile_snapshot_to_ui(profile_data: Dictionary, active_server: Dict
 		profile_username_label.text = resolved_username
 	if join_date_label:
 		join_date_label.text = _format_profile_join_label(profile_data)
+	if profile_about_label:
+		profile_about_label.text = str(profile_data.get("bio", "")).strip_edges()
+		if profile_about_label.text.is_empty():
+			profile_about_label.text = "This player has not written a description yet."
+	if profile_about_edit_button:
+		profile_about_edit_button.visible = _is_profile_snapshot_current_user(profile_data) and UserSession.is_logged_in
+	if profile_visited_count_label:
+		profile_visited_count_label.text = str(maxi(int(profile_data.get("visited_modes_count", 0)), 0)) if profile_data.has("visited_modes_count") else "—"
 	if profile_status_label:
 		profile_status_label.text = _get_profile_status_text(profile_data, active_server)
 		profile_status_label.add_theme_color_override("font_color", Color(0.1, 0.55, 0.24, 1) if profile_status_label.text != "Offline" else Color(0.42, 0.44, 0.48, 1))
 	_refresh_profile_header_avatar_snapshot(profile_data)
+	var snapshot_outfit: Dictionary = profile_data.get("avatar_outfit", {}) if profile_data.get("avatar_outfit", {}) is Dictionary else {}
+	_refresh_profile_currently_wearing(profile_data, snapshot_outfit)
 	var profile_preview_targets: Array = [profile_header_preview_player, profile_preview_player]
 	var has_preview_target: bool = false
 	for preview_target in profile_preview_targets:
@@ -6576,108 +6671,128 @@ func _apply_profile_snapshot_to_ui(profile_data: Dictionary, active_server: Dict
 			preview_target.right_arm_color = _get_profile_avatar_color(profile_data, "right_arm", Color(0.96, 0.8, 0.2))
 			preview_target.left_leg_color = _get_profile_avatar_color(profile_data, "left_leg", Color(0.65, 0.8, 0.2))
 			preview_target.right_leg_color = _get_profile_avatar_color(profile_data, "right_leg", Color(0.65, 0.8, 0.2))
-			var snapshot_outfit: Dictionary = profile_data.get("avatar_outfit", {}) if profile_data.get("avatar_outfit", {}) is Dictionary else {}
 			_apply_profile_avatar_visuals_to_preview(preview_target, profile_data, snapshot_outfit)
 	if not has_preview_target:
 		return
 
+func _prepare_profile_view() -> void:
+	_profile_refresh_generation += 1
+	_close_profile_about_editor()
+	var target := selected_profile_user_id if not selected_profile_user_id.is_empty() else UserSession.user_id
+	var profile: Dictionary = ProfileBuilder.cached_profile(target)
+	if str(selected_profile_snapshot.get("id", "")) == target:
+		profile.merge(selected_profile_snapshot, true)
+	profile["id"] = target
+	profile["username"] = selected_profile_username if not selected_profile_user_id.is_empty() else UserSession.username
+	selected_profile_user_id = target
+	selected_profile_username = str(profile.get("username", "Player"))
+	selected_profile_snapshot = profile.duplicate(true)
+	if target == UserSession.user_id:
+		selected_profile_snapshot = _merge_current_session_avatar_into_profile(selected_profile_snapshot)
+	elif str(selected_profile_active_server.get("host_user_id", "")) == UserSession.user_id:
+		selected_profile_active_server = {}
+	if is_instance_valid(profile_preview_player): profile_preview_player.rotation.y = 0.0
+	if is_instance_valid(_profile_games_panel):
+		_profile_games_panel.get_parent().remove_child(_profile_games_panel)
+		_profile_games_panel.queue_free()
+		_profile_games_panel = null
+	_apply_profile_snapshot_to_ui(selected_profile_snapshot, selected_profile_active_server)
+	_update_profile_social_counts(selected_profile_snapshot)
+
+func _profile_refresh_is_current(target: String, generation: int) -> bool:
+	return is_inside_tree() and not _lobby_exiting and generation == _profile_refresh_generation and selected_profile_user_id == target
+
+func _close_profile_about_editor() -> void:
+	if is_instance_valid(profile_about_editor): profile_about_editor.hide()
+	if is_instance_valid(profile_about_label): profile_about_label.show()
+	if is_instance_valid(profile_about_edit_button):
+		profile_about_edit_button.visible = _is_viewing_own_profile() and UserSession.is_logged_in
+
+func _save_profile_about_async() -> void:
+	if _profile_about_save_in_flight or not _is_viewing_own_profile() or not UserSession.is_logged_in:
+		return
+	var target := str(UserSession.user_id)
+	var generation := _profile_refresh_generation
+	var text := profile_about_input.text
+	if text.length() > 1000:
+		profile_about_status.text = "Use at most 1000 characters."
+		return
+	_profile_about_save_in_flight = true
+	profile_about_save_button.disabled = true
+	profile_about_status.text = "Saving…"
+	var result: Dictionary = await CloudAPI.update_profile_about(text)
+	_profile_about_save_in_flight = false
+	if is_instance_valid(profile_about_save_button):
+		profile_about_save_button.disabled = profile_about_input.text.length() > 1000
+	var ok := bool(result.get("ok", false)) and result.get("data") is Dictionary and str(result.data.get("id", "")) == target
+	if ok:
+		var cached := ProfileBuilder.cached_profile(target)
+		cached["id"] = target
+		cached["bio"] = str((result.get("data", {}) as Dictionary).get("bio", text.strip_edges()))
+		ProfileBuilder.remember(cached)
+		if _profile_refresh_is_current(target, generation):
+			# An earlier profile GET may still contain the previous description.
+			# Retire that generation before displaying the acknowledged save.
+			_profile_refresh_generation += 1
+			selected_profile_snapshot["bio"] = cached.bio
+			_apply_profile_snapshot_to_ui(selected_profile_snapshot, selected_profile_active_server)
+			_close_profile_about_editor()
+	if not _profile_refresh_is_current(target, generation): return
+	profile_about_save_button.disabled = profile_about_input.text.length() > 1000
+	if not ok:
+		profile_about_status.text = "Could not save. %s" % str(result.get("error", "Try again."))
+
 func _refresh_selected_profile_async() -> void:
-	if not CloudAPI.is_configured():
-		return
-	var target_user_id: String = selected_profile_user_id if not selected_profile_user_id.is_empty() else UserSession.user_id
-	if target_user_id.is_empty():
-		return
+	if not CloudAPI.is_configured(): return
+	var target := selected_profile_user_id if not selected_profile_user_id.is_empty() else UserSession.user_id
+	var generation := _profile_refresh_generation
+	if target.is_empty() or _profile_refresh_in_flight_generation == generation: return
+	_profile_refresh_in_flight_generation = generation
 	if not CloudAPI.has_authenticated_session():
-		var preferred_username: String = UserSession.username if UserSession.is_logged_in else CloudAPI.get_current_username()
-		await CloudAPI.authenticate_or_create_profile(preferred_username)
-	var profile_data: Dictionary = selected_profile_snapshot.duplicate(true)
-	var active_server: Dictionary = selected_profile_active_server.duplicate(true)
-	var profile_result: Dictionary = await CloudAPI.load_player_profile(target_user_id)
-	if bool(profile_result.get("ok", false)) and profile_result.get("data", {}) is Dictionary:
-		profile_data = (profile_result.get("data", {}) as Dictionary).duplicate(true)
-	elif profile_data.is_empty():
+		await CloudAPI.authenticate_or_create_profile(UserSession.username)
+		if not _profile_refresh_is_current(target, generation): return
+	var profile := selected_profile_snapshot.duplicate(true)
+	var result: Dictionary = await CloudAPI.load_player_profile(target)
+	if not _profile_refresh_is_current(target, generation): return
+	if bool(result.get("ok", false)) and result.get("data", {}) is Dictionary:
+		profile = (result.data as Dictionary).duplicate(true)
+		ProfileBuilder.remember(profile)
+	elif profile.is_empty():
+		_profile_refresh_in_flight_generation = -1
 		return
-	var is_own_profile := target_user_id == str(UserSession.user_id).strip_edges()
-	if is_own_profile:
-		profile_data = _merge_current_session_avatar_into_profile(profile_data)
-	var resolved_username: String = str(profile_data.get("username", selected_profile_username)).strip_edges()
-	if resolved_username.is_empty():
-		resolved_username = UserSession.username if UserSession.is_logged_in else "Player"
-	selected_profile_user_id = target_user_id
-	selected_profile_username = resolved_username
-	selected_profile_snapshot = profile_data.duplicate(true)
-	if profile_username_label:
-		profile_username_label.text = resolved_username
-		ACCOUNT_BADGES.attach(profile_username_label, profile_data, true)
-	if sidebar_username and target_user_id == UserSession.user_id:
-		sidebar_username.text = resolved_username
-		ACCOUNT_BADGES.attach(sidebar_username, profile_data)
-	var active_server_lookup: Dictionary = {}
-	var active_servers_result: Dictionary = await CloudAPI.fetch_active_servers("", 64, 3.0, 1)
-	if bool(active_servers_result.get("ok", false)):
-		active_server_lookup = _build_server_lookup_by_user(CloudAPI._extract_array_payload(active_servers_result.get("data", [])))
-		var matched_by_id: Variant = active_server_lookup.get(target_user_id, {})
-		if matched_by_id is Dictionary:
-			active_server = matched_by_id
-		else:
-			var matched_by_name: Variant = active_server_lookup.get(resolved_username.to_lower(), {})
-			if matched_by_name is Dictionary:
-				active_server = matched_by_name
-	selected_profile_active_server = active_server.duplicate(true)
-	var resolved_friend_count: int = int(profile_data.get("friends_count", 0))
+	if target == UserSession.user_id:
+		profile = _merge_current_session_avatar_into_profile(profile)
+	selected_profile_snapshot = profile.duplicate(true)
+	selected_profile_username = str(profile.get("username", selected_profile_username))
+	_apply_profile_snapshot_to_ui(profile, selected_profile_active_server)
+	ACCOUNT_BADGES.attach(profile_username_label, profile, true)
+	if sidebar_username and target == UserSession.user_id:
+		sidebar_username.text = selected_profile_username
+		ACCOUNT_BADGES.attach(sidebar_username, profile)
+	var servers: Dictionary = await CloudAPI.fetch_active_servers("", 64, 3.0, 1)
+	if not _profile_refresh_is_current(target, generation): return
+	if bool(servers.get("ok", false)):
+		var lookup := _build_server_lookup_by_user(CloudAPI._extract_array_payload(servers.get("data", [])))
+		selected_profile_active_server = lookup.get(target, lookup.get(selected_profile_username.to_lower(), {}))
 	if CloudAPI.has_method("count_friends_for_user"):
-		var friend_count_result: Dictionary = await CloudAPI.count_friends_for_user(target_user_id)
-		if bool(friend_count_result.get("ok", false)):
-			resolved_friend_count = int(friend_count_result.get("count", CloudAPI._extract_array_payload(friend_count_result.get("data", [])).size()))
-			profile_data["friends_count"] = resolved_friend_count
-	elif target_user_id == UserSession.user_id:
-		var own_friends_result: Dictionary = await CloudAPI.get_friends_list()
-		if bool(own_friends_result.get("ok", false)):
-			resolved_friend_count = CloudAPI._extract_array_payload(own_friends_result.get("data", [])).size()
-			profile_data["friends_count"] = resolved_friend_count
+		var friends: Dictionary = await CloudAPI.count_friends_for_user(target)
+		if not _profile_refresh_is_current(target, generation): return
+		if bool(friends.get("ok", false)): profile["friends_count"] = int(friends.get("count", 0))
 	if CloudAPI.has_method("get_follow_counts_for_user"):
-		var follow_counts_result: Dictionary = await CloudAPI.get_follow_counts_for_user(target_user_id)
-		if bool(follow_counts_result.get("ok", false)) and follow_counts_result.get("data", {}) is Dictionary:
-			var follow_counts: Dictionary = follow_counts_result.get("data", {})
-			profile_data["followers_count"] = int(follow_counts.get("followers_count", profile_data.get("followers_count", 0)))
-			profile_data["following_count"] = int(follow_counts.get("following_count", profile_data.get("following_count", 0)))
-	_apply_profile_snapshot_to_ui(profile_data, active_server)
-	_update_profile_social_counts(profile_data, resolved_friend_count)
-	var avatar_outfit: Dictionary = profile_data.get("avatar_outfit", {}).duplicate(true) if profile_data.get("avatar_outfit", {}) is Dictionary else {}
-	var avatar_outfit_result: Dictionary = await CloudAPI.load_avatar_outfit(target_user_id)
-	if bool(avatar_outfit_result.get("ok", false)) and avatar_outfit_result.get("data", {}) is Dictionary:
-		var refreshed_outfit: Dictionary = (avatar_outfit_result.get("data", {}) as Dictionary).duplicate(true)
-		if not refreshed_outfit.is_empty():
-			avatar_outfit = refreshed_outfit
-	if is_own_profile:
-		var local_outfit := _build_avatar_outfit_payload()
-		for local_key in local_outfit.keys():
-			avatar_outfit[local_key] = local_outfit[local_key]
-		avatar_outfit["equipped_avatar_item_payloads"] = _get_local_equipped_avatar_item_payloads()
-	else:
-		avatar_outfit["equipped_avatar_item_payloads"] = await _load_profile_equipped_avatar_item_payloads(profile_data, avatar_outfit)
-	profile_data["avatar_outfit"] = avatar_outfit
-	selected_profile_snapshot = profile_data.duplicate(true)
-	_refresh_profile_header_avatar_snapshot(profile_data)
-	var profile_preview_targets: Array = [profile_header_preview_player, profile_preview_player]
-	var has_preview_target: bool = false
-	for preview_target in profile_preview_targets:
-		if preview_target != null:
-			has_preview_target = true
-	if not has_preview_target:
-		_refresh_profile_games_section()
-		return
-	for preview_target in profile_preview_targets:
-		if preview_target == null:
-			continue
-		preview_target.head_color = _parse_profile_color(avatar_outfit.get("head_color", _get_profile_avatar_color(profile_data, "head", Color(0.96, 0.8, 0.2))), Color(0.96, 0.8, 0.2))
-		preview_target.torso_color = _parse_profile_color(avatar_outfit.get("torso_color", _get_profile_avatar_color(profile_data, "torso", Color(0.05, 0.4, 0.7))), Color(0.05, 0.4, 0.7))
-		preview_target.left_arm_color = _parse_profile_color(avatar_outfit.get("left_arm_color", _get_profile_avatar_color(profile_data, "left_arm", Color(0.96, 0.8, 0.2))), Color(0.96, 0.8, 0.2))
-		preview_target.right_arm_color = _parse_profile_color(avatar_outfit.get("right_arm_color", _get_profile_avatar_color(profile_data, "right_arm", Color(0.96, 0.8, 0.2))), Color(0.96, 0.8, 0.2))
-		preview_target.left_leg_color = _parse_profile_color(avatar_outfit.get("left_leg_color", _get_profile_avatar_color(profile_data, "left_leg", Color(0.65, 0.8, 0.2))), Color(0.65, 0.8, 0.2))
-		preview_target.right_leg_color = _parse_profile_color(avatar_outfit.get("right_leg_color", _get_profile_avatar_color(profile_data, "right_leg", Color(0.65, 0.8, 0.2))), Color(0.65, 0.8, 0.2))
-		_apply_profile_avatar_visuals_to_preview(preview_target, profile_data, avatar_outfit)
-	_refresh_profile_currently_wearing(profile_data, avatar_outfit)
+		var follows: Dictionary = await CloudAPI.get_follow_counts_for_user(target)
+		if not _profile_refresh_is_current(target, generation): return
+		if bool(follows.get("ok", false)) and follows.get("data") is Dictionary:
+			profile.merge(follows.data, true)
+	var outfit: Dictionary = profile.get("avatar_outfit", {}) if profile.get("avatar_outfit") is Dictionary else {}
+	if target != UserSession.user_id:
+		outfit["equipped_avatar_item_payloads"] = await _load_profile_equipped_avatar_item_payloads(profile, outfit)
+		if not _profile_refresh_is_current(target, generation): return
+	profile["avatar_outfit"] = outfit
+	selected_profile_snapshot = profile.duplicate(true)
+	ProfileBuilder.remember(profile)
+	_apply_profile_snapshot_to_ui(profile, selected_profile_active_server)
+	_update_profile_social_counts(profile)
+	_profile_refresh_in_flight_generation = -1
 	_refresh_profile_games_section()
 
 func _is_profile_snapshot_current_user(profile_data: Dictionary) -> bool:
@@ -6687,7 +6802,8 @@ func _is_profile_snapshot_current_user(profile_data: Dictionary) -> bool:
 	var own_name := str(UserSession.username).strip_edges().to_lower()
 	var profile_id := str(profile_data.get("id", profile_data.get("user_id", selected_profile_user_id))).strip_edges()
 	var profile_name := str(profile_data.get("username", selected_profile_username)).strip_edges().to_lower()
-	return (not own_id.is_empty() and profile_id == own_id) or (not own_name.is_empty() and profile_name == own_name)
+	if not profile_id.is_empty(): return not own_id.is_empty() and profile_id == own_id
+	return not own_name.is_empty() and profile_name == own_name
 
 func _merge_current_session_avatar_into_profile(profile_data: Dictionary) -> Dictionary:
 	var merged := profile_data.duplicate(true)
@@ -6721,7 +6837,7 @@ func _apply_profile_avatar_visuals_to_preview(preview_target: Node, profile_data
 	preview_target.set("chest_badge_texture_path", _get_profile_avatar_texture_path(profile_data, avatar_outfit, "chest_badge_texture_path", "", true))
 	preview_target.set("shirt_texture_path", _get_profile_avatar_texture_path(profile_data, avatar_outfit, "shirt_texture_path", "", true))
 	preview_target.set("pants_texture_path", _get_profile_avatar_texture_path(profile_data, avatar_outfit, "pants_texture_path", "", true))
-	preview_target.set("equipped_avatar_items", avatar_outfit.get("equipped_avatar_item_payloads", []) if avatar_outfit.get("equipped_avatar_item_payloads", []) is Array else [])
+	preview_target.set("equipped_avatar_items", _collect_profile_equipped_avatar_item_payloads(profile_data, avatar_outfit))
 	if preview_target.has_method("force_avatar_visual_refresh"):
 		preview_target.call_deferred("force_avatar_visual_refresh")
 	elif preview_target.has_method("_apply_avatar_visuals_if_needed"):
@@ -6730,14 +6846,24 @@ func _apply_profile_avatar_visuals_to_preview(preview_target: Node, profile_data
 func _refresh_profile_currently_wearing(profile_data: Dictionary, avatar_outfit: Dictionary = {}) -> void:
 	if profile_wearing_items_container == null:
 		return
-	_clear_children_immediate(profile_wearing_items_container)
 	var items: Array = _collect_profile_equipped_avatar_item_payloads(profile_data, avatar_outfit)
+	var has_shirt := false
+	var has_pants := false
+	for item_variant in items:
+		if item_variant is Dictionary:
+			var kind := str(item_variant.get("item_kind", item_variant.get("category", ""))).to_lower()
+			has_shirt = has_shirt or kind in ["shirt", "shirts"]
+			has_pants = has_pants or kind == "pants"
 	var profile_shirt_texture := str(_get_profile_avatar_texture_path(profile_data, avatar_outfit, "shirt_texture_path", "", true)).strip_edges()
-	if not profile_shirt_texture.is_empty():
-		items.append({"name": "Shirt", "category": "Shirt", "thumbnail": profile_shirt_texture})
+	if not profile_shirt_texture.is_empty() and not has_shirt:
+		items.append({"id": "profile_shirt", "name": "Shirt", "category": "Shirt", "template_url": profile_shirt_texture})
 	var profile_pants_texture := str(_get_profile_avatar_texture_path(profile_data, avatar_outfit, "pants_texture_path", "", true)).strip_edges()
-	if not profile_pants_texture.is_empty():
-		items.append({"name": "Pants", "category": "Pants", "thumbnail": profile_pants_texture})
+	if not profile_pants_texture.is_empty() and not has_pants:
+		items.append({"id": "profile_pants", "name": "Pants", "category": "Pants", "template_url": profile_pants_texture})
+	var signature := JSON.stringify([profile_data.get("id", ""), items]).sha256_text()
+	if signature == _profile_wearing_signature: return
+	_profile_wearing_signature = signature
+	_clear_children_immediate(profile_wearing_items_container)
 	var seen: Dictionary = {}
 	for item_variant in items:
 		if not (item_variant is Dictionary):
@@ -6755,8 +6881,8 @@ func _refresh_profile_currently_wearing(profile_data: Dictionary, avatar_outfit:
 
 func _create_profile_wearing_item_card(item: Dictionary) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(150, 196)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.custom_minimum_size = Vector2(134, 176)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", _make_white_panel_style())
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 8)
@@ -6768,13 +6894,14 @@ func _create_profile_wearing_item_card(item: Dictionary) -> Control:
 	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 	var preview := _create_profile_wearing_item_preview(item)
-	preview.custom_minimum_size = Vector2(134, 112)
+	preview.custom_minimum_size = Vector2(118, 112)
 	box.add_child(preview)
+	_add_limited_item_badge(preview, item)
 	var name_label := Label.new()
-	name_label.text = str(item.get("name", item.get("id", "Avatar Item"))).strip_edges()
+	name_label.text = preload("res://scripts/ui/halloween_event_data.gd").display_name(item).strip_edges()
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.custom_minimum_size = Vector2(134, 24)
+	name_label.custom_minimum_size = Vector2(118, 24)
 	name_label.add_theme_font_size_override("font_size", 13)
 	name_label.add_theme_color_override("font_color", Color(0.16, 0.17, 0.2, 1))
 	box.add_child(name_label)
@@ -6789,7 +6916,7 @@ func _create_profile_wearing_item_card(item: Dictionary) -> Control:
 
 func _create_profile_wearing_item_preview(item: Dictionary) -> Control:
 	var holder := Panel.new()
-	holder.custom_minimum_size = Vector2(134, 112)
+	holder.custom_minimum_size = Vector2(118, 112)
 	holder.clip_contents = true
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.94, 0.95, 0.97, 1)
@@ -6803,6 +6930,23 @@ func _create_profile_wearing_item_preview(item: Dictionary) -> Control:
 	style.corner_radius_bottom_right = 6
 	style.corner_radius_bottom_left = 6
 	holder.add_theme_stylebox_override("panel", style)
+	var data: Dictionary = item.get("data", {}) if item.get("data", {}) is Dictionary else {}
+	var kind := str(item.get("item_kind", item.get("category", ""))).to_lower()
+	if kind in ["shirt", "shirts", "pants"] or item.has("model_id") or item.has("source_model_path") or data.has("source_model_path") or data.has("parts") or item.has("source_url"):
+		var rect := TextureRect.new()
+		rect.name = "ProfileItemPreview"
+		rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(rect)
+		var renderer := get_node_or_null("CatalogThumbnailRenderer")
+		if renderer == null:
+			renderer = preload("res://scripts/lobby/catalog_thumbnail_renderer.gd").new()
+			renderer.name = "CatalogThumbnailRenderer"
+			add_child(renderer)
+		renderer.call("request_preview", item, rect)
+		return holder
 	var thumbnail_path := _resolve_profile_wearing_item_thumbnail(item)
 	if not thumbnail_path.is_empty():
 		var rect := TextureRect.new()
@@ -7009,14 +7153,14 @@ func _create_social_avatar_preview(profile: Dictionary, size_px: int = 72) -> Co
 	return fallback
 
 func _format_profile_join_label(profile_data: Dictionary) -> String:
-	var raw_join_date: String = str(profile_data.get("join_date", profile_data.get("created_at", ""))).strip_edges()
+	var raw_join_date: String = str(profile_data.get("join_date", profile_data.get("created_at", profile_data.get("created", "")))).strip_edges()
 	if raw_join_date.is_empty():
-		return "Joined recently"
+		return "Join Date: —"
 	var date_only: String = raw_join_date.substr(0, 10)
 	var parts: PackedStringArray = date_only.split("-")
 	if parts.size() == 3:
-		return "Joined %s.%s.%s" % [parts[2], parts[1], parts[0]]
-	return "Joined %s" % date_only
+		return "Join Date: %s.%s.%s" % [parts[2], parts[1], parts[0]]
+	return "Join Date: %s" % date_only
 
 func _refresh_continue_playing_section() -> void:
 	if CloudAPI != null and CloudAPI.is_configured() and not _lobby_bootstrap_active:
@@ -8067,29 +8211,26 @@ func _is_local_entry_owned_by_current_user(entry: Dictionary) -> bool:
 		return creator_name.is_empty()
 	return creator_name.is_empty() or creator_name == current_username
 
+func _configure_profile_creations_columns(grid: GridContainer, view: Control) -> void:
+	if not is_instance_valid(grid) or not is_instance_valid(view): return
+	# The available page width excludes its outer padding and the list margins.
+	# Using the grid's previous minimum would hold a desktop layout open on phone.
+	var available := maxf(view.size.x - 68.0, 0.0)
+	grid.columns = clampi(int((available + 16.0) / 244.0), 1, 3)
+
 func _refresh_profile_games_section() -> void:
-	# FIX Bug-6: ProfileBuilder builds ProfileView as ScrollContainer > MarginContainer > VBoxContainer.
-	# The old lookup "ProfileView/Content" never matched. Now we traverse to find the actual root VBox.
-	var profile_view: Control = null
-	if main_tabs:
-		profile_view = main_tabs.get_node_or_null("ProfileView")
-	if profile_view == null:
-		return
-	var profile_content: VBoxContainer = _find_first_vbox_child(profile_view)
-	if profile_content == null:
-		return
-	if _profile_games_panel != null and is_instance_valid(_profile_games_panel):
-		if _profile_games_panel.get_parent() != null:
-			_profile_games_panel.get_parent().remove_child(_profile_games_panel)
+	# Creations owns this list. About never appends a duplicate My Games section.
+	if not is_instance_valid(profile_creations_container) or not profile_creations_container.is_visible_in_tree(): return
+	var generation := _profile_refresh_generation
+	var target_at_start := selected_profile_user_id
+	if is_instance_valid(_profile_games_panel):
+		_profile_games_panel.get_parent().remove_child(_profile_games_panel)
 		_profile_games_panel.queue_free()
-		_profile_games_panel = null
-
 	_profile_games_panel = Panel.new()
-	_profile_games_panel.name = "ProfileGamesPanel"
-	_profile_games_panel.custom_minimum_size = Vector2(0, 320)
+	_profile_games_panel.name = "ProfileCreationsPanel"
+	_profile_games_panel.custom_minimum_size = Vector2(0, 400)
 	_profile_games_panel.add_theme_stylebox_override("panel", _make_white_panel_style())
-	profile_content.add_child(_profile_games_panel)
-
+	profile_creations_container.add_child(_profile_games_panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 20)
@@ -8106,7 +8247,7 @@ func _refresh_profile_games_section() -> void:
 	var target_user_id: String = selected_profile_user_id if not selected_profile_user_id.is_empty() else UserSession.user_id
 	var target_username: String = selected_profile_username if not selected_profile_username.is_empty() else (UserSession.username if UserSession.is_logged_in else "Player")
 	var is_own_profile: bool = target_user_id == UserSession.user_id
-	title.text = "My Games" if is_own_profile else "%s's Games" % target_username
+	title.text = "Creations"
 	title.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 1))
 	title.add_theme_font_size_override("font_size", 20)
 	root.add_child(title)
@@ -8120,17 +8261,26 @@ func _refresh_profile_games_section() -> void:
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 220)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(scroll)
 
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.name = "ProfileCreationsGrid"
+	grid.columns = 1
 	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 16)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(grid)
+	var profile_view := main_tabs.get_tab_control(Tab.PROFILE)
+	var resize_columns := func(): _configure_profile_creations_columns(grid, profile_view)
+	profile_view.resized.connect(resize_columns)
+	grid.tree_exiting.connect(func():
+		if is_instance_valid(profile_view) and profile_view.resized.is_connected(resize_columns):
+			profile_view.resized.disconnect(resize_columns)
+	)
+	resize_columns.call()
 
 	_add_placeholder_label(grid, "Loading games...")
 
@@ -8233,7 +8383,7 @@ func _refresh_profile_games_section() -> void:
 			return str(a.get("name", "")).to_lower() < str(b.get("name", "")).to_lower()
 		return a_players > b_players
 	)
-	if not is_instance_valid(grid):
+	if not is_instance_valid(grid) or not _profile_refresh_is_current(target_at_start, generation):
 		return
 	_clear_container(grid)
 	if game_entries.is_empty():
@@ -8308,14 +8458,13 @@ func _create_profile_game_card(game_info: Dictionary) -> Panel:
 	play_button.pressed.connect(func(): _start_smart_play_for_game(game_info))
 	action_row.add_child(play_button)
 
-	var studio_button := Button.new()
-	studio_button.text = "Studio"
-	studio_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	studio_button.custom_minimum_size = Vector2(0, 34)
 	var folder_path: String = str(game_info.get("folder", "")).strip_edges()
-	studio_button.disabled = folder_path.is_empty()
-	studio_button.pressed.connect(func(): _open_local_game_in_studio(folder_path))
 	if not folder_path.is_empty():
+		var studio_button := Button.new()
+		studio_button.text = "Studio"
+		studio_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		studio_button.custom_minimum_size = Vector2(0, 34)
+		studio_button.pressed.connect(func(): _open_local_game_in_studio(folder_path))
 		action_row.add_child(studio_button)
 
 	return panel
@@ -8540,7 +8689,7 @@ func _hide_loading_overlay() -> void:
 
 func _update_loading_overlay(title: String, subtitle: String, progress_ratio: float) -> void:
 	_ensure_loading_overlay()
-	var general_operation := title in ["Signing in", "Loading profile", "Loading lobby"] or title.to_lower().contains("publish") or title.to_lower().contains("upload")
+	var general_operation := title.to_lower().contains("publish") or title.to_lower().contains("upload")
 	_loading_title_label.text = title if general_operation else "Joining experience..."
 	_loading_subtitle_label.visible = general_operation
 	_loading_subtitle_label.text = subtitle
@@ -8558,12 +8707,8 @@ func _update_loading_transport_badge(text: String) -> void:
 
 func _show_loading_error(title: String, subtitle: String) -> void:
 	push_warning("[Lobby] %s: %s" % [title, subtitle])
-	_show_loading_overlay(title, subtitle, 1.0)
-	_loading_title_label.text = title
-	_loading_subtitle_label.visible = true
-	await get_tree().create_timer(1.6).timeout
-	if _loading_overlay:
-		_loading_overlay.visible = false
+	if is_instance_valid(_loading_overlay): _loading_overlay.hide()
+	_show_lobby_notice(title, subtitle)
 
 func _make_primary_button_style(color_value: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -9749,35 +9894,7 @@ func _load_icon_image(path: String) -> Image:
 			return null
 		bytes = file.get_buffer(file.get_length())
 		file.close()
-	if bytes.size() < 4:
-		return null
-	
-	var img := Image.new()
-	
-	# Try PNG first (header: 0x89 0x50 0x4E 0x47)
-	if bytes[0] == 0x89 and bytes[1] == 0x50 and bytes[2] == 0x4E and bytes[3] == 0x47:
-		if img.load_png_from_buffer(bytes) == OK:
-			return img
-	
-	# Try JPG (header: 0xFF 0xD8)
-	if bytes[0] == 0xFF and bytes[1] == 0xD8:
-		if img.load_jpg_from_buffer(bytes) == OK:
-			return img
-	
-	# Try WebP (header: RIFF....WEBP)
-	if bytes[0] == 0x52 and bytes[1] == 0x49 and bytes[2] == 0x46 and bytes[3] == 0x46:
-		if img.load_webp_from_buffer(bytes) == OK:
-			return img
-	
-	# Last attempt: try all formats blindly
-	if img.load_png_from_buffer(bytes) == OK:
-		return img
-	if img.load_jpg_from_buffer(bytes) == OK:
-		return img
-	if img.load_webp_from_buffer(bytes) == OK:
-		return img
-	
-	return null
+	return IMAGE_BYTE_DECODER.decode(bytes)
 
 func _is_inline_image_data(value: String) -> bool:
 	return value.begins_with("data:image/") or value.begins_with("base64:")
@@ -9805,8 +9922,11 @@ func _try_apply_cached_remote_game_icon(url: String, texture_rect: Variant) -> b
 		if not FileAccess.file_exists(legacy_cache_path):
 			return false
 		cache_path = legacy_cache_path
-	var cached_image := Image.new()
-	if cached_image.load(cache_path) != OK:
+	var cached_image := _load_icon_image(cache_path)
+	if cached_image == null:
+		# Remove only this URL's known cache file; the normal bounded download
+		# path can then repair HTML error pages and interrupted image bodies.
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(cache_path))
 		return false
 	if cache_path == _get_legacy_remote_game_icon_cache_path(url):
 		_ensure_remote_game_icon_cache_dir()
@@ -9921,13 +10041,8 @@ func _load_remote_game_icon_async(url: String, texture_rect: Variant, attempt: i
 	if body.is_empty():
 		_retry_remote_game_icon_load(clean_url, texture_rect, attempt)
 		return
-	var image := Image.new()
-	var load_error: Error = image.load_png_from_buffer(body)
-	if load_error != OK:
-		load_error = image.load_jpg_from_buffer(body)
-	if load_error != OK:
-		load_error = image.load_webp_from_buffer(body)
-	if load_error != OK:
+	var image: Image = IMAGE_BYTE_DECODER.decode(body)
+	if image == null:
 		_retry_remote_game_icon_load(clean_url, texture_rect, attempt)
 		return
 	_ensure_remote_game_icon_cache_dir()
@@ -10244,6 +10359,7 @@ func _find_child_by_name_recursive(root: Node, desired_name: String) -> Node:
 	return null
 
 func _start_smart_play_for_game(game_info: Dictionary) -> void:
+	GameSceneLoader.prepare_main()
 	_ensure_experience_loading_overlay()
 	_show_loading_overlay("Loading...", "Preparing %s for smart play" % str(game_info.get("name", "this game")), 0.05)
 	_loading_overlay.call("set_experience", str(game_info.get("name", "Bobux")), game_info)
@@ -10264,7 +10380,7 @@ func _start_smart_play_for_game(game_info: Dictionary) -> void:
 	if CloudAPI.is_configured() and CloudAPI.has_authenticated_session():
 		await CloudAPI.update_profile_presence("online", str(map_info.get("name", resolved_game_info.get("name", ""))).strip_edges(), {})
 	_update_loading_overlay("Loading...", "Connecting via dedicated WebSocket...", 0.92)
-	get_tree().change_scene_to_file("res://scenes/main/main.tscn")
+	await GameSceneLoader.open_main()
 
 func _queue_map_visit_increment(game_info: Dictionary) -> void:
 	if CloudAPI == null or not CloudAPI.is_configured():
@@ -10281,6 +10397,7 @@ func _queue_map_visit_increment(game_info: Dictionary) -> void:
 	)
 
 func _join_server_flow(game_info: Dictionary, server_info: Dictionary) -> void:
+	GameSceneLoader.prepare_main()
 	_update_loading_overlay("Preparing world...", "Loading the latest map version.", 0.52)
 	var map_result: Dictionary = await _prepare_map_for_game(game_info, server_info)
 	if not bool(map_result.get("ok", false)):
@@ -10304,9 +10421,10 @@ func _join_server_flow(game_info: Dictionary, server_info: Dictionary) -> void:
 	if CloudAPI.is_configured() and CloudAPI.has_authenticated_session():
 		await CloudAPI.update_profile_presence("online", str(targeted_server_info.get("map_name", resolved_game_info.get("name", ""))).strip_edges(), targeted_server_info)
 	_update_loading_overlay("Joining server...", "Connecting you now.", 0.95)
-	get_tree().change_scene_to_file("res://scenes/main/main.tscn")
+	await GameSceneLoader.open_main()
 
 func _host_game_flow(game_info: Dictionary) -> void:
+	GameSceneLoader.prepare_main()
 	_update_loading_overlay("Preparing server...", "Creating your world.", 0.46)
 	var map_result: Dictionary = await _prepare_map_for_game(game_info, {})
 	if not bool(map_result.get("ok", false)):
@@ -10324,7 +10442,7 @@ func _host_game_flow(game_info: Dictionary) -> void:
 	if CloudAPI.is_configured() and CloudAPI.has_authenticated_session():
 		await CloudAPI.update_profile_presence("online", str(resolved_game_info.get("name", "Untitled Experience")).strip_edges(), {})
 	_update_loading_overlay("Starting server...", "Publishing and opening your experience.", 0.95)
-	get_tree().change_scene_to_file("res://scenes/main/main.tscn")
+	await GameSceneLoader.open_main()
 
 func _prepare_map_for_game(game_info: Dictionary, server_info: Dictionary) -> Dictionary:
 	var resolved_game_info: Dictionary = game_info.duplicate(true)

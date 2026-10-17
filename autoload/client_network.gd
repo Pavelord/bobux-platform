@@ -32,7 +32,7 @@ const MAX_RPC_PAYLOAD_SIZE: int = 16384
 const DEFAULT_WS_PATH: String = "/ws"
 const DEFAULT_DEDICATED_WS_URL: String = "ws://109.71.245.162/ws"
 const DEFAULT_DEDICATED_HOST: String = "109.71.245.162"
-const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-10-06-1"
+const NETWORK_PROTOCOL_VERSION: String = "vps-ws-2026-10-10-2"
 const DEFAULT_ROOM_MAP_NAME: String = "Untitled Experience"
 const DEFAULT_ROOM_MAP_ID: String = "untitled"
 const MANUAL_NETWORK_POLL_RATE_HZ: float = 90.0
@@ -94,6 +94,7 @@ var _smart_play_recovery_attempts: int = 0
 var _smart_play_flow_serial: int = 0
 var _smart_play_stability_serial: int = 0
 var _smart_play_failed_room_ids: Dictionary = {}
+var _editor_join_serial := 0
 
 func _multiplayer_api() -> MultiplayerAPI:
 	if not is_inside_tree():
@@ -250,6 +251,7 @@ func _server_peer_keepalive_age_msec(peer_id: int, now_msec: int = 0) -> int:
 	return maxi(effective_now_msec - last_keepalive_msec, 0)
 
 func _find_external_active_session_conflict(user_id: String, requested_room_id: String) -> Dictionary:
+	if EditorTestServer.is_local_server_process(): return {}
 	var clean_user_id: String = user_id.strip_edges()
 	if clean_user_id.is_empty() or CloudAPI == null:
 		return {}
@@ -563,11 +565,16 @@ func _process(delta: float) -> void:
 	if api == null or api.multiplayer_peer == null:
 		_manual_network_poll_accumulator = 0.0
 		return
+	var peer := api.multiplayer_peer
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
+		_manual_network_poll_accumulator = 0.0
+		return
 	_manual_network_poll_accumulator += delta
 	if _manual_network_poll_accumulator < (1.0 / MANUAL_NETWORK_POLL_RATE_HZ):
 		return
 	_manual_network_poll_accumulator = 0.0
-	api.multiplayer_peer.poll()
+	peer.poll()
+	if api.multiplayer_peer != peer or peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED: return
 	if api.is_server():
 		var now_msec: int = Time.get_ticks_msec()
 		if api.get_peers().size() > 0 and now_msec - _debug_last_server_poll_log_msec >= 2000:
@@ -591,7 +598,7 @@ func _build_room_auth_payload() -> Dictionary:
 		"map_id": _active_map_id,
 		"map_name": _sanitize_room_map_name(_active_map_name, _active_map_id, _guess_runtime_map_name()),
 		"cloud_version_id": _active_cloud_version_id,
-		"user_id": SupabaseClient.get_user_id(),
+		"user_id": CloudAPI.get_current_user_id(),
 		"username": CloudAPI.get_current_username(),
 		"max_players": int(_current_server_info.get("max_players", MAX_CLIENTS)),
 		"create_if_missing": bool(_current_server_info.get("create_if_missing", false))
@@ -696,6 +703,9 @@ func connect_or_host() -> void:
 func _discover_or_host_smart_play() -> void:
 	if not _smart_play_flow_active:
 		return
+	if EditorTestServer.should_route():
+		host_game(GameState.DEFAULT_PORT)
+		return
 	transport_status_changed.emit("Looking for a live dedicated room...")
 	transport_progress_updated.emit("discover", 0.2)
 	var preferred_map_filter: String = _guess_runtime_map_id()
@@ -749,7 +759,7 @@ func host_game(_port: int, existing_mode_rows: Array = []) -> Error:
 		"map_name": _sanitize_room_map_name(_active_map_name, _active_map_id, _guess_runtime_map_name()),
 		"map_id": _active_map_id,
 		"cloud_version_id": _active_cloud_version_id,
-		"host_user_id": SupabaseClient.get_user_id(),
+		"host_user_id": CloudAPI.get_current_user_id(),
 		"host_username": CloudAPI.get_current_username(),
 		"server_url": runtime_server_url,
 		"ip": _extract_public_host(runtime_server_url),
@@ -838,6 +848,8 @@ func measure_server_latency(ip: String, port: int, timeout_seconds: float = 1.5)
 	return INF
 
 func disconnect_from_session_async() -> void:
+	_editor_join_serial += 1
+	if is_instance_valid(EditorTestServer): EditorTestServer.session_active = false
 	_smart_play_flow_active = false
 	_smart_play_recovery_in_progress = false
 	_smart_play_recovery_attempts = 0
@@ -850,6 +862,8 @@ func disconnect_from_session_async() -> void:
 	_teardown_session_peer()
 
 func disconnect_from_session(preserve_smart_play_flow: bool = false) -> void:
+	_editor_join_serial += 1
+	if is_instance_valid(EditorTestServer): EditorTestServer.session_active = false
 	if not preserve_smart_play_flow:
 		_smart_play_flow_active = false
 		_smart_play_recovery_in_progress = false
@@ -905,7 +919,7 @@ func _teardown_session_peer() -> void:
 		# Immediately poll to flush the WebSocket close frame before the peer
 		# is replaced or nullified. Without this, fast reconnect or scene-change
 		# paths could orphan the server-side session.
-		peer.poll()
+		if peer is WebSocketMultiplayerPeer: peer.poll()
 		call_deferred("_finalize_peer_shutdown_async", peer)
 	elif api != null:
 		api.multiplayer_peer = null
@@ -946,14 +960,14 @@ func _send_leave_notice_if_needed_async() -> void:
 	})
 	var deadline_msec: int = Time.get_ticks_msec() + int(LEAVE_ACK_TIMEOUT_SECONDS * 1000.0)
 	while Time.get_ticks_msec() < deadline_msec:
-		if api.multiplayer_peer == null:
+		if api.multiplayer_peer == null or api.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 			break
 		api.multiplayer_peer.poll()
 		if _leave_ack_received:
 			break
 		await get_tree().process_frame
 		await get_tree().create_timer(0.05).timeout
-	if api.multiplayer_peer != null:
+	if api.multiplayer_peer != null and api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
 		api.multiplayer_peer.poll()
 
 func _finalize_peer_shutdown_async(expected_peer: MultiplayerPeer) -> void:
@@ -1044,7 +1058,8 @@ func _receive_room_chat_message(text: String, sender_id: int) -> void:
 
 func _host_dedicated_server(port: int) -> Error:
 	var peer := WebSocketMultiplayerPeer.new()
-	var error_code: Error = peer.create_server(port, "*")
+	var bind_address := "127.0.0.1" if EditorTestServer.is_local_server_process() else "*"
+	var error_code: Error = peer.create_server(port, bind_address)
 	if error_code != OK:
 		last_connection_error = "Dedicated server creation failed: %s" % error_string(error_code)
 		push_error("[ClientNetwork] %s" % last_connection_error)
@@ -1068,6 +1083,10 @@ func _host_dedicated_server(port: int) -> Error:
 	return OK
 
 func _start_client_attempt(ws_url: String) -> Error:
+	if EditorTestServer.should_route(ws_url):
+		_editor_join_serial += 1
+		_start_editor_test_session.call_deferred(_editor_join_serial)
+		return OK
 	_pending_ws_url = ws_url.strip_edges()
 	if _pending_ws_url.is_empty():
 		last_connection_error = "Dedicated server URL is empty."
@@ -1083,25 +1102,56 @@ func _start_client_attempt(ws_url: String) -> Error:
 	_wakeup_and_begin_client_attempt(_client_wakeup_serial)
 	return OK
 
+func _start_editor_test_session(serial: int) -> void:
+	transport_status_changed.emit("Локальный тестовый сервер — запуск текущей версии…")
+	transport_progress_updated.emit("connect", 0.42)
+	var endpoint: String = await EditorTestServer.ensure_endpoint()
+	if serial != _editor_join_serial: return
+	if endpoint.is_empty():
+		last_connection_error = EditorTestServer.last_error
+		connection_failed.emit(last_connection_error)
+		return
+	EditorTestServer.session_active = true
+	# Separate development rooms cannot alias a production room's identity.
+	_active_room_id = "editor:%d:%s" % [OS.get_process_id(), _active_map_id]
+	_current_server_info["room_id"] = _active_room_id
+	_current_server_info["server_url"] = endpoint
+	_current_server_info["ip"] = "127.0.0.1"
+	_current_server_info["create_if_missing"] = true
+	_current_server_info["editor_test_room"] = true
+	# Avoid routing the already resolved endpoint a second time on debug Android.
+	_begin_resolved_client_attempt(endpoint)
+
+func _begin_resolved_client_attempt(ws_url: String) -> void:
+	_pending_ws_url = ws_url
+	_pending_public_host = _extract_public_host(ws_url)
+	_pending_public_port = _extract_public_port(ws_url)
+	_pending_attempt = 1
+	_connected_once_for_attempt = false
+	_explicit_join_rejection_message = ""
+	_client_wakeup_serial += 1
+	_wakeup_and_begin_client_attempt(_client_wakeup_serial)
+
 func _wakeup_and_begin_client_attempt(wakeup_serial: int) -> void:
 	var ws_url_snapshot: String = _pending_ws_url
-	await _warm_server_if_needed(ws_url_snapshot)
 	if wakeup_serial != _client_wakeup_serial or ws_url_snapshot != _pending_ws_url or _pending_ws_url.is_empty():
 		return
+	# The WebSocket may already be ready, or be a direct Godot endpoint with no
+	# HTTP /health route. Waking a sleeping proxy must not gate the first socket.
+	_warm_server_if_needed.call_deferred(ws_url_snapshot, wakeup_serial)
 	_begin_client_attempt()
 
-func _warm_server_if_needed(ws_url: String) -> void:
+func _warm_server_if_needed(ws_url: String, wakeup_serial: int = -1) -> void:
+	if _extract_public_host(ws_url) in ["127.0.0.1", "localhost", "::1"]: return
 	var health_url: String = _build_health_url_from_ws_url(ws_url)
 	if health_url.is_empty():
 		return
 	var deadline_msec: int = Time.get_ticks_msec() + int(SERVER_WAKEUP_TIMEOUT_SECONDS * 1000.0)
 	var attempt_index: int = 1
 	while Time.get_ticks_msec() < deadline_msec:
-		transport_status_changed.emit("Waking dedicated server... (%d)" % attempt_index)
-		transport_progress_updated.emit("wakeup", 0.44)
+		if wakeup_serial != -1 and (wakeup_serial != _client_wakeup_serial or ws_url != _pending_ws_url or _connected_once_for_attempt): return
 		var response_code: int = await _request_wakeup_http_status(health_url)
 		if response_code >= 200 and response_code < 500:
-			await get_tree().create_timer(0.35).timeout
 			return
 		attempt_index += 1
 		await get_tree().create_timer(SERVER_WAKEUP_POLL_SECONDS).timeout
@@ -1630,6 +1680,10 @@ func _request_pending_room_join_keepalive() -> void:
 # PRACTICE SCREENSHOT: Client room confirmation RPC - loads the agreed map before the player is accepted into the room.
 @rpc("authority", "reliable")
 func _confirm_room_join(payload: Dictionary) -> void:
+	var join_api := _multiplayer_api()
+	var join_peer: MultiplayerPeer = join_api.multiplayer_peer if join_api != null else null
+	var join_attempt := _client_attempt_serial
+	if join_peer == null: return
 	_stop_connection_timeout()
 	_server_supports_pending_join_keepalive = int(payload.get("pending_join_keepalive_protocol", 0)) >= 1
 	_start_pending_room_join_keepalive()
@@ -1647,8 +1701,13 @@ func _confirm_room_join(payload: Dictionary) -> void:
 	_current_server_info["create_if_missing"] = false
 	transport_status_changed.emit("Room confirmed. Syncing map...")
 	transport_progress_updated.emit("map", 0.9)
+	var joined_room := _active_room_id
+	var still_current := _is_current_map_join.bind(join_attempt, join_peer, joined_room)
 	if MapManager != null and MapManager.has_method("load_map"):
-		var map_result: Dictionary = await MapManager.load_map(_active_map_id, _active_map_name, _active_cloud_version_id)
+		var map_result: Dictionary = await MapManager.load_map(_active_map_id, _active_map_name, _active_cloud_version_id, still_current)
+		# Map downloads may outlive a Back button or a reconnect. A completed
+		# old request must never close/confirm the newer session's peer.
+		if not still_current.call(): return
 		if not bool(map_result.get("ok", false)):
 			var api: MultiplayerAPI = _multiplayer_api()
 			if api != null and api.multiplayer_peer != null:
@@ -1661,6 +1720,10 @@ func _confirm_room_join(payload: Dictionary) -> void:
 	_complete_room_join.rpc_id(1, {
 		"room_id": _active_room_id
 	})
+
+func _is_current_map_join(attempt: int, peer: MultiplayerPeer, room_id: String) -> bool:
+	var api := _multiplayer_api()
+	return api != null and api.multiplayer_peer == peer and _client_attempt_serial == attempt and _active_room_id == room_id and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 # PRACTICE SCREENSHOT: Final room join RPC - commits the player to the room registry and broadcasts room summaries.
 @rpc("any_peer", "reliable")
@@ -1927,7 +1990,7 @@ func _map_alias_titles_are_one_edit_apart(left: String, right: String) -> bool:
 
 func _get_connected_player_count() -> int:
 	var api: MultiplayerAPI = _multiplayer_api()
-	if api == null or api.multiplayer_peer == null:
+	if api == null or not is_session_active():
 		return 0
 	return api.get_peers().size() + 1
 
@@ -1955,7 +2018,7 @@ func _build_room_id() -> String:
 	var stable_room_id: String = _build_stable_public_room_id()
 	if not stable_room_id.is_empty():
 		return stable_room_id
-	var owner_id: String = SupabaseClient.get_user_id()
+	var owner_id: String = CloudAPI.get_current_user_id()
 	if owner_id.is_empty():
 		owner_id = CloudAPI.get_current_username().strip_edges().to_lower().replace(" ", "_")
 	return "%s:%s:%d" % [_guess_runtime_map_id(), owner_id.substr(0, min(owner_id.length(), 8)), int(Time.get_unix_time_from_system())]

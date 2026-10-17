@@ -48,6 +48,9 @@ var _ui_scroll_touch_index: int = -1
 var _ui_scroll_target: ScrollContainer = null
 var _ui_scroll_start_position: Vector2 = Vector2.ZERO
 var _ui_scroll_dragged: bool = false
+var _ui_scroll_axis: Vector2 = Vector2.ZERO
+var _ui_scroll_remainder: float = 0.0
+var _ui_scroll_pressed_button: BaseButton
 var _joystick_center: Vector2 = Vector2.ZERO
 var _joystick_default_offsets: Vector4 = Vector4.ZERO
 var _touch_positions: Dictionary = {}
@@ -602,6 +605,9 @@ func _clear_touch_state() -> void:
 	_ui_scroll_target = null
 	_ui_scroll_start_position = Vector2.ZERO
 	_ui_scroll_dragged = false
+	_ui_scroll_axis = Vector2.ZERO
+	_ui_scroll_remainder = 0.0
+	_restore_scroll_button()
 	_touch_positions.clear()
 	_move_vector = Vector2.ZERO
 	_look_delta = Vector2.ZERO
@@ -695,12 +701,18 @@ func _handle_mobile_ui_scroll_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
+			if _ui_scroll_touch_index != -1:
+				return
+			_finish_ui_scroll()
 			var target: ScrollContainer = _find_scroll_container_at(get_tree().current_scene, touch.position)
 			if target != null:
 				_ui_scroll_touch_index = touch.index
 				_ui_scroll_target = target
 				_ui_scroll_start_position = touch.position
 				_ui_scroll_dragged = false
+				_ui_scroll_axis = Vector2.ZERO
+				_ui_scroll_remainder = 0.0
+				_ui_scroll_pressed_button = _find_mobile_ui_hit(get_tree().current_scene, touch.position) as BaseButton
 		elif touch.index == _ui_scroll_touch_index:
 			# BUGFIX: a scroll release must not be reinterpreted as tapping a game card.
 			if _ui_scroll_dragged:
@@ -708,30 +720,61 @@ func _handle_mobile_ui_scroll_input(event: InputEvent) -> void:
 			_ui_scroll_touch_index = -1
 			_ui_scroll_target = null
 			_ui_scroll_start_position = Vector2.ZERO
-			_ui_scroll_dragged = false
+			# Godot may emit the emulated mouse release after the raw touch.
+			# Keep the cancellation flag through that release, then restore the
+			# button next idle frame so a swipe cannot trigger Play/Buy/Equip.
+			_finish_ui_scroll_if_released.call_deferred()
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
 		if drag.index == _ui_scroll_touch_index and _ui_scroll_target != null and is_instance_valid(_ui_scroll_target):
-			if drag.position.distance_to(_ui_scroll_start_position) >= UI_SCROLL_TAP_CANCEL_DISTANCE:
+			if not _ui_scroll_dragged and drag.position.distance_to(_ui_scroll_start_position) >= UI_SCROLL_TAP_CANCEL_DISTANCE:
 				_ui_scroll_dragged = true
-			_apply_mobile_ui_scroll(_ui_scroll_target, drag.relative)
-			get_viewport().set_input_as_handled()
+				var distance := drag.position - _ui_scroll_start_position
+				_ui_scroll_axis = Vector2(0, 1) if absf(distance.y) >= absf(distance.x) else Vector2(1, 0)
+				if is_instance_valid(_ui_scroll_pressed_button) and not _ui_scroll_pressed_button.disabled:
+					_ui_scroll_pressed_button.set_meta("mobile_scroll_cancelled_press", true)
+					_ui_scroll_pressed_button.disabled = true
+			if _ui_scroll_dragged:
+				_apply_mobile_ui_scroll(_ui_scroll_target, drag.relative)
+				get_viewport().set_input_as_handled()
+
+func _restore_scroll_button() -> void:
+	if is_instance_valid(_ui_scroll_pressed_button) and _ui_scroll_pressed_button.has_meta("mobile_scroll_cancelled_press"):
+		_ui_scroll_pressed_button.remove_meta("mobile_scroll_cancelled_press")
+		_ui_scroll_pressed_button.disabled = false
+	_ui_scroll_pressed_button = null
+
+func _finish_ui_scroll() -> void:
+	_restore_scroll_button()
+	_ui_scroll_dragged = false
+	_ui_scroll_axis = Vector2.ZERO
+	_ui_scroll_remainder = 0.0
+
+func _finish_ui_scroll_if_released() -> void:
+	if _ui_scroll_touch_index == -1: _finish_ui_scroll()
 
 
 func _apply_mobile_ui_scroll(scroll: ScrollContainer, relative: Vector2) -> void:
-	if absf(relative.y) >= absf(relative.x):
-		if scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
-			scroll.scroll_vertical = maxi(0, scroll.scroll_vertical - int(round(relative.y)))
-		else:
-			var parent_vertical := _find_parent_scroll_container_with_axis(scroll, true)
-			if parent_vertical != null:
-				parent_vertical.scroll_vertical = maxi(0, parent_vertical.scroll_vertical - int(round(relative.y)))
-	elif scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
-		scroll.scroll_horizontal = maxi(0, scroll.scroll_horizontal - int(round(relative.x)))
-	else:
-		var parent_horizontal := _find_parent_scroll_container_with_axis(scroll, false)
-		if parent_horizontal != null:
-			parent_horizontal.scroll_horizontal = maxi(0, parent_horizontal.scroll_horizontal - int(round(relative.x)))
+	var vertical: bool = _ui_scroll_axis.y > 0 if _ui_scroll_axis != Vector2.ZERO else absf(relative.y) >= absf(relative.x)
+	var delta := -(relative.y if vertical else relative.x) + _ui_scroll_remainder
+	var whole := int(delta)
+	_ui_scroll_remainder = delta - whole
+	var target: ScrollContainer = scroll
+	while target != null and whole != 0:
+		if _can_scroll_axis(target, vertical):
+			var bar: ScrollBar = target.get_v_scroll_bar() if vertical else target.get_h_scroll_bar()
+			var old := target.scroll_vertical if vertical else target.scroll_horizontal
+			var next := clampi(old + whole, 0, maxi(0, int(ceil(bar.max_value - bar.page))))
+			if vertical: target.scroll_vertical = next
+			else: target.scroll_horizontal = next
+			whole -= next - old
+		target = _find_parent_scroll_container_with_axis(target, vertical)
+
+func _can_scroll_axis(scroll: ScrollContainer, vertical: bool) -> bool:
+	var mode: int = scroll.vertical_scroll_mode if vertical else scroll.horizontal_scroll_mode
+	if mode == ScrollContainer.SCROLL_MODE_DISABLED: return false
+	var bar: ScrollBar = scroll.get_v_scroll_bar() if vertical else scroll.get_h_scroll_bar()
+	return bar.max_value - bar.page > 0.5
 
 
 func _find_parent_scroll_container_with_axis(node: Node, vertical: bool) -> ScrollContainer:
@@ -739,30 +782,50 @@ func _find_parent_scroll_container_with_axis(node: Node, vertical: bool) -> Scro
 	while current != null:
 		if current is ScrollContainer:
 			var scroll := current as ScrollContainer
-			if vertical and scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
-				return scroll
-			if not vertical and scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
+			if scroll.is_visible_in_tree() and _can_scroll_axis(scroll, vertical):
 				return scroll
 		current = current.get_parent()
 	return null
 
 
 func _find_scroll_container_at(root: Node, position: Vector2) -> ScrollContainer:
-	if root == null:
+	var hit := _find_mobile_ui_hit(root, position)
+	if hit is HSlider or hit is VSlider or hit is ScrollBar or hit is LineEdit or hit is TextEdit or hit is SubViewportContainer:
 		return null
-	for index in range(root.get_child_count() - 1, -1, -1):
-		var child: Node = root.get_child(index)
-		var nested: ScrollContainer = _find_scroll_container_at(child, position)
-		if nested != null:
-			return nested
-	if root is ScrollContainer:
-		var scroll := root as ScrollContainer
-		if scroll.is_visible_in_tree() and scroll.get_global_rect().has_point(position):
-			var can_scroll_vertical: bool = scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
-			var can_scroll_horizontal: bool = scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
-			if can_scroll_vertical or can_scroll_horizontal:
-				return scroll
+	if hit != null and hit.has_meta("mobile_scroll_block"): return null
+	var current: Node = hit
+	while current != null:
+		if current is ScrollContainer:
+			var scroll := current as ScrollContainer
+			if _can_scroll_axis(scroll, true) or _can_scroll_axis(scroll, false): return scroll
+		current = current.get_parent()
 	return null
+
+func _find_mobile_ui_hit(node: Node, position: Vector2) -> Control:
+	if node == null or node.is_queued_for_deletion() or node is SubViewport: return null
+	if node is CanvasItem and not (node as CanvasItem).is_visible_in_tree(): return null
+	if node is CanvasLayer and not (node as CanvasLayer).visible: return null
+	var inside := false
+	if node is Control:
+		var control := node as Control
+		var local := control.get_global_transform_with_canvas().affine_inverse() * position
+		inside = Rect2(Vector2.ZERO, control.size).has_point(local)
+		# A child's rectangle can still cover the finger after it has been
+		# scrolled outside a clipping ancestor. It must not steal this gesture.
+		if (control.clip_contents or control is ScrollContainer) and not inside: return null
+	var children := node.get_children()
+	children.sort_custom(func(a: Node, b: Node): return _mobile_ui_draw_order(a) > _mobile_ui_draw_order(b))
+	for child in children:
+		var hit := _find_mobile_ui_hit(child, position)
+		if hit != null: return hit
+	if node is Control and inside and (node as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		return node as Control
+	return null
+
+func _mobile_ui_draw_order(node: Node) -> int:
+	var layer := (node as CanvasLayer).layer * 100000 if node is CanvasLayer else 0
+	var z := (node as CanvasItem).z_index * 1000 if node is CanvasItem else 0
+	return layer + z + node.get_index()
 
 
 func _show_update_dialog(payload: Dictionary) -> void:
@@ -773,7 +836,7 @@ func _show_update_dialog(payload: Dictionary) -> void:
 		return
 	_update_dialog = ConfirmationDialog.new()
 	_update_dialog.title = "Bobux update"
-	_update_dialog.dialog_text = "%s\n\nTap Download to install the newest mobile beta." % str(payload.get("notes", "A new Bobux mobile beta is available."))
+	_update_dialog.dialog_text = "%s\n\nНажми «Скачать», чтобы установить новую версию Bobux." % str(payload.get("notes", "Доступна новая версия Bobux."))
 	_update_dialog.ok_button_text = "Download"
 	_update_dialog.cancel_button_text = "Later"
 	_update_dialog.exclusive = bool(payload.get("required", false))

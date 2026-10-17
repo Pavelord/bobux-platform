@@ -8,8 +8,10 @@ const ClimbSensorModule = preload("res://scripts/player/humanoid/climb_sensor.gd
 const GroundControllerModule = preload("res://scripts/player/humanoid/ground_controller.gd")
 const AirControllerModule = preload("res://scripts/player/humanoid/air_controller.gd")
 const ClimbControllerModule = preload("res://scripts/player/humanoid/climb_controller.gd")
+const HumanoidStateMachineModule = preload("res://scripts/player/humanoid/state_machine.gd")
 
 const RbxlMaterialCache = preload("res://addons/rbxl_importer/material_cache.gd")
+const RenderResourceLifecycle = preload("res://addons/roblox_runtime/roblox_render_resource_lifecycle.gd")
 const WALK_CYCLE_SPEED: float = 9.0
 const LIMB_SWING_ANGLE: float = 0.82
 const MOUSE_SENSITIVITY: float = 0.008
@@ -143,6 +145,12 @@ static var _avatar_decal_texture_cache: Dictionary = {}
 static var _requested_textures: Dictionary = {}
 static var _requested_remote_avatar_textures: Dictionary = {}
 static var _failed_avatar_texture_paths: Dictionary = {}
+static var _remote_avatar_texture_waiters: Dictionary = {}
+static var _avatar_source_image_cache: Dictionary = {}
+static var _avatar_source_image_order: Array[String] = []
+static var _avatar_source_image_bytes := 0
+const AVATAR_SOURCE_IMAGE_CACHE_BYTES := 16 * 1024 * 1024
+const AVATAR_TEXTURE_RETRY_MSEC := 5000
 
 enum CharacterState {
 	IDLE,
@@ -165,7 +173,7 @@ enum CharacterState {
 @export var use_local_avatar_fallback: bool = false
 @export var render_avatar_visual_decals: bool = true
 @export var render_avatar_clothing_decals: bool = true
-@export var current_health: int = MAX_HEALTH
+@export var current_health: float = MAX_HEALTH
 @export var network_room_id: String = ""
 @export var network_position: Vector3 = Vector3.ZERO
 @export var network_position_origin: Vector3 = Vector3.ZERO
@@ -210,7 +218,7 @@ enum CharacterState {
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var spring_arm: SpringArm3D = $CameraPivot/SpringArm3D
 @onready var player_camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
-@onready var state_synchronizer: MultiplayerSynchronizer = $StateSynchronizer
+@onready var state_synchronizer: MultiplayerSynchronizer = get_node_or_null("StateSynchronizer")
 @onready var name_label: Label3D = $Visuals/NameLabel
 
 var applied_colors: Dictionary = {}
@@ -222,7 +230,12 @@ var _teleport_ready_at_msec: int = 0
 var move_speed: float = 0.0
 var jump_velocity_setting: float = 0.0
 var _lua_move_target := Vector3.ZERO
+var _lua_move_part: Node3D = null
+var _lua_move_part_offset := Vector3.ZERO
 var _lua_move_deadline := 0
+var _lua_move_direction := Vector3.ZERO
+var _lua_move_active := false
+var _humanoid_move_direction := Vector3.ZERO
 var _logical_move_speed: float = 0.0
 var _logical_jump_velocity: float = 0.0
 var _is_respawning: bool = false
@@ -255,6 +268,11 @@ var _default_collision_mask: int = 1
 var _last_chat_bubble_msec: int = 0
 var _character_state: int = CharacterState.IDLE
 var _roblox_humanoid_state: int = 8
+var _humanoid_state_machine := HumanoidStateMachineModule.new()
+var _requested_humanoid_state := -1
+var _humanoid_speed_events: Dictionary = {}
+var _gravity_workspace: WeakRef = null
+var _gravity_workspace_id := 0
 var _ground_sensor: RefCounted = GroundSensorModule.new()
 var _spawn_floor_recovery_frames := 3
 var _grounded_by_sensor: bool = false
@@ -335,6 +353,8 @@ var _right_pants_down_decal: MeshInstance3D = null
 var _applied_avatar_visual_key: String = ""
 var _avatar_attachment_root: Node3D = null
 var _applied_avatar_attachment_key: int = -1
+var _avatar_attachment_covers_head := false
+var _avatar_texture_retry_scheduled := false
 static var _cached_custom_character_limbs: Array = []
 static var _custom_character_cache_attempted: bool = false
 
@@ -421,7 +441,7 @@ func _ready() -> void:
 		_remote_position_buffer.clear()
 		name_label.visible = true
 		# AUDIT FIX MEDIUM-1: Disable collision shapes for remote players on the
-		# dedicated server so the physics engine doesn't waste CPU on O(NВІ)
+		# dedicated server so the physics engine doesn't waste CPU on O(NР’Р†)
 		# broad-phase sweeps across 1,000 player bodies.
 	name_label.text = display_name
 	_load_custom_character()
@@ -435,6 +455,13 @@ func _ready() -> void:
 	# interpolate from Vector3.ZERO to the actual spawn position on the
 	# first rendered frame, which caused shadow jitter and camera shake.
 	call_deferred("_reset_all_physics_interpolation")
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		# UI previews also use direct queue_free. Detach every renderer instance
+		# before child destructors release surface overrides or Label3D's internal
+		# outline/font materials (Godot #85817); preserve cached shared resources.
+		RenderResourceLifecycle.detach_render_tree(self)
 
 func _exit_tree() -> void:
 	set_process_input(false)
@@ -454,6 +481,7 @@ func _configure_humanoid_physics() -> void:
 	move_speed = _world_units(_logical_move_speed)
 	jump_velocity_setting = _world_units(_logical_jump_velocity)
 	gravity_force = _world_units(HUMANOID_CONFIG.float_value("Gravity"))
+	_humanoid_state_machine.configure(HUMANOID_CONFIG)
 	set_meta("humanoid_physics_config_source", "res://scripts/player/humanoid/humanoid_config.tres")
 
 func _input(event: InputEvent) -> void:
@@ -803,6 +831,7 @@ func _estimate_remote_snapshot_velocity() -> Vector3:
 	return (latest_pos - previous_pos) / dt_seconds
 
 func _run_local_movement(delta: float) -> void:
+	_humanoid_state_machine.tick(delta)
 	if _spawn_floor_recovery_frames > 0:
 		_spawn_floor_recovery_frames -= 1
 		if not is_instance_valid(_seated_part): _ground_sensor.recover_spawn_overlap(self, HUMANOID_CONFIG)
@@ -828,15 +857,25 @@ func _run_local_movement(delta: float) -> void:
 		input_vector = Vector2(requested_local_direction.x, requested_local_direction.z - trace_climb_axis)
 	var input_strength := clampf(input_vector.length(), 0.0, 1.0)
 	var humanoid := get_node_or_null("Humanoid")
-	if humanoid != null and bool(humanoid.get_meta("PlatformStand", false)):
+	var platform_standing := humanoid != null and bool(humanoid.get_meta("PlatformStand", false)) and _humanoid_state_machine.is_enabled(humanoid, 14)
+	if _requested_humanoid_state == 14 and not platform_standing:
+		_requested_humanoid_state = -1
+	if platform_standing or _requested_humanoid_state in [0, 1, 16] or (humanoid != null and bool(humanoid.get_meta("Sit", false)) and not is_instance_valid(_seated_part) and _humanoid_state_machine.is_enabled(humanoid, 13)):
 		_stop_climbing()
+		_humanoid_move_direction = Vector3.ZERO
+		if platform_standing:
+			_publish_humanoid_state(14)
+		elif _requested_humanoid_state in [0, 1, 16]:
+			_publish_humanoid_state(_requested_humanoid_state)
+		else:
+			_publish_humanoid_state(13)
 		if jump_pressed and not _is_text_input_focused():
 			LuaScriptEngine.notify_jump_request(self)
 		if not scripted_velocity:
 			velocity.y = _air_vertical(delta)
 		_integrate_character_motion(delta)
 		_sample_ground_sensor()
-		_update_character_state(false)
+		_publish_humanoid_speed_events()
 		return
 	if _update_seated_movement(jump_pressed, input_vector):
 		return
@@ -846,6 +885,7 @@ func _run_local_movement(delta: float) -> void:
 		return
 	if _is_text_input_focused():
 		_stop_climbing()
+		_humanoid_move_direction = Vector3.ZERO
 		if not on_floor:
 			velocity.y = _air_vertical(delta)
 		else:
@@ -872,15 +912,20 @@ func _run_local_movement(delta: float) -> void:
 	var local_input_direction: Vector3 = Vector3(input_vector.x, 0.0, input_vector.y)
 	var world_move_direction: Vector3 = camera_basis * local_input_direction
 	world_move_direction.y = 0.0
+	if input_vector.length_squared() > 0.01:
+		_lua_move_active = false
+	elif _lua_move_active:
+		world_move_direction = _lua_move_direction
+		input_strength = clampf(world_move_direction.length(), 0.0, 1.0)
 	if _lua_move_deadline > 0:
 		if input_vector.length_squared() > 0.01:
 			_lua_move_deadline = 0
 		else:
-			var offset := _lua_move_target - global_position
+			var offset := _get_lua_move_target() - global_position
 			offset.y = 0
 			if offset.length() <= _world_units(1.0) or Time.get_ticks_msec() >= _lua_move_deadline:
 				_lua_move_deadline = 0
-				LuaScriptEngine.fire_roblox_instance_event(get_node("Humanoid"), "MoveToFinished", [offset.length() <= _world_units(1.0)])
+				_finish_humanoid_move_to(offset.length() <= _world_units(1.0))
 			else:
 				world_move_direction = offset.normalized()
 				input_strength = 1.0
@@ -888,12 +933,17 @@ func _run_local_movement(delta: float) -> void:
 		world_move_direction = Vector3(trace_move)
 		world_move_direction.y = 0.0
 		input_strength = clampf(world_move_direction.length(), 0.0, 1.0)
-	
-	if is_shift_lock or is_first_person:
+	_humanoid_move_direction = world_move_direction.normalized() if world_move_direction.length_squared() > 0.001 else Vector3.ZERO
+	var auto_rotate := _humanoid_auto_rotate_enabled()
+	if world_move_direction.length_squared() > 0.001:
+		# Input magnitude belongs in input_strength once. AutoRotate controls
+		# facing, so turning it off must not square an analog Move magnitude.
+		world_move_direction = world_move_direction.normalized()
+	if auto_rotate and (is_shift_lock or is_first_person):
 		visuals.rotation.y = camera_pivot.rotation.y + PI
 		if world_move_direction.length_squared() > 0.001:
 			world_move_direction = world_move_direction.normalized()
-	elif world_move_direction.length_squared() > 0.001:
+	elif auto_rotate and world_move_direction.length_squared() > 0.001:
 		world_move_direction = world_move_direction.normalized()
 		var target_angle: float = atan2(world_move_direction.x, world_move_direction.z)
 		visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, clampf(delta * LOCAL_TURN_LERP_SPEED, 0.0, 1.0))
@@ -905,7 +955,7 @@ func _run_local_movement(delta: float) -> void:
 			if is_instance_valid(_seated_part):
 				_update_seated_movement(false, input_vector)
 				return
-	if _update_climbing_movement(delta, input_vector, world_move_direction, camera_basis, jump_pressed):
+	if _update_climbing_movement(delta, input_vector, world_move_direction, camera_basis, jump_pressed, input_strength):
 		return
 	var horizontal_velocity: Vector3
 	if _external_control_lock > 0.0 or scripted_velocity:
@@ -981,6 +1031,16 @@ func _update_character_state(is_sprinting: bool) -> void:
 	_set_character_state(next_state)
 
 func _set_character_state(next_state: int) -> void:
+	var landing := _character_state in [CharacterState.JUMPING, CharacterState.FALLING] and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING]
+	var state_ids := {"Running": 8, "RunningNoPhysics": 8, "Jumping": 3, "Freefall": 5, "Seated": 13, "Climbing": 12, "Swimming": 4, "Dead": 15}
+	var requested_public_state := int(state_ids.get(_character_state_name(next_state), 8))
+	if _requested_humanoid_state == 5:
+		if next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING, CharacterState.SEATED, CharacterState.SWIMMING, CharacterState.CLIMBING, CharacterState.DEAD]:
+			_requested_humanoid_state = -1
+		else:
+			requested_public_state = 5
+	_publish_humanoid_state(requested_public_state, landing)
+	_publish_humanoid_speed_events()
 	if _character_state == next_state:
 		return
 	var previous_state := _character_state
@@ -999,13 +1059,10 @@ func _set_character_state(next_state: int) -> void:
 	_locomotion_audio_timer = 0.12 if was_airborne and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING] else 0.0
 	if was_airborne and next_state in [CharacterState.IDLE, CharacterState.WALKING, CharacterState.RUNNING]:
 		_trace_state_override = "Landed"
-		_publish_humanoid_state(7) # Landed precedes the next running state.
-	var state_ids := {"Running": 8, "RunningNoPhysics": 8, "Jumping": 3, "Freefall": 5, "Seated": 13, "Climbing": 12, "Swimming": 4, "Dead": 15}
-	_publish_humanoid_state(int(state_ids.get(_character_state_name(next_state), 8)))
 	var humanoid := get_node_or_null("Humanoid")
 	if humanoid != null:
-		humanoid.set_meta("HumanoidState", _character_state_name(next_state))
-		humanoid.set_meta("MoveDirection", Vector3(velocity.x, 0.0, velocity.z).normalized() if Vector2(velocity.x, velocity.z).length_squared() > 0.001 else Vector3.ZERO)
+		humanoid.set_meta("HumanoidState", HumanoidStateMachineModule.state_name(get_runtime_humanoid_state()))
+		humanoid.set_meta("MoveDirection", _humanoid_move_direction)
 
 func _update_locomotion_audio(delta: float) -> void:
 	_locomotion_audio_timer = maxf(_locomotion_audio_timer - delta, 0.0)
@@ -1068,14 +1125,30 @@ func set_lua_linear_velocity(value: Vector3) -> void:
 		_jump_buffer_time_left = 0.0
 		_coyote_time_left = 0.0
 
-func _publish_humanoid_state(next_state: int) -> void:
-	if next_state == _roblox_humanoid_state:
-		return
-	var previous := _roblox_humanoid_state
-	_roblox_humanoid_state = next_state
+func _publish_humanoid_state(next_state: int, landing: bool = false, force: bool = false) -> void:
 	var humanoid := get_node_or_null("Humanoid")
+	var transition: Array[int] = _humanoid_state_machine.force_transition(humanoid, next_state) if force else _humanoid_state_machine.transition(humanoid, next_state, landing)
+	if transition.is_empty():
+		return
+	_roblox_humanoid_state = transition[1]
 	if humanoid != null:
-		LuaScriptEngine.notify_humanoid_state_changed(humanoid, previous, next_state)
+		LuaScriptEngine.notify_humanoid_state_changed(humanoid, transition[0], transition[1])
+
+func _publish_humanoid_speed_events() -> void:
+	var humanoid := get_node_or_null("Humanoid")
+	if humanoid == null:
+		return
+	var state := get_runtime_humanoid_state()
+	var speeds := {
+		"Running": Vector2(velocity.x, velocity.z).length() / world_stud_scale if state == 8 else 0.0,
+		"Climbing": absf(velocity.dot(Vector3.UP)) / world_stud_scale if state == 12 else 0.0,
+		"Swimming": velocity.length() / world_stud_scale if state == 4 else 0.0,
+	}
+	for event_name in speeds:
+		var speed: float = speeds[event_name]
+		if not _humanoid_speed_events.has(event_name) or not is_equal_approx(float(_humanoid_speed_events[event_name]), speed):
+			_humanoid_speed_events[event_name] = speed
+			LuaScriptEngine.fire_roblox_instance_event(humanoid, event_name, [speed])
 
 func request_humanoid_state(state: int) -> void:
 	if current_health <= 0 or _is_respawning:
@@ -1083,9 +1156,11 @@ func request_humanoid_state(state: int) -> void:
 	var humanoid := get_node_or_null("Humanoid")
 	if humanoid != null and not bool(humanoid.get_meta("bobux_state_enabled_%d" % state, true)):
 		return
+	ImportedPlaceNetwork.send_character_command(self, "request_humanoid_state", state)
 	_refresh_humanoid_jump_velocity()
 	match state:
 		3: # An explicit Lua ChangeState(Jumping) must also work in mid-air.
+			_requested_humanoid_state = -1
 			_stop_climbing()
 			velocity.y = jump_velocity_setting
 			floor_snap_length = 0.0
@@ -1093,14 +1168,79 @@ func request_humanoid_state(state: int) -> void:
 			_coyote_time_left = 0.0
 			_set_character_state(CharacterState.JUMPING)
 		5:
-			velocity.y = minf(velocity.y, 0.0)
-			_set_character_state(CharacterState.FALLING)
+			# Freefall is airborne motion, including ascent. Changing an API
+			# state must not discard a script's upward impulse.
+			_requested_humanoid_state = 5
+			_publish_humanoid_state(5, false, true)
+		8, 10, 2:
+			_requested_humanoid_state = -1
+			if humanoid != null:
+				humanoid.set_meta("PlatformStand", false)
+				humanoid.set_meta("Sit", false)
+			if is_instance_valid(_seated_part):
+				_leave_seat(false)
+			_publish_humanoid_state(state, false, true)
+		0, 1, 14, 16:
+			_requested_humanoid_state = state
+			_stop_climbing()
+			if is_instance_valid(_seated_part):
+				_leave_seat(false)
+			if humanoid != null:
+				humanoid.set_meta("PlatformStand", state == 14)
+			_publish_humanoid_state(state, false, true)
+		13:
+			if humanoid != null:
+				humanoid.set_meta("Sit", true)
+			_publish_humanoid_state(13, false, true)
+		15:
+			set_health(0.0)
 		_:
 			return
 
 func move_to(destination: Vector3) -> void:
+	if not destination.is_finite():
+		return
+	ImportedPlaceNetwork.send_character_command(self, "move_to", destination)
+	_lua_move_active = false
+	_lua_move_part = null
 	_lua_move_target = destination
-	_lua_move_deadline = Time.get_ticks_msec() + 8000
+	_lua_move_deadline = Time.get_ticks_msec() + roundi(HUMANOID_CONFIG.float_value("MoveTo.TimeoutSeconds") * 1000.0)
+
+func move_to_part(destination: Vector3, part: Node3D) -> void:
+	if not destination.is_finite(): return
+	ImportedPlaceNetwork.send_character_move_to_part(self, destination, part)
+	_lua_move_active = false
+	_lua_move_part = null
+	_lua_move_target = destination
+	_lua_move_deadline = Time.get_ticks_msec() + roundi(HUMANOID_CONFIG.float_value("MoveTo.TimeoutSeconds") * 1000.0)
+	if is_instance_valid(part) and part.is_inside_tree():
+		_lua_move_part = part
+		_lua_move_part_offset = part.global_transform.affine_inverse() * destination
+
+func _get_lua_move_target() -> Vector3:
+	if is_instance_valid(_lua_move_part) and _lua_move_part.is_inside_tree():
+		return _lua_move_part.global_transform * _lua_move_part_offset
+	return _lua_move_target
+
+func set_humanoid_move(direction: Vector3) -> void:
+	if not direction.is_finite():
+		return
+	ImportedPlaceNetwork.send_character_command(self, "set_humanoid_move", direction)
+	_lua_move_deadline = 0
+	_lua_move_part = null
+	_lua_move_direction = Vector3(direction.x, 0.0, direction.z).limit_length(1.0)
+	_lua_move_active = true
+
+func _finish_humanoid_move_to(reached: bool) -> void:
+	ImportedPlaceNetwork.notify_humanoid_move_finished(self, reached)
+	LuaScriptEngine.fire_roblox_instance_event(get_node("Humanoid"), "MoveToFinished", [reached])
+
+func get_humanoid_move_direction() -> Vector3:
+	return _humanoid_move_direction
+
+func _humanoid_auto_rotate_enabled() -> bool:
+	var humanoid := get_node_or_null("Humanoid")
+	return humanoid == null or bool(humanoid.get_meta("AutoRotate", true))
 
 func apply_external_impulse(delta_velocity: Vector3) -> void:
 	if not delta_velocity.is_finite() or current_health <= 0 or _is_preview_instance(): return
@@ -1108,7 +1248,10 @@ func apply_external_impulse(delta_velocity: Vector3) -> void:
 	set_lua_linear_velocity(velocity + delta_velocity)
 	_external_control_lock = 0.25
 
-func _update_climbing_movement(delta: float, input_vector: Vector2, world_move_direction: Vector3, camera_basis: Basis, jump_pressed: bool) -> bool:
+func _update_climbing_movement(delta: float, _input_vector: Vector2, world_move_direction: Vector3, _camera_basis: Basis, jump_pressed: bool, input_strength: float = 1.0) -> bool:
+	if not _humanoid_state_machine.is_enabled(get_node_or_null("Humanoid"), 12):
+		_stop_climbing()
+		return false
 	var probe_direction := -_climb_normal if _climbing_active else world_move_direction
 	var climb_hit := ClimbSensorModule.probe(self, probe_direction, HUMANOID_CONFIG)
 	if _climbing_active:
@@ -1128,7 +1271,14 @@ func _update_climbing_movement(delta: float, input_vector: Vector2, world_move_d
 
 	if not _climbing_active:
 		return false
-	var vertical_input := clampf(-input_vector.y, -1.0, 1.0)
+	# MoveDirection is world space, including Humanoid:Move(..., false).
+	# Derive ascent/descent from approach to the truss instead of the camera's
+	# local forward key: rotating the camera must not reverse a scripted climb.
+	# Wall-normal projection is our controller approximation; only the .7
+	# WalkSpeed multiplier is a documented Roblox numeric contract.
+	var vertical_input := clampf(world_move_direction.dot(-_climb_normal), -1.0, 1.0) * clampf(input_strength, 0.0, 1.0)
+	if has_meta("bobux_trace_climb_axis"):
+		vertical_input = clampf(vertical_input + float(get_meta("bobux_trace_climb_axis", 0.0)), -1.0, 1.0)
 	velocity = ClimbControllerModule.velocity_for(velocity / world_stud_scale, _climb_surface, _climb_normal, vertical_input, _logical_move_speed, delta, HUMANOID_CONFIG) * world_stud_scale
 	floor_snap_length = 0.0
 	_integrate_character_motion(delta)
@@ -1138,7 +1288,7 @@ func _update_climbing_movement(delta: float, input_vector: Vector2, world_move_d
 
 func _update_swimming_contact() -> void:
 	var water := _find_overlapping_special_node(["roblox_water"], ["Water"], ["TerrainWater", "Water"])
-	_swimming_active = water != null
+	_swimming_active = water != null and _humanoid_state_machine.is_enabled(get_node_or_null("Humanoid"), 4)
 	_water_volume = water
 	if _swimming_active:
 		_stop_climbing()
@@ -1152,12 +1302,31 @@ func _run_swimming_movement(delta: float, input_vector: Vector2, jump_pressed: b
 	var camera_basis := Basis.from_euler(Vector3(0.0, camera_pivot.global_rotation.y, 0.0))
 	var direction := camera_basis * Vector3(input_vector.x, 0.0, input_vector.y)
 	direction.y = 0.0
+	if _is_text_input_focused():
+		direction = Vector3.ZERO
+	elif input_vector.length_squared() > 0.01:
+		_lua_move_active = false
+		_lua_move_deadline = 0
+	elif _lua_move_active:
+		direction = _lua_move_direction
+	elif _lua_move_deadline > 0:
+		var offset := _get_lua_move_target() - global_position
+		offset.y = 0.0
+		if offset.length() <= _world_units(1.0) or Time.get_ticks_msec() >= _lua_move_deadline:
+			_lua_move_deadline = 0
+			_finish_humanoid_move_to(offset.length() <= _world_units(1.0))
+		else:
+			direction = offset.normalized()
+	_humanoid_move_direction = direction.normalized() if direction.length_squared() > 0.001 else Vector3.ZERO
+	var input_strength := clampf(direction.length(), 0.0, 1.0)
 	if direction.length_squared() > 0.001:
 		direction = direction.normalized()
 		var target_angle := atan2(direction.x, direction.z)
-		visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, clampf(delta * LOCAL_TURN_LERP_SPEED, 0.0, 1.0))
+		if _humanoid_auto_rotate_enabled():
+			visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, clampf(delta * LOCAL_TURN_LERP_SPEED, 0.0, 1.0))
 	var vertical_input := 1.0 if Input.is_action_pressed("jump") or jump_pressed else -0.08
-	var target_velocity := direction * _world_units(HUMANOID_CONFIG.float_value("Swimming.Speed"))
+	# Public Humanoid.WalkSpeed contract: swimming is 87.5% of WalkSpeed.
+	var target_velocity := direction * _world_units(_logical_move_speed * HUMANOID_CONFIG.float_value("Swimming.MoveSpeedFactor")) * input_strength
 	target_velocity.y = (
 		_world_units(HUMANOID_CONFIG.float_value("Swimming.VerticalSpeed")) * vertical_input
 		if vertical_input > 0.0
@@ -1195,9 +1364,13 @@ func _find_seat_below() -> Node3D:
 	return null
 
 func _enter_seat(seat: Node3D) -> void:
+	if not _humanoid_state_machine.is_enabled(get_node_or_null("Humanoid"), 13):
+		return
 	if seat == null or _seated_part == seat or bool(seat.get_meta("Disabled", seat.get_meta("disabled", false))):
 		return
-	var occupant: Variant = seat.get_meta("Occupant") if seat.has_meta("Occupant") else null
+	var bridge := get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null and not bridge.seat_entry_allowed(self, seat): return
+	var occupant: Variant = preload("res://addons/roblox_runtime/roblox_seat_authority.gd").occupant(seat)
 	if is_instance_valid(occupant) and occupant.get_parent() != self: return
 	if is_instance_valid(_seated_part) and _seated_part != seat: _leave_seat(false)
 	if bool(seat.get_meta("attribute_BobuxVehicle", false)):
@@ -1215,7 +1388,9 @@ func _enter_seat(seat: Node3D) -> void:
 	humanoid.set_meta("Sit", true)
 	humanoid.set_meta("SeatPart", seat)
 	seat.set_meta("Occupant", humanoid)
-	var weld := Node.new()
+	var weld := seat.get_node_or_null("SeatWeld")
+	var create_weld := weld == null
+	if create_weld: weld = Node.new()
 	weld.name = "SeatWeld"
 	weld.set_meta("roblox_class", "Weld")
 	weld.set_meta("bobux_seat_weld", true)
@@ -1223,14 +1398,16 @@ func _enter_seat(seat: Node3D) -> void:
 	weld.set_meta("Part1", get_node_or_null("Torso"))
 	weld.set_meta("C0", LuaScriptEngine.BobuxCFrame.new(Transform3D(Basis.IDENTITY, Vector3(0, absf(seat.scale.y) / _world_units(2.0) + 1.5, 0))))
 	LuaScriptEngine.BobuxInstance.wrap(seat) # Install the ChildAdded/Removed bridge before parenting.
-	seat.add_child(weld)
+	if create_weld: seat.add_child(weld)
 	_seat_property_changed(seat, "Occupant")
 	_seat_property_changed(humanoid, "Sit")
 	_seat_property_changed(humanoid, "SeatPart")
-	LuaScriptEngine.fire_roblox_instance_event(humanoid, "Seated", [true, seat])
 	_set_character_state(CharacterState.SEATED)
+	if bridge != null: bridge.seat_state_changed(self, seat, true)
 
 func _seat_property_changed(target: Node, property_name: String) -> void:
+	var bridge := get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null: bridge.mark_changed(target, property_name)
 	LuaScriptEngine.fire_roblox_instance_event(target, "PropertyChanged_" + property_name, [])
 	LuaScriptEngine.fire_roblox_instance_event(target, "Changed", [property_name])
 
@@ -1241,6 +1418,8 @@ func _set_seat_input(seat: Node, input_vector: Vector2) -> void:
 		if seat.get_meta(key, 0) != values[key]:
 			seat.set_meta(key, values[key])
 			_seat_property_changed(seat, key)
+	var bridge := get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null: bridge.forward_seat_input(self, seat, input_vector)
 
 func _update_seated_movement(jump_pressed: bool, input_vector: Vector2 = Vector2.ZERO) -> bool:
 	# Do not restart the exit cooldown on every ordinary walking frame.
@@ -1283,6 +1462,9 @@ func _leave_seat(apply_jump: bool) -> void:
 		_seat_collision_body.remove_collision_exception_with(self)
 	_seat_collision_body = null
 	var was_seated := is_instance_valid(_seated_part)
+	var old_seat: Node = _seated_part if was_seated else null
+	var bridge := get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null and old_seat != null: bridge.forward_seat_leave(self, old_seat)
 	if _seated_part != null and is_instance_valid(_seated_part):
 		_set_seat_input(_seated_part, Vector2.ZERO)
 		_seated_part.set_meta("Occupant", null)
@@ -1299,11 +1481,14 @@ func _leave_seat(apply_jump: bool) -> void:
 	if was_seated:
 		_seat_property_changed(humanoid, "Sit")
 		_seat_property_changed(humanoid, "SeatPart")
-		LuaScriptEngine.fire_roblox_instance_event(humanoid, "Seated", [false, null])
+		# Publish the state exit after clearing SeatPart; the common Humanoid
+		# event bridge emits Seated(false, nil) exactly once.
+		_publish_humanoid_state(8, false, true)
 	floor_snap_length = 0.0 if apply_jump else 0.0
 	if apply_jump:
 		velocity = Vector3.UP * jump_velocity_setting
 	_reset_all_physics_interpolation()
+	if bridge != null and was_seated: bridge.seat_state_changed(self, old_seat, false)
 
 func _find_overlapping_special_node(groups: Array[String], classes: Array[String], material_names: Array[String]) -> Node:
 	if get_world_3d() == null:
@@ -1383,9 +1568,11 @@ func _try_auto_step_up(move_direction: Vector3, delta: float, was_on_floor: bool
 # The solver/config use studs. These adapters only support saved pre-migration
 # maps whose entire world was authored at 0.5 Godot units per stud.
 func _air_vertical(delta: float) -> float:
-	return AirControllerModule.update_vertical(velocity.y / world_stud_scale, delta, HUMANOID_CONFIG) * world_stud_scale
+	return AirControllerModule.update_vertical(velocity.y / world_stud_scale, delta, HUMANOID_CONFIG, _get_current_gravity() / world_stud_scale) * world_stud_scale
 
 func _ground_vertical(delta: float) -> float:
+	if _ground_sensor.get("hit_part") == null:
+		return velocity.y - _get_current_gravity() * delta
 	return GroundControllerModule.update_vertical(velocity.y / world_stud_scale, _ground_hit_distance, _ground_sensor.get("hit_part") != null, delta, HUMANOID_CONFIG) * world_stud_scale
 
 func _sample_ground_sensor() -> bool:
@@ -1531,6 +1718,8 @@ func _smooth_camera_follow(_delta: float) -> void:
 	camera_pivot.position = Vector3(0.0, _world_units(CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT), 0.0)
 
 func _update_local_camera_rig_render_phase(_delta: float) -> void:
+	_restore_camera_after_script()
+	if _is_scriptable_camera(): return
 	if camera_pivot == null:
 		return
 	var camera_height := _world_units(CAMERA_FIRST_PERSON_HEIGHT if is_first_person else CAMERA_THIRD_PERSON_HEIGHT)
@@ -1544,6 +1733,22 @@ func _update_local_camera_rig_render_phase(_delta: float) -> void:
 	else:
 		camera_pivot.position = Vector3(0.0, camera_height, 0.0)
 	_update_camera_collision_distance(_delta)
+
+func _is_scriptable_camera() -> bool:
+	if player_camera == null: return false
+	var camera_type: Variant = player_camera.get_meta("CameraType", "Custom")
+	return str(camera_type).ends_with("Scriptable") or ((camera_type is int or camera_type is float) and int(camera_type) == 6)
+
+func _restore_camera_after_script() -> void:
+	if player_camera == null or not player_camera.has_meta("bobux_camera_written_msec"): return
+	# Custom camera writes are temporary. Scriptable cameras deliberately retain
+	# their pose until their script switches back to Custom.
+	var camera_type: Variant = player_camera.get_meta("CameraType", "Custom")
+	if str(camera_type).ends_with("Scriptable") or ((camera_type is int or camera_type is float) and int(camera_type) == 6): return
+	if Time.get_ticks_msec() - int(player_camera.get_meta("bobux_camera_written_msec")) <= 200: return
+	player_camera.remove_meta("bobux_camera_written_msec")
+	player_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, spring_arm.get_hit_length()))
+	player_camera.reset_physics_interpolation()
 
 func _set_camera_desired_spring_length(value: float) -> void:
 	_camera_desired_spring_length = clampf(value, 0.0, 20.0)
@@ -1631,7 +1836,7 @@ func _apply_camera_rotation_delta(yaw_delta: float, pitch_delta: float) -> void:
 func _sync_visual_rotation_to_camera_if_needed() -> void:
 	if visuals == null or camera_pivot == null:
 		return
-	if is_shift_lock or is_first_person:
+	if _humanoid_auto_rotate_enabled() and (is_shift_lock or is_first_person):
 		visuals.rotation.y = camera_pivot.rotation.y + PI
 
 func _update_animation_state(delta: float) -> void:
@@ -1644,7 +1849,7 @@ func _update_animation_state(delta: float) -> void:
 		animation_airborne = false
 		return
 	if _character_state == CharacterState.SWIMMING:
-		animation_weight = clampf(velocity.length() / maxf(HUMANOID_CONFIG.float_value("Swimming.Speed"), 0.0001), 0.25, 1.0)
+		animation_weight = clampf(velocity.length() / maxf(move_speed * HUMANOID_CONFIG.float_value("Swimming.MoveSpeedFactor"), 0.0001), 0.25, 1.0)
 		animation_airborne = false
 		animation_cycle = wrapf(animation_cycle + delta * WALK_CYCLE_SPEED * 0.6, 0.0, TAU)
 		return
@@ -1779,8 +1984,9 @@ func _apply_avatar_visuals_if_needed() -> void:
 	var active_torso_clothing_path := active_shirt_path
 	if active_torso_clothing_path.is_empty():
 		active_torso_clothing_path = active_pants_path
-	var visual_key: String = "%s|%s|%s|%s|%s" % [active_face_path, active_badge_path, active_shirt_path, active_pants_path, active_torso_clothing_path]
 	_apply_avatar_attachment_items_if_needed()
+	if _avatar_attachment_covers_head: active_face_path = ""
+	var visual_key: String = "%s|%s|%s|%s|%s" % [active_face_path, active_badge_path, active_shirt_path, active_pants_path, active_torso_clothing_path]
 	if not use_local_avatar_fallback:
 		face_texture_path = resolved_face_path
 		chest_badge_texture_path = resolved_badge_path
@@ -1882,6 +2088,18 @@ func _clear_avatar_attachment_nodes() -> void:
 	for child in _avatar_attachment_root.get_children():
 		_avatar_attachment_root.remove_child(child)
 		child.queue_free()
+	_refresh_avatar_head_cover()
+
+func _refresh_avatar_head_cover() -> void:
+	var covered := false
+	if is_instance_valid(_avatar_attachment_root):
+		for child in _avatar_attachment_root.get_children():
+			if bool(child.get_meta("bobux_covers_head", false)): covered = true
+	if covered == _avatar_attachment_covers_head: return
+	_avatar_attachment_covers_head = covered
+	head_mesh.visible = not covered
+	if is_instance_valid(_face_decal) and covered: _face_decal.hide()
+	_applied_avatar_visual_key = ""
 
 func _avatar_attachment_item_is_clothing(item: Dictionary) -> bool:
 	var data := _avatar_attachment_item_data(item)
@@ -1897,8 +2115,16 @@ func _create_avatar_attachment_node(item: Dictionary) -> Node3D:
 		root.name = "AvatarAttachment"
 	var item_data := _avatar_attachment_item_data(item)
 	var slot := _avatar_attachment_resolve_slot(item, item_data)
+	var head_top := slot == "Head" and (str(item_data.get("attachment_anchor", "")) == "head_top" or str(item.get("id", "")) == "event_halloween_2026_gift")
+	root.set_meta("bobux_head_top_anchor", head_top)
+	root.set_meta("bobux_cover_head_requested", slot == "HeadCenter" and bool(item_data.get("covers_head", item.get("covers_head", false))))
 	var transform_data := _avatar_attachment_resolve_transform(item, item_data)
 	root.position = _avatar_attachment_slot_position(slot) + _avatar_attachment_vector3(transform_data.get("position", []), Vector3.ZERO)
+	if head_top:
+		# Fit to the actual rounded head, including preview/model scale. The
+		# old fixed slot plus centered mesh could bury the coffin in the head.
+		var head_bounds := _avatar_attachment_mesh_aabb_in_space(_avatar_attachment_root, head_mesh)
+		root.position = Vector3(head_bounds.get_center().x, head_bounds.end.y + 0.025, head_bounds.get_center().z)
 	root.rotation_degrees = _avatar_attachment_vector3(transform_data.get("rotation_degrees", []), Vector3.ZERO)
 	root.scale = _avatar_attachment_vector3(transform_data.get("scale", []), Vector3.ONE)
 	var parts := _avatar_attachment_extract_parts(item_data)
@@ -2003,12 +2229,6 @@ func _load_avatar_attachment_source_async(root: Node3D, source_path: String, fal
 	if root == null or not is_instance_valid(root):
 		return
 	var loaded_model := await _instantiate_avatar_attachment_source(source_path)
-	# A cancelled download or an older client could leave a non-empty but invalid
-	# cache file. Invalidate it once and fetch a clean copy before using geometry
-	# fallbacks; otherwise the same accessory remains invisible on every join.
-	if loaded_model == null and _is_remote_avatar_attachment_source(source_path):
-		_remove_cached_avatar_attachment_source(source_path)
-		loaded_model = await _instantiate_avatar_attachment_source(source_path)
 	if root == null or not is_instance_valid(root):
 		if loaded_model != null:
 			loaded_model.queue_free()
@@ -2024,25 +2244,79 @@ func _load_avatar_attachment_source_async(root: Node3D, source_path: String, fal
 		if root == null or not is_instance_valid(root) or loaded_model == null or not is_instance_valid(loaded_model):
 			return
 		_normalize_loaded_avatar_attachment_source(root, loaded_model)
+		if bool(root.get_meta("bobux_cover_head_requested", false)):
+			var cover_meshes: Array[MeshInstance3D] = []
+			_collect_avatar_attachment_meshes(loaded_model, cover_meshes)
+			if cover_meshes.any(func(mesh): return mesh.mesh != null):
+				root.set_meta("bobux_covers_head", true)
+				_refresh_avatar_head_cover()
+				_apply_avatar_visuals_if_needed()
 		return
-	if not fallback_parts.is_empty():
+	if not fallback_parts.is_empty() and root.get_child_count() == 0:
 		for raw_part in fallback_parts:
 			if raw_part is Dictionary:
 				root.add_child(_create_avatar_attachment_part(raw_part as Dictionary))
-		return
-	root.add_child(_create_avatar_attachment_part({
+	elif root.get_child_count() == 0:
+		root.add_child(_create_avatar_attachment_part({
 		"name": "AttachmentPreview",
 		"kind": "Block",
 		"position": [0.0, 0.0, 0.0],
 		"rotation_degrees": [0.0, 0.0, 0.0],
 		"scale": [0.65, 0.65, 0.65],
 		"color": "ffb347"
-	}))
+		}))
+	# Failed downloads are temporary. Retry while this equipped item exists;
+	# backoff bounds both network traffic and mobile work, without truncating it.
+	var attempt := int(root.get_meta("bobux_source_attempt", 0)) + 1
+	root.set_meta("bobux_source_attempt", attempt)
+	if is_inside_tree():
+		await get_tree().create_timer(minf(60.0, 5.0 * pow(2.0, mini(attempt - 1, 4)))).timeout
+		if is_instance_valid(root) and root.is_inside_tree(): _load_avatar_attachment_source_async(root, source_path, fallback_parts)
+
+const AVATAR_ATTACHMENT_CACHE_MAX_ENTRIES: int = 8
+const AVATAR_ATTACHMENT_CACHE_MAX_SOURCE_BYTES: int = 32 * 1024 * 1024
+static var _avatar_attachment_scene_cache: Dictionary = {}
+static var _avatar_attachment_scene_cache_order: Array[String] = []
+static var _avatar_attachment_scene_cache_source_bytes: int = 0
 
 func _instantiate_avatar_attachment_source(source_path: String) -> Node:
 	var local_path := await _resolve_avatar_attachment_source_path(source_path)
 	if local_path.is_empty():
 		return null
+	for attempt in range(2):
+		var fingerprint: String = _avatar_attachment_file_fingerprint(local_path)
+		if _avatar_attachment_scene_cache.has(fingerprint):
+			_avatar_attachment_scene_cache_order.erase(fingerprint)
+			_avatar_attachment_scene_cache_order.append(fingerprint)
+			return (_avatar_attachment_scene_cache[fingerprint].scene as PackedScene).instantiate()
+		var model: Node = _import_avatar_attachment_source(local_path)
+		if model != null:
+			# Imported/exported PackedScenes need the same COLOR_0 handling as
+			# raw glTF, otherwise cached/exported avatars lose their vertex colours.
+			RbxlMaterialCache.enable_embedded_vertex_colors(model)
+			_cache_avatar_attachment_scene(fingerprint, local_path, model)
+			return model
+		if attempt > 0 or not _is_remote_avatar_attachment_source(source_path):
+			break
+		# Repair only the exact file that failed. A second caller must never
+		# remove a newer valid file or the global downloader's temporary file.
+		_remove_cached_avatar_attachment_source(source_path, fingerprint)
+		local_path = await _resolve_avatar_attachment_source_path(source_path)
+		if local_path.is_empty():
+			break
+	return null
+
+func _import_avatar_attachment_source(local_path: String) -> Node:
+	# Exported GLB/FBX files are remapped to imported PackedScenes. Load those
+	# before trying raw files, which may not be present inside the client PCK.
+	if local_path.begins_with("res://") and ResourceLoader.exists(local_path):
+		var imported: Resource = ResourceLoader.load(local_path)
+		if imported is PackedScene:
+			return (imported as PackedScene).instantiate()
+		if imported is Mesh:
+			var imported_mesh := MeshInstance3D.new()
+			imported_mesh.mesh = imported
+			return imported_mesh
 	var extension := local_path.get_extension().to_lower()
 	if extension in ["glb", "gltf", "fbx"]:
 		var gltf_document: GLTFDocument = FBXDocument.new() if local_path.get_extension().to_lower() == "fbx" else GLTFDocument.new()
@@ -2050,7 +2324,6 @@ func _instantiate_avatar_attachment_source(source_path: String) -> Node:
 		var error := gltf_document.append_from_file(local_path, gltf_state)
 		if error == OK:
 			var scene := gltf_document.generate_scene(gltf_state)
-			RbxlMaterialCache.enable_embedded_vertex_colors(scene)
 			return scene
 	elif extension == "obj":
 		if ClassDB.class_exists("OBJMesh"):
@@ -2071,77 +2344,95 @@ func _instantiate_avatar_attachment_source(source_path: String) -> Node:
 				return mesh_instance
 	return null
 
+func _cache_avatar_attachment_scene(fingerprint: String, local_path: String, scene: Node) -> void:
+	var source_file := FileAccess.open(local_path, FileAccess.READ)
+	var source_bytes: int = source_file.get_length() if source_file != null else 0
+	if source_bytes > AVATAR_ATTACHMENT_CACHE_MAX_SOURCE_BYTES:
+		return
+	var pending: Array[Node] = [scene]
+	while not pending.is_empty():
+		var current: Node = pending.pop_back()
+		for child in current.get_children():
+			child.owner = scene
+			pending.append(child)
+	var packed := PackedScene.new()
+	if packed.pack(scene) != OK:
+		return
+	while not _avatar_attachment_scene_cache_order.is_empty() and (_avatar_attachment_scene_cache_order.size() >= AVATAR_ATTACHMENT_CACHE_MAX_ENTRIES or _avatar_attachment_scene_cache_source_bytes + source_bytes > AVATAR_ATTACHMENT_CACHE_MAX_SOURCE_BYTES):
+		var oldest: String = _avatar_attachment_scene_cache_order.pop_front()
+		_avatar_attachment_scene_cache_source_bytes -= int(_avatar_attachment_scene_cache[oldest].source_bytes)
+		_avatar_attachment_scene_cache.erase(oldest)
+	_avatar_attachment_scene_cache[fingerprint] = {"scene": packed, "source_bytes": source_bytes}
+	_avatar_attachment_scene_cache_order.append(fingerprint)
+	_avatar_attachment_scene_cache_source_bytes += source_bytes
+
+func _avatar_attachment_file_fingerprint(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	var size: int = file.get_length() if file != null else 0
+	return "%s::%d::%d" % [path, FileAccess.get_modified_time(path), size]
+
 func _resolve_avatar_attachment_source_path(source_path: String) -> String:
 	var clean_path := source_path.strip_edges()
 	if clean_path.is_empty():
 		return ""
 	if not (clean_path.begins_with("http://") or clean_path.begins_with("https://")):
 		return clean_path
-	var cache_dir := "user://cache/avatar_attachments"
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(cache_dir))
-	var url_path := clean_path.split("?", false, 1)[0]
-	var extension := url_path.get_extension().to_lower()
-	if extension not in ["glb", "gltf", "fbx", "obj"]:
-		extension = "glb"
-	var file_name := "attachment_%s.%s" % [clean_path.md5_text(), extension]
-	var local_path := cache_dir.path_join(file_name)
-	if FileAccess.file_exists(local_path):
-		var cached := FileAccess.open(local_path, FileAccess.READ)
-		var cached_size := cached.get_length() if cached != null else 0
-		if cached != null:
-			cached.close()
-		if cached_size > 32:
-			return local_path
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(local_path))
-	var temporary_path := local_path + ".part"
+	var local_path: String = _avatar_attachment_cache_path(clean_path)
+	if _avatar_attachment_cached_file_valid(local_path):
+		return local_path
 	for attempt in range(3):
-		if FileAccess.file_exists(temporary_path):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary_path))
-		var request := HTTPRequest.new()
-		add_child(request)
-		request.download_file = temporary_path
-		request.timeout = 20.0
-		var error := request.request(clean_path)
-		var result: Array = []
-		if error == OK:
-			result = await request.request_completed
-		request.queue_free()
-		var successful := result.size() >= 2 \
-			and int(result[0]) == HTTPRequest.RESULT_SUCCESS \
-			and int(result[1]) >= 200 \
-			and int(result[1]) < 300
-		if successful and FileAccess.file_exists(temporary_path):
-			var downloaded := FileAccess.open(temporary_path, FileAccess.READ)
-			var downloaded_size := downloaded.get_length() if downloaded != null else 0
-			if downloaded != null:
-				downloaded.close()
-			if downloaded_size > 32:
-				if FileAccess.file_exists(local_path):
-					DirAccess.remove_absolute(ProjectSettings.globalize_path(local_path))
-				if DirAccess.rename_absolute(ProjectSettings.globalize_path(temporary_path), ProjectSettings.globalize_path(local_path)) == OK:
-					return local_path
+		# CloudAPI owns the job, request and .download file. Its singleflight
+		# survives one preview/player being freed and is shared by all avatars.
+		var result: Dictionary = await CloudAPI.download_map_asset_file(clean_path, local_path)
+		if bool(result.get("ok", false)) and _avatar_attachment_cached_file_valid(local_path):
+			return local_path
+		if bool(result.get("ok", false)):
+			_remove_cached_avatar_attachment_source(clean_path)
 		if attempt < 2 and is_inside_tree():
 			await get_tree().create_timer(0.35 * float(attempt + 1)).timeout
-	if FileAccess.file_exists(temporary_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary_path))
 	return ""
+
+func _avatar_attachment_cache_path(source_path: String) -> String:
+	var clean_path: String = source_path.strip_edges()
+	var extension: String = clean_path.split("?", false, 1)[0].get_extension().to_lower()
+	if extension not in ["glb", "gltf", "fbx", "obj"]:
+		extension = "glb"
+	return "user://cache/avatar_attachments/attachment_%s.%s" % [clean_path.md5_text(), extension]
+
+func _avatar_attachment_cached_file_valid(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() <= 32:
+		return false
+	var bytes: PackedByteArray = file.get_buffer(mini(int(file.get_length()), 1024))
+	match path.get_extension().to_lower():
+		"glb":
+			return bytes.decode_u32(0) == 0x46546c67 and bytes.decode_u32(4) == 2 and bytes.decode_u32(8) == file.get_length()
+		"fbx":
+			return bytes.slice(0, 18).get_string_from_ascii() == "Kaydara FBX Binary" or bytes.get_string_from_utf8().strip_edges().begins_with("; FBX") or bytes.get_string_from_utf8().contains("FBXHeaderExtension")
+		"gltf":
+			return bytes.get_string_from_utf8().strip_edges().begins_with("{")
+		"obj":
+			var text: String = bytes.get_string_from_utf8().strip_edges()
+			var first_word: String = text.split(" ", false, 1)[0]
+			return text.begins_with("#") or first_word in ["v", "vt", "vn", "f", "o", "mtllib", "usemtl", "g", "s", "l", "p"]
+	return false
 
 func _is_remote_avatar_attachment_source(source_path: String) -> bool:
 	var clean_path := source_path.strip_edges().to_lower()
 	return clean_path.begins_with("http://") or clean_path.begins_with("https://")
 
-func _remove_cached_avatar_attachment_source(source_path: String) -> void:
+func _remove_cached_avatar_attachment_source(source_path: String, expected_fingerprint: String = "") -> void:
 	var clean_path := source_path.strip_edges()
 	if not _is_remote_avatar_attachment_source(clean_path):
 		return
-	var url_path := clean_path.split("?", false, 1)[0]
-	var extension := url_path.get_extension().to_lower()
-	if extension not in ["glb", "gltf", "fbx", "obj"]:
-		extension = "glb"
-	var local_path := "user://cache/avatar_attachments/attachment_%s.%s" % [clean_path.md5_text(), extension]
-	for candidate in [local_path, local_path + ".part"]:
-		if FileAccess.file_exists(candidate):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate))
+	var local_path: String = _avatar_attachment_cache_path(clean_path)
+	var job_key: String = ProjectSettings.globalize_path(local_path).replace("\\", "/").simplify_path()
+	var active_jobs: Dictionary = CloudAPI.get("_asset_download_jobs")
+	if active_jobs.has(job_key) or (not expected_fingerprint.is_empty() and _avatar_attachment_file_fingerprint(local_path) != expected_fingerprint):
+		return
+	if FileAccess.file_exists(local_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(local_path))
+	# Do not delete shared .part/.download files owned by another request.
 
 func _normalize_loaded_avatar_attachment_source(root: Node3D, loaded_model: Node) -> void:
 	if root == null or loaded_model == null:
@@ -2164,6 +2455,7 @@ func _normalize_loaded_avatar_attachment_source(root: Node3D, loaded_model: Node
 	if loaded_node == null:
 		return
 	var center := bounds.get_center()
+	if bool(root.get_meta("bobux_head_top_anchor", false)): center.y = bounds.position.y
 	var max_axis := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
 	var scale_factor := 1.0
 	if max_axis > 2.2:
@@ -2234,6 +2526,8 @@ func _avatar_attachment_surface_needs_fallback_color(mesh_instance: MeshInstance
 			if base_material.get(texture_property) is Texture2D:
 				return false
 		if base_material.vertex_color_use_as_albedo:
+			return false
+		if base_material.emission_enabled:
 			return false
 		var color := base_material.albedo_color
 		return color.a <= 0.01 or (
@@ -2459,6 +2753,8 @@ func _avatar_attachment_vector3(value: Variant, fallback: Vector3) -> Vector3:
 
 func _avatar_attachment_slot_position(slot_name: String) -> Vector3:
 	match slot_name:
+		"HeadCenter":
+			return _avatar_attachment_local_position_for_node(head_mesh, Vector3(0.0, 4.6, 0.0))
 		"Head":
 			return _avatar_attachment_local_position_for_node(head_mesh, Vector3(0.0, 4.6, 0.0)) + Vector3(0.0, 0.6, 0.0)
 		"Torso":
@@ -2720,6 +3016,9 @@ func _load_texture_from_any_path(texture_path: String, remove_edge_background: b
 	var cache_key: String = ""
 	if should_prepare:
 		cache_key = "%s|edge=%s|crop=%s|region=%s" % [clean_path, str(remove_edge_background), str(crop_to_visible), str(template_region)]
+		# A downloaded/repaired clothing file can keep its URL and cache path.
+		# Do not retain the old prepared shirt/face after its source changes.
+		if not clean_path.begins_with("res://"): cache_key += "|" + _avatar_texture_file_fingerprint(clean_path)
 		var cached_texture: Texture2D = _avatar_decal_texture_cache.get(cache_key, null) as Texture2D
 		if cached_texture != null:
 			return cached_texture
@@ -2741,26 +3040,44 @@ func _load_texture_from_any_path(texture_path: String, remove_edge_background: b
 		return null
 	if _avatar_texture_path_failed(clean_path, resolved_path):
 		return null
-	if _is_avatar_texture_cache_path(clean_path) or _is_avatar_texture_cache_path(resolved_path):
-		if not _file_has_probable_image_header(resolved_path):
-			_mark_avatar_texture_load_failed(clean_path, resolved_path)
-			return null
-	var image := Image.new()
-	if image.load(resolved_path) != OK:
+	var image := _decode_avatar_texture_file(resolved_path)
+	if image == null:
 		_mark_avatar_texture_load_failed(clean_path, resolved_path)
 		return null
 	return _cache_avatar_decal_texture(cache_key, _make_decal_texture_from_image(image, remove_edge_background, crop_to_visible, template_region))
 
 func _avatar_texture_path_failed(path_a: String, path_b: String) -> bool:
-	return _failed_avatar_texture_paths.has(path_a) or _failed_avatar_texture_paths.has(path_b)
+	var blocked := false
+	for path_value in [path_a, path_b]:
+		if not _failed_avatar_texture_paths.has(path_value): continue
+		var failure: Variant = _failed_avatar_texture_paths[path_value]
+		var failed_at := int(failure.get("time", 0)) if failure is Dictionary else int(failure)
+		var changed := failure is Dictionary and str(failure.get("fingerprint", "")) != _avatar_texture_file_fingerprint(path_value)
+		if changed or Time.get_ticks_msec() - failed_at >= AVATAR_TEXTURE_RETRY_MSEC:
+			_failed_avatar_texture_paths.erase(path_value)
+		else: blocked = true
+	return blocked
+
+func _avatar_texture_file_fingerprint(path_value: String) -> String:
+	if not FileAccess.file_exists(path_value): return "missing"
+	var file := FileAccess.open(path_value, FileAccess.READ)
+	return "%d:%d" % [FileAccess.get_modified_time(path_value), file.get_length()] if file != null else "unreadable"
+
+func _schedule_avatar_texture_retry() -> void:
+	if _avatar_texture_retry_scheduled or not is_inside_tree(): return
+	_avatar_texture_retry_scheduled = true
+	await get_tree().create_timer(float(AVATAR_TEXTURE_RETRY_MSEC) / 1000.0).timeout
+	_avatar_texture_retry_scheduled = false
+	if is_inside_tree():
+		_applied_avatar_visual_key = ""
+		_apply_avatar_visuals_if_needed()
 
 func _mark_avatar_texture_load_failed(original_path: String, resolved_path: String) -> void:
-	if not original_path.is_empty():
-		_failed_avatar_texture_paths[original_path] = Time.get_ticks_msec()
-	if not resolved_path.is_empty():
-		_failed_avatar_texture_paths[resolved_path] = Time.get_ticks_msec()
 	if _is_avatar_texture_cache_path(original_path) or _is_avatar_texture_cache_path(resolved_path):
 		_delete_avatar_texture_cache_file(resolved_path if not resolved_path.is_empty() else original_path)
+	for path_value in [original_path, resolved_path]:
+		if not path_value.is_empty(): _failed_avatar_texture_paths[path_value] = {"time": Time.get_ticks_msec(), "fingerprint": _avatar_texture_file_fingerprint(path_value)}
+	_schedule_avatar_texture_retry()
 
 func _is_avatar_texture_cache_path(path_value: String) -> bool:
 	var normalized := path_value.strip_edges().replace("\\", "/")
@@ -2777,26 +3094,44 @@ func _delete_avatar_texture_cache_file(path_value: String) -> void:
 			push_warning("[Player] Could not remove corrupt avatar texture cache file: %s" % absolute_path)
 
 func _file_has_probable_image_header(path_value: String) -> bool:
+	return _decode_avatar_texture_file(path_value) != null
+
+func _decode_avatar_texture_file(path_value: String) -> Image:
 	if path_value.strip_edges().is_empty() or not FileAccess.file_exists(path_value):
-		return false
+		return null
+	var fingerprint := _avatar_texture_file_fingerprint(path_value)
+	if _avatar_source_image_cache.has(path_value):
+		var cached: Dictionary = _avatar_source_image_cache[path_value]
+		if str(cached.fingerprint) == fingerprint:
+			_avatar_source_image_order.erase(path_value)
+			_avatar_source_image_order.append(path_value)
+			return cached.image as Image
+		_avatar_source_image_bytes -= int(cached.bytes)
+		_avatar_source_image_cache.erase(path_value)
+		_avatar_source_image_order.erase(path_value)
 	var file := FileAccess.open(path_value, FileAccess.READ)
 	if file == null:
-		return false
+		return null
 	var file_length := int(file.get_length())
 	if file_length < 12 or file_length > 32 * 1024 * 1024:
 		file.close()
-		return false
+		return null
 	var bytes := file.get_buffer(file_length)
 	file.close()
-	var decoded := Image.new()
-	var decode_error := ERR_FILE_UNRECOGNIZED
-	if bytes.size() >= 8 and bytes[0] == 0x89 and bytes[1] == 0x50 and bytes[2] == 0x4E and bytes[3] == 0x47:
-		decode_error = decoded.load_png_from_buffer(bytes)
-	elif bytes.size() >= 3 and bytes[0] == 0xFF and bytes[1] == 0xD8 and bytes[2] == 0xFF:
-		decode_error = decoded.load_jpg_from_buffer(bytes)
-	elif bytes.size() >= 12 and bytes[0] == 0x52 and bytes[1] == 0x49 and bytes[2] == 0x46 and bytes[3] == 0x46 and bytes[8] == 0x57 and bytes[9] == 0x45 and bytes[10] == 0x42 and bytes[11] == 0x50:
-		decode_error = decoded.load_webp_from_buffer(bytes)
-	return decode_error == OK and not decoded.is_empty() and decoded.get_width() > 0 and decoded.get_height() > 0
+	var decoded := preload("res://scripts/ui/image_byte_decoder.gd").decode(bytes)
+	if decoded == null: return null
+	# All clothing regions share one decode. This bounds retained source images
+	# on phones and avoids decoding the same shirt dozens of times per avatar.
+	var decoded_bytes := decoded.get_data_size()
+	if decoded_bytes <= AVATAR_SOURCE_IMAGE_CACHE_BYTES:
+		while not _avatar_source_image_order.is_empty() and (_avatar_source_image_cache.size() >= 8 or _avatar_source_image_bytes + decoded_bytes > AVATAR_SOURCE_IMAGE_CACHE_BYTES):
+			var oldest: String = _avatar_source_image_order.pop_front()
+			_avatar_source_image_bytes -= int(_avatar_source_image_cache[oldest].bytes)
+			_avatar_source_image_cache.erase(oldest)
+		_avatar_source_image_cache[path_value] = {"fingerprint": fingerprint, "bytes": decoded_bytes, "image": decoded}
+		_avatar_source_image_order.append(path_value)
+		_avatar_source_image_bytes += decoded_bytes
+	return decoded
 
 func _cache_avatar_decal_texture(cache_key: String, texture: Texture2D) -> Texture2D:
 	if texture != null and not cache_key.is_empty():
@@ -2835,22 +3170,33 @@ func _get_remote_avatar_texture_cache_path(url: String) -> String:
 func _request_remote_avatar_texture(url: String, target_path: String) -> void:
 	if not is_inside_tree() or url.is_empty() or target_path.is_empty():
 		return
-	if bool(_requested_remote_avatar_textures.get(url, false)):
-		return
-	_requested_remote_avatar_textures[url] = true
+	var waiters: Array = _remote_avatar_texture_waiters.get(url, [])
+	if not waiters.any(func(reference): return reference.get_ref() == self): waiters.append(weakref(self))
+	_remote_avatar_texture_waiters[url] = waiters
+	var active: Variant = _requested_remote_avatar_textures.get(url)
+	if active is WeakRef and is_instance_valid(active.get_ref()): return
+	_requested_remote_avatar_textures.erase(url)
 	var temporary_path := target_path + ".part"
 	_delete_avatar_texture_cache_file(temporary_path)
 	var request := HTTPRequest.new()
 	request.download_file = temporary_path
 	request.timeout = 18.0
 	add_child(request)
+	_requested_remote_avatar_textures[url] = weakref(request)
+	request.tree_exiting.connect(func():
+		var current: Variant = _requested_remote_avatar_textures.get(url)
+		if current is WeakRef and current.get_ref() == request:
+			_requested_remote_avatar_textures.erase(url)
+			_finish_remote_avatar_texture_waiters(url, false), CONNECT_ONE_SHOT)
 	var start_error := request.request(url)
 	if start_error != OK:
 		_requested_remote_avatar_textures.erase(url)
 		_delete_avatar_texture_cache_file(temporary_path)
 		request.queue_free()
+		_finish_remote_avatar_texture_waiters(url, false)
 		return
 	request.request_completed.connect(func(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+		var success := false
 		_requested_remote_avatar_textures.erase(url)
 		if is_instance_valid(request):
 			request.queue_free()
@@ -2862,14 +3208,26 @@ func _request_remote_avatar_texture(url: String, target_path: String) -> void:
 				if DirAccess.rename_absolute(absolute_temporary, absolute_target) == OK:
 					_failed_avatar_texture_paths.erase(target_path)
 					_failed_avatar_texture_paths.erase(absolute_target)
-					force_avatar_visual_refresh()
+					success = true
 				else:
 					_delete_avatar_texture_cache_file(temporary_path)
 			else:
 				_delete_avatar_texture_cache_file(temporary_path)
 		else:
 			_delete_avatar_texture_cache_file(temporary_path)
+		_finish_remote_avatar_texture_waiters(url, success)
 	)
+
+func _finish_remote_avatar_texture_waiters(url: String, success: bool) -> void:
+	var waiters: Array = _remote_avatar_texture_waiters.get(url, [])
+	_remote_avatar_texture_waiters.erase(url)
+	for reference in waiters:
+		var avatar: Node = reference.get_ref()
+		if avatar == null or not avatar.is_inside_tree(): continue
+		if success:
+			avatar.set("_applied_avatar_visual_key", "")
+			avatar.call_deferred("_apply_avatar_visuals_if_needed")
+		else: avatar.call("_schedule_avatar_texture_retry")
 
 @rpc("any_peer", "reliable")
 func request_custom_texture(file_name: String) -> void:
@@ -3183,14 +3541,19 @@ func _ensure_humanoid_api_node() -> Node:
 	humanoid.set_meta("roblox_class", "Humanoid")
 	humanoid.set_meta("bobux_character_body_instance_id", get_instance_id())
 	humanoid.set_meta("Health", float(current_health))
-	humanoid.set_meta("MaxHealth", float(MAX_HEALTH))
+	if not humanoid.has_meta("MaxHealth"):
+		humanoid.set_meta("MaxHealth", float(MAX_HEALTH))
 	humanoid.set_meta("WalkSpeed", _logical_move_speed)
 	humanoid.set_meta("JumpPower", _logical_jump_velocity)
-	humanoid.set_meta("HipHeight", HUMANOID_CONFIG.float_value("HipHeight"))
+	if not humanoid.has_meta("HipHeight"):
+		humanoid.set_meta("HipHeight", HUMANOID_CONFIG.float_value("HipHeight"))
 	humanoid.set_meta("CollisionType", str(HUMANOID_CONFIG.value("CollisionType")))
-	humanoid.set_meta("AutoRotate", true)
+	if not humanoid.has_meta("AutoRotate"):
+		humanoid.set_meta("AutoRotate", true)
+	if not humanoid.has_meta("BreakJointsOnDeath"):
+		humanoid.set_meta("BreakJointsOnDeath", true)
 	humanoid.set_meta("RigType", "R6")
-	humanoid.set_meta("HumanoidState", _character_state_name(_character_state))
+	humanoid.set_meta("HumanoidState", HumanoidStateMachineModule.state_name(get_runtime_humanoid_state()))
 	if humanoid.get_node_or_null("Animator") == null:
 		var animator := Node.new()
 		animator.name = "Animator"
@@ -3229,6 +3592,7 @@ func ensure_roblox_character_contract() -> void:
 		proxy.position = (Vector3.UP * root_height + relative_position) * world_stud_scale
 		proxy.set_meta("roblox_class", "Part")
 		proxy.set_meta("bobux_character_part_proxy", true)
+		proxy.set_meta("bobux_character_part_stud_scale", world_stud_scale)
 		proxy.set_meta("bobux_character_body_instance_id", get_instance_id())
 		proxy.set_meta("bobux_runtime_generated", true)
 		proxy.set_meta("Size", size)
@@ -3290,9 +3654,9 @@ func _sync_humanoid_runtime_properties(grounded_now: bool) -> void:
 	humanoid.set_meta("Health", float(current_health))
 	humanoid.set_meta("WalkSpeed", _logical_move_speed)
 	humanoid.set_meta("JumpPower", _logical_jump_velocity)
-	humanoid.set_meta("HumanoidState", _character_state_name(_character_state))
+	humanoid.set_meta("HumanoidState", HumanoidStateMachineModule.state_name(get_runtime_humanoid_state()))
 	var planar_velocity := Vector3(velocity.x, 0.0, velocity.z)
-	humanoid.set_meta("MoveDirection", planar_velocity.normalized() if planar_velocity.length_squared() > 0.001 else Vector3.ZERO)
+	humanoid.set_meta("MoveDirection", _humanoid_move_direction if _is_local_authority_safe() else (planar_velocity.normalized() if planar_velocity.length_squared() > 0.001 else Vector3.ZERO))
 	humanoid.set_meta("FloorMaterial", _resolve_humanoid_floor_material(grounded_now))
 
 func _resolve_humanoid_floor_material(grounded_now: bool) -> String:
@@ -3394,11 +3758,21 @@ func configure_spawn_points(points: Array, initial_index: int = -1) -> void:
 func get_respawn_position() -> Vector3:
 	return respawn_position
 
-func get_health() -> int:
+func get_health() -> float:
+	# Existing HUDs use a finite display range. Luau reads the logical getters
+	# below, so infinite health does not become NaN in a ProgressBar ratio.
+	return current_health if is_finite(current_health) else float(MAX_HEALTH)
+
+func get_humanoid_health() -> float:
 	return current_health
 
-func get_max_health() -> int:
-	return MAX_HEALTH
+func get_max_health() -> float:
+	var maximum := get_humanoid_max_health()
+	return maximum if is_finite(maximum) else float(MAX_HEALTH)
+
+func get_humanoid_max_health() -> float:
+	var humanoid := get_node_or_null("Humanoid")
+	return maxf(0.0, float(humanoid.get_meta("MaxHealth", MAX_HEALTH))) if humanoid != null else float(MAX_HEALTH)
 
 func apply_world_stud_scale(value: float) -> void:
 	world_stud_scale = clampf(value, 0.25, 2.0)
@@ -3420,20 +3794,34 @@ func get_humanoid_walk_speed() -> float:
 	return _logical_move_speed
 
 func set_humanoid_walk_speed(value: float) -> void:
+	if not is_finite(value): return
 	_logical_move_speed = maxf(0.0, value)
 	move_speed = _world_units(_logical_move_speed)
+	ImportedPlaceNetwork.send_character_command(self, "set_humanoid_property", {"key": "WalkSpeed", "value": _logical_move_speed})
 
 func get_humanoid_jump_power() -> float:
 	return _logical_jump_velocity
 
 func set_humanoid_jump_power(value: float) -> void:
+	if not is_finite(value): return
 	_logical_jump_velocity = maxf(0.0, value)
 	jump_velocity_setting = _world_units(_logical_jump_velocity)
+	ImportedPlaceNetwork.send_character_command(self, "set_humanoid_property", {"key": "JumpPower", "value": _logical_jump_velocity})
+
+func set_humanoid_property(key: String, value: Variant) -> void:
+	# The bridge accepts a fixed, typed Humanoid property list; no arbitrary
+	# property or method can be selected by a network payload.
+	ImportedPlaceNetwork.send_character_command(self, "set_humanoid_property", {"key": key, "value": value})
+
+func set_humanoid_state_enabled(state: int, enabled: bool) -> void:
+	ImportedPlaceNetwork.send_character_command(self, "set_humanoid_state_enabled", {"state": state, "enabled": enabled})
 
 func _refresh_humanoid_jump_velocity() -> void:
 	var humanoid := get_node_or_null("Humanoid")
 	if humanoid == null or bool(humanoid.get_meta("UseJumpPower", true)):
-		jump_velocity_setting = _world_units(_logical_jump_velocity)
+		# JumpPower is a public authored value; the motor's conversion is a
+		# separately recorded fit to the Studio R6 traces, not a property rewrite.
+		jump_velocity_setting = _world_units(_logical_jump_velocity * HUMANOID_CONFIG.float_value("Humanoid.JumpPowerVelocityScale"))
 	else:
 		var height := maxf(0.0, float(humanoid.get_meta("JumpHeight", HUMANOID_CONFIG.value("Humanoid.JumpHeight"))))
 		jump_velocity_setting = sqrt(2.0 * _get_current_gravity() * _world_units(height))
@@ -3451,20 +3839,28 @@ func apply_movement_settings(settings: Dictionary) -> void:
 	set_humanoid_jump_power(maxf(1.0, float(merged_settings.get("jump_velocity", HUMANOID_CONFIG.float_value("JumpPower")))))
 
 func set_health(value: float) -> void:
+	if is_nan(value) or value == -INF: return
+	var target := clampf(value, 0.0, get_humanoid_max_health())
+	if target == current_health: return
 	if ImportedPlaceNetwork.send_character_command(self, "set_health", value):
-		current_health = clampi(roundi(value), 0, get_max_health())
+		var previous := current_health
+		current_health = target
+		if previous != current_health:
+			LuaScriptEngine.fire_roblox_instance_event(_ensure_humanoid_api_node(), "HealthChanged", [current_health])
 		return
 	if _is_preview_instance() or not _is_local_authority_safe() or _is_respawning or _is_network_gameplay_frozen():
 		return
 	var previous := current_health
-	current_health = clampi(roundi(value), 0, get_max_health())
+	# Humanoid.Health is a number. Rounding each frame discarded low-rate
+	# damage (e.g. 4*dt lava/acid) forever rather than accumulating it.
+	current_health = target
 	if previous != current_health:
 		LuaScriptEngine.fire_roblox_instance_event(_ensure_humanoid_api_node(), "HealthChanged", [current_health])
 	if current_health <= 0:
 		_handle_death_and_respawn()
 
 func take_damage(amount: float) -> void:
-	if amount <= 0 or get_node_or_null("ForceField") != null:
+	if not is_finite(amount) or amount == 0.0 or LuaScriptEngine.humanoid_is_forcefield_protected(_ensure_humanoid_api_node()):
 		return
 	set_health(current_health - amount)
 
@@ -3485,6 +3881,10 @@ func can_use_teleport() -> bool:
 	return Time.get_ticks_msec() >= _teleport_ready_at_msec
 
 func set_lua_position(target_position: Vector3) -> void:
+	# Public MoveTo contract: a root CFrame teleport cancels walking.
+	_lua_move_deadline = 0
+	_lua_move_part = null
+	_lua_move_active = false
 	_spawn_floor_recovery_frames = 3
 	ImportedPlaceNetwork.send_character_command(self, "set_lua_position", target_position)
 	# Authored CFrame/Position writes are intentional teleports. The unstuck
@@ -3593,7 +3993,7 @@ func _force_local_respawn_recovery() -> void:
 	global_position = respawn_target
 	velocity = Vector3.ZERO
 	floor_snap_length = 0.0
-	current_health = MAX_HEALTH
+	current_health = get_humanoid_max_health()
 	_is_respawning = false
 	_awaiting_authoritative_respawn = false
 	_has_safe_position = true
@@ -3623,7 +4023,7 @@ func apply_authoritative_respawn_position(target_position: Vector3, treat_as_che
 	global_position = _get_safe_reposition_target(target_position)
 	velocity = Vector3.ZERO
 	floor_snap_length = 0.0
-	current_health = MAX_HEALTH
+	current_health = get_humanoid_max_health()
 	_is_respawning = false
 	_awaiting_authoritative_respawn = false
 	_has_safe_position = true
@@ -3635,6 +4035,10 @@ func apply_authoritative_respawn_position(target_position: Vector3, treat_as_che
 
 func _spawn_death_fragments() -> void:
 	if _death_visual_active or visuals == null or get_parent() == null:
+		return
+	# Public API: keep joints/visual rig intact when scripts opt out.
+	var humanoid := get_node_or_null("Humanoid")
+	if humanoid != null and not bool(humanoid.get_meta("BreakJointsOnDeath", true)):
 		return
 	_death_visual_active = true
 	visuals.visible = false
@@ -3691,6 +4095,14 @@ func _restore_after_respawn() -> void:
 	RobloxAudioPack.play_character("action_get_up.mp3", self, -8.0)
 	LuaScriptEngine.notify_character_respawned(self)
 	_external_control_lock = 0.0
+	_requested_humanoid_state = -1
+	_lua_move_active = false
+	_lua_move_deadline = 0
+	_humanoid_move_direction = Vector3.ZERO
+	var humanoid := get_node_or_null("Humanoid")
+	if humanoid != null:
+		humanoid.set_meta("PlatformStand", false)
+		humanoid.set_meta("Sit", false)
 	if visuals != null:
 		visuals.rotation.x = 0.0
 		if _pose_initialized: visuals.position = _rest_visuals_position
@@ -4094,10 +4506,14 @@ func assign_network_room(room_id: String) -> void:
 	network_room_id = room_id.strip_edges()
 	if state_synchronizer != null:
 		state_synchronizer.update_visibility()
+	var visibility := get_node_or_null("SpawnVisibility") as MultiplayerSynchronizer
+	if visibility != null and visibility.is_inside_tree(): visibility.update_visibility()
 
 func _on_room_summaries_updated(_summaries: Array) -> void:
 	if state_synchronizer != null:
 		state_synchronizer.update_visibility()
+	var visibility := get_node_or_null("SpawnVisibility") as MultiplayerSynchronizer
+	if visibility != null: visibility.update_visibility()
 
 func _is_peer_visible_for_room(peer_id: int) -> bool:
 	# AUDIT FIX CRITICAL-1: An empty room_id now hides the player from ALL peers
@@ -4114,7 +4530,11 @@ func _is_peer_visible_for_room(peer_id: int) -> bool:
 	return peer_room == network_room_id
 
 func _should_filter_visibility_by_room() -> bool:
-	return multiplayer != null and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED and multiplayer.is_server()
+	return multiplayer != null and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED and is_multiplayer_authority() and not multiplayer.is_server()
+
+func _is_state_peer_visible_for_room(peer_id: int) -> bool:
+	# The server receives every owner's state; other observers need that avatar.
+	return peer_id == 1 or _is_peer_visible_for_room(peer_id)
 
 func _use_conservative_websocket_replication() -> bool:
 	if NetworkManager == null or not NetworkManager.has_method("get_active_transport_label"):
@@ -4185,16 +4605,17 @@ func _configure_state_synchronizer_for(synchronizer: MultiplayerSynchronizer) ->
 		synchronizer.replication_interval = 1.0 / DEFAULT_ALWAYS_SYNC_HZ
 	synchronizer.replication_config = replication_config
 	var filter_visibility_by_room: bool = _should_filter_visibility_by_room()
-	synchronizer.public_visibility = not filter_visibility_by_room
+	synchronizer.public_visibility = true
 	if filter_visibility_by_room:
 		if not _room_visibility_filter_registered:
-			synchronizer.add_visibility_filter(_is_peer_visible_for_room)
+			synchronizer.add_visibility_filter(_is_state_peer_visible_for_room)
 			_room_visibility_filter_registered = true
 	else:
 		if _room_visibility_filter_registered:
-			synchronizer.remove_visibility_filter(_is_peer_visible_for_room)
+			synchronizer.remove_visibility_filter(_is_state_peer_visible_for_room)
 			_room_visibility_filter_registered = false
 	synchronizer.update_visibility()
+	preload("res://addons/roblox_runtime/roblox_avatar_replication.gd").configure_spawn_visibility(self)
 
 func _ensure_chat_bubble_nodes() -> void:
 	if _chat_bubble_back == null:
@@ -4451,6 +4872,28 @@ func _get_player_and_world_collision_mask() -> int:
 
 func _get_current_gravity() -> float:
 	# One ballistic arc; releasing Space must not change the weight of the body.
+	# Public Workspace.Gravity is measured in studs/s². Never mutate the
+	# shared config resource: simultaneous maps can have different gravity.
+	var requested_id := int(get_meta("bobux_workspace_instance_id", 0))
+	var workspace: Variant = _gravity_workspace.get_ref() if _gravity_workspace != null else null
+	if not is_instance_valid(workspace) or requested_id != _gravity_workspace_id:
+		workspace = instance_from_id(requested_id) if requested_id > 0 else null
+		if not is_instance_valid(workspace):
+			var cursor: Node = get_parent()
+			while cursor != null:
+				if str(cursor.get_meta("roblox_class", "")) == "Workspace":
+					workspace = cursor
+					break
+				cursor = cursor.get_parent()
+		_gravity_workspace = weakref(workspace) if is_instance_valid(workspace) else null
+		_gravity_workspace_id = requested_id
+	if is_instance_valid(workspace):
+		var properties: Dictionary = workspace.get_meta("roblox_properties", {})
+		var configured: Variant = workspace.get_meta("Gravity", properties.get("Gravity", HUMANOID_CONFIG.value("Gravity")))
+		if (configured is float or configured is int) and is_finite(float(configured)) and float(configured) >= 0.0:
+			gravity_force = _world_units(float(configured))
+			return gravity_force
+	gravity_force = _world_units(HUMANOID_CONFIG.float_value("Gravity"))
 	return gravity_force
 
 # --- Chat Bubbles ---

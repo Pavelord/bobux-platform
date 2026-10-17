@@ -75,6 +75,7 @@ func sync_from_part() -> void:
 
 func refresh_properties() -> void:
 	body.freeze = bool(part.get_meta("anchored", part.get_meta("roblox_properties", {}).get("Anchored", true)))
+	set_physics_process(not body.freeze)
 	var cursor_role: Node = part
 	while cursor_role != null:
 		if str(cursor_role.get_meta("bobux_network_role", "")) == "client":
@@ -84,9 +85,12 @@ func refresh_properties() -> void:
 			body.contact_monitor = false
 			break
 		cursor_role = cursor_role.get_parent()
-	var collide := bool(part.get_meta("can_collide", true))
-	body.collision_layer = 1 if collide else (16 if bool(part.get_meta("CanQuery", true)) else 0)
+	var props: Dictionary = part.get_meta("roblox_properties", {})
+	var collide := bool(part.get_meta("can_collide", props.get("CanCollide", true)))
+	var can_query := bool(part.get_meta("CanQuery", props.get("CanQuery", true)))
+	body.collision_layer = 1 if collide else (16 if can_query else 0)
 	body.collision_mask = (1 | 2 | 4 | 64) if collide else 0
+	if is_instance_valid(shape): shape.disabled = not (collide or can_query)
 	body.sleeping = false
 	var engine := get_tree().root.get_node_or_null("LuaScriptEngine")
 	if engine != null:

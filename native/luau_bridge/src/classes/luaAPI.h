@@ -1,0 +1,138 @@
+#ifndef LUAAPI_H
+#define LUAAPI_H
+
+#ifndef LAPI_GDEXTENSION
+#include "core/core_bind.h"
+#include "core/object/ref_counted.h"
+#else
+#include <godot_cpp/classes/ref.hpp>
+#endif
+
+#include "luaError.h"
+
+#include <luaState.h>
+#include <lua/lua.hpp>
+
+#ifdef LAPI_GDEXTENSION
+using namespace godot;
+#endif
+
+class LuaCoroutine;
+class LuaObjectMetatable;
+
+class LuaAPI : public RefCounted {
+	GDCLASS(LuaAPI, RefCounted);
+
+protected:
+	static void _bind_methods();
+
+public:
+	LuaAPI();
+	~LuaAPI();
+	String getRuntimeName() const { return "Luau 0.719"; }
+	void setBudgetCallback(Callable callback);
+	lua_State *scheduledThread = nullptr;
+	uint64_t getVMCPUTimeUsec() const;
+	void beginNativeCall();
+	void endNativeCall();
+	uint32_t pauseNativeCalls();
+	void resumeNativeCalls(uint32_t depth);
+
+	void setHook(Callable hook, int mask, int count);
+
+	void setUseCallables(bool value);
+	bool getUseCallables() const;
+
+	void setObjectMetatable(Ref<LuaObjectMetatable> value);
+	Ref<LuaObjectMetatable> getObjectMetatable() const;
+
+	void setMemoryLimit(uint64_t limit);
+	uint64_t getMemoryLimit() const;
+
+	int configureGC(int what, int data);
+	uint64_t getMemoryUsage() const;
+
+	bool luaFunctionExists(String functionName);
+
+	Variant pullVariant(String name);
+	Variant callFunction(String functionName, Array args);
+	Variant doFile(String fileName, Array args);
+	Variant doString(String code, Array args);
+	Variant getRegistryValue(String name);
+
+	Ref<LuaError> setRegistryValue(String name, Variant var);
+	Ref<LuaError> bindLibraries(TypedArray<String> libs);
+	Ref<LuaError> pushGlobalVariant(String name, Variant var);
+
+	Ref<LuaCoroutine> newCoroutine();
+	Ref<LuaCoroutine> getRunningCoroutine();
+
+	lua_State *newThreadState();
+	lua_State *getState();
+
+	enum HookMask {
+		HOOK_MASK_CALL = LUA_MASKCALL,
+		HOOK_MASK_RETURN = LUA_MASKRET,
+		HOOK_MASK_LINE = LUA_MASKLINE,
+		HOOK_MASK_COUNT = LUA_MASKCOUNT,
+	};
+
+	enum GCOption {
+		GC_STOP = LUA_GCSTOP,
+		GC_RESTART = LUA_GCRESTART,
+		GC_COLLECT = LUA_GCCOLLECT,
+		GC_COUNT = LUA_GCCOUNT,
+		GC_COUNTB = LUA_GCCOUNTB,
+		GC_STEP = LUA_GCSTEP,
+		GC_SETPAUSE = LUA_GCSETPAUSE,
+		GC_SETSTEPMUL = LUA_GCSETSTEPMUL,
+	};
+
+private:
+	Callable budgetCallback;
+	uint32_t interruptCount = 0;
+	uint64_t nativeCPUTimeUsec = 0;
+	uint64_t nativeCallStartedUsec = 0;
+	uint32_t nativeCallDepth = 0;
+	static uint64_t threadCPUTimeUsec();
+	static void budgetInterrupt(lua_State *L, int gc);
+	bool useCallables = true;
+
+	LuaState state;
+	lua_State *lState = nullptr;
+
+	Ref<LuaObjectMetatable> objectMetatable;
+
+	static void *luaAlloc(void *ud, void *ptr, size_t osize, size_t nsize);
+
+	struct LuaAllocData {
+		uint64_t memoryUsed = 0;
+		uint64_t memoryLimit = 0;
+	};
+
+	LuaAllocData luaAllocData;
+
+	Variant execute(int argc, int handlerIndex);
+};
+
+// Limit these scopes to protected Godot ABI calls. They end before Lua errors
+// or yields, which may longjmp across C++ stack frames.
+class LuaNativeCallScope {
+	LuaAPI *owner;
+public:
+	explicit LuaNativeCallScope(LuaAPI *api) : owner(api) { if (owner) owner->beginNativeCall(); }
+	~LuaNativeCallScope() { if (owner) owner->endNativeCall(); }
+};
+
+class LuaVMCallbackScope {
+	LuaAPI *owner;
+	uint32_t depth;
+public:
+	explicit LuaVMCallbackScope(LuaAPI *api) : owner(api), depth(api ? api->pauseNativeCalls() : 0) {}
+	~LuaVMCallbackScope() { if (owner) owner->resumeNativeCalls(depth); }
+};
+
+VARIANT_ENUM_CAST(LuaAPI::HookMask)
+VARIANT_ENUM_CAST(LuaAPI::GCOption)
+
+#endif

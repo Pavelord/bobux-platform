@@ -86,6 +86,7 @@ const MATERIAL_TEXTURE_ALIASES := {
 	"Plaster": "Concrete",
 }
 const NAMED_MATERIAL_ENUMS := {
+	"Air": 1792,
 	"Plastic": 256,
 	"SmoothPlastic": 272,
 	"Neon": 288,
@@ -146,6 +147,7 @@ const NAMED_MATERIAL_PATTERNS := {
 
 var _cache: Dictionary = {}
 var _surface_texture_cache: Dictionary = {}
+static var _scaled_runtime_materials: Dictionary = {}
 var use_procedural_material_fallbacks: bool = false
 var use_roblox_surface_patterns: bool = true
 
@@ -213,8 +215,19 @@ static func sync_texture_scale(part: MeshInstance3D, stud_scale: float = -1.0) -
 		var repeats := scale_ / (float(original.get_meta("bobux_texture_tile_studs")) * maxf(stud_scale, 0.001))
 		if original.uv1_scale.is_equal_approx(repeats):
 			continue
-		var material := original.duplicate(false) as StandardMaterial3D
-		material.uv1_scale = repeats
+		# Identical parts often have the same physical texture scale. Reuse that
+		# immutable variant; Lua property writes already clone before mutation.
+		var key := "%s|%s" % [original.get_instance_id(), repeats]
+		var cached: WeakRef = _scaled_runtime_materials.get(key)
+		var material := cached.get_ref() as StandardMaterial3D if cached != null else null
+		if material == null:
+			material = original.duplicate(false) as StandardMaterial3D
+			material.uv1_scale = repeats
+			_scaled_runtime_materials[key] = weakref(material)
+			if _scaled_runtime_materials.size() > 2048:
+				for stale_key in _scaled_runtime_materials.keys():
+					if _scaled_runtime_materials[stale_key].get_ref() == null:
+						_scaled_runtime_materials.erase(stale_key)
 		if part.material_override != null:
 			part.material_override = material
 			return
@@ -310,6 +323,19 @@ func get_named_material(color: Color, material_name: String, transparency: float
 	if material != null:
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		material.uv1_triplanar = material.albedo_texture != null
+	return material
+
+## Runtime-only immutable version. Studio callers retain the editable API above.
+func get_shared_named_material(color: Color, material_name: String, transparency: float = 0.0) -> StandardMaterial3D:
+	var normalized_name := material_name if NAMED_MATERIAL_ENUMS.has(material_name) else "Plastic"
+	var base := get_material(color, int(NAMED_MATERIAL_ENUMS.get(normalized_name, 256)),
+		transparency, 0.0, str(NAMED_MATERIAL_PATTERNS.get(normalized_name, "")))
+	var key := "runtime_named|%s" % base.get_instance_id()
+	if _cache.has(key): return _cache[key]
+	var material := base.duplicate(false) as StandardMaterial3D
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.uv1_triplanar = material.albedo_texture != null
+	_cache[key] = material
 	return material
 
 

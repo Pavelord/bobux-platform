@@ -2763,7 +2763,7 @@ func _load_runtime_texture(data: Dictionary) -> Texture2D:
 func _load_texture_from_path(texture_path: String) -> Texture2D:
 	if texture_path.strip_edges().is_empty():
 		return null
-	if texture_path.begins_with("res://"):
+	if texture_path.begins_with("res://") and ResourceLoader.exists(texture_path):
 		var resource := load(texture_path)
 		if resource is Texture2D:
 			return resource as Texture2D

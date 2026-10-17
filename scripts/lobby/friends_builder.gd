@@ -5,7 +5,7 @@ const AVATAR_PREVIEW_CACHE_DIR: String = "user://cache/friend_avatar_previews"
 const AVATAR_PREVIEW_RENDER_SIZE: int = 320
 const AVATAR_PREVIEW_RENDER_SETTLE_SECONDS: float = 0.45
 const AVATAR_PREVIEW_RENDER_BATCH_SIZE: int = 4
-const AVATAR_PREVIEW_RENDER_REVISION: String = "portrait_v15_right_bust"
+const AVATAR_PREVIEW_RENDER_REVISION: String = "portrait_v16_head_top_event"
 
 static var _avatar_preview_queue: Array = []
 static var _avatar_preview_pending: Dictionary = {}

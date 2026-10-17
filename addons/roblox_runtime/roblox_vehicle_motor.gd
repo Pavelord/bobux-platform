@@ -8,6 +8,8 @@ var _driver: CollisionObject3D
 
 static func ensure(seat_: Node3D) -> VehicleBody3D:
 	if not is_instance_valid(seat_) or not seat_.get_parent() is Node3D: return null
+	var bridge := seat_.get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null and bridge.role(seat_) == "client": return null
 	var id := int(seat_.get_meta("bobux_vehicle_motor_id", 0))
 	var existing: Variant = instance_from_id(id) if id > 0 else null
 	if is_instance_valid(existing): return existing
@@ -59,21 +61,16 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(seat): queue_free(); return
-	var occupant: Variant = seat.get_meta("Occupant") if seat.has_meta("Occupant") else null
+	var occupant: Variant = preload("res://addons/roblox_runtime/roblox_seat_authority.gd").occupant(seat)
 	var character: Node = occupant.get_parent() if is_instance_valid(occupant) else null
 	if is_instance_valid(_driver) and _driver != character:
 		remove_collision_exception_with(_driver)
 		_driver = null
-	var driving := is_instance_valid(character) and character.has_method("_is_local_authority_safe") and bool(character._is_local_authority_safe())
-	var throttle := Input.get_axis("move_back", "move_forward") if driving else 0.0
-	var turn := Input.get_axis("move_right", "move_left") if driving else 0.0
-	# Properties remain available to Lua controllers, including autonomous cars.
-	if not driving:
-		throttle = float(seat.get_meta("ThrottleFloat", 0.0)) if occupant != null else 0.0
-		turn = float(seat.get_meta("SteerFloat", 0.0)) if occupant != null else 0.0
-	else:
-		seat.set_meta("ThrottleFloat", throttle)
-		seat.set_meta("SteerFloat", turn)
+	var driving := is_instance_valid(character)
+	# Player movement already combines keyboard and touch input. Network play
+	# receives that standard input from the assigned driver's validated channel.
+	var throttle := float(seat.get_meta("ThrottleFloat", 0.0)) if driving else 0.0
+	var turn := float(seat.get_meta("SteerFloat", 0.0)) if driving else 0.0
 	var speed := linear_velocity.dot(global_basis.z)
 	var limit := float(seat.get_meta("MaxSpeed", 65.0))
 	engine_force = throttle * 1400.0 if absf(speed) < limit or signf(speed) != signf(throttle) else 0.0

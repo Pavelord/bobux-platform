@@ -1,5 +1,6 @@
 extends Control
 const AudioFileLoader = preload("res://addons/roblox_runtime/audio_file_loader.gd")
+const CASCADIA_MONO_FONT = preload("res://assets/fonts/CascadiaMono.ttf")
 
 const ACCELERATION = 10.0
 const MAX_SPEED = 25.0
@@ -38,7 +39,6 @@ const SHAPE_OPTIONS: Array[String] = [
 ]
 const CLOUD_INLINE_ASSET_MAX_BYTES: int = 24 * 1024 * 1024
 const CLOUD_INLINE_ASSET_TOTAL_MAX_BYTES: int = 96 * 1024 * 1024
-const CLOUD_INLINE_ASSET_MAX_TRACKS: int = 32
 const CLOUD_MAP_ASSET_UPLOAD_CONCURRENCY: int = 3
 const CLOUD_MAP_ASSET_MAX_BYTES: int = 50 * 1024 * 1024
 const CLOUD_MAP_ASSET_FAILURES_KEY: String = "__bobux_publish_asset_failures"
@@ -325,6 +325,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if studio_playtest_active:
 		return
 	var text_input_focused := _is_text_input_focused()
+	if not text_input_focused and _handle_explorer_keyboard_shortcut(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if event.pressed:
@@ -483,6 +486,34 @@ func _unhandled_input(event: InputEvent) -> void:
 					_update_inspector()
 					_commit_editor_history("Rotate")
 		return
+
+
+func _handle_explorer_keyboard_shortcut(event: InputEvent) -> bool:
+	if explorer_tree == null or not (event is InputEventKey):
+		return false
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo or get_viewport().gui_get_focus_owner() != explorer_tree:
+		return false
+	var item := explorer_tree.get_selected()
+	if item == null:
+		return false
+	var metadata: Variant = item.get_metadata(0)
+	if not (metadata is int):
+		return false
+	var node := instance_from_id(int(metadata)) as Node
+	if not is_instance_valid(node) or bool(node.get_meta("is_roblox_service", false)):
+		return false
+	if key_event.keycode == KEY_F2 and not key_event.ctrl_pressed:
+		_rename_item_dialog(node)
+		return true
+	if key_event.keycode == KEY_DELETE and not key_event.ctrl_pressed:
+		_delete_node(node)
+		return true
+	if key_event.keycode == KEY_D and key_event.ctrl_pressed:
+		_duplicate_node(node)
+		return true
+	return false
+
 
 func _process_movement(delta: float) -> void:
 	if studio_playtest_active:
@@ -2623,8 +2654,12 @@ var main_container: VBoxContainer = null
 var left_panel: TabContainer = null
 var right_side: VSplitContainer = null
 var script_editor_tabs: TabContainer = null
+var script_editor_home: Control = null
+var script_editor_window: Window = null
+var script_editor_window_content: Control = null
 var viewport_container_node: SubViewportContainer = null
 var explorer_popup: PopupMenu = null
+var explorer_hover_item: TreeItem = null
 var open_scripts: Dictionary = {}
 var properties_dock_panel: PanelContainer = null
 var properties_title_label: Label = null
@@ -2649,6 +2684,8 @@ var document_tabs_container: HBoxContainer = null
 var document_tab_spacer: Control = null
 var script_document_buttons: Dictionary = {}
 var active_document_script_id: int = 0
+var _script_focus_mode: bool = false
+var _script_focus_restore: Dictionary = {}
 var studio_grid_root: Node3D = null
 var ribbon_tab_buttons: Dictionary = {}
 var active_ribbon_tab: String = "Home"
@@ -2669,7 +2706,8 @@ const STUDIO_ICON_FILES := {
 	"Select": "mouse-pointer-2.svg", "Move": "move.svg", "Scale": "scaling.svg",
 	"Rotate": "rotate-cw.svg", "Transform": "boxes.svg", "Geometric": "box-select.svg",
 	"Part": "box.svg", "Terrain": "mountain.svg", "Audio": "audio.svg", "Character": "person-standing.svg",
-	"GUI": "panels-top-left.svg", "Script": "file-code-2.svg", "Import": "download.svg",
+	"GUI": "panels-top-left.svg", "Script": "file-code-2.svg", "Local": "file-code-2.svg",
+	"Module": "file-code-2.svg", "Templates": "file-code-2.svg", "Import": "download.svg",
 	"Material": "circle-dot.svg", "Color": "palette.svg", "Group": "group.svg", "Lock": "lock.svg",
 	"Anchor": "anchor.svg", "Explorer": "list-tree.svg", "Properties": "sliders-horizontal.svg",
 	"Toolbox": "briefcase-business.svg", "Assets": "images.svg", "Play": "play.svg",
@@ -2696,22 +2734,47 @@ func _build_main_white_layout() -> void:
 	_build_studio_menu_bar()
 	_build_toolbar_white()
 
-	var split_main := HBoxContainer.new()
+	var split_main := HSplitContainer.new()
 	split_main.name = "MainSplit"
-	split_main.add_theme_constant_override("separation", 0)
+	split_main.add_theme_constant_override("separation", 6)
+	split_main.add_theme_constant_override("minimum_grab_thickness", 12)
+	split_main.touch_dragger_enabled = _is_mobile_studio_runtime()
+	split_main.dragger_visibility = SplitContainer.DRAGGER_VISIBLE
+	split_main.add_theme_constant_override("autohide", 0)
+	var main_split_bar := StyleBoxFlat.new()
+	main_split_bar.bg_color = Color("#D8DDE3")
+	split_main.add_theme_stylebox_override("split_bar_background", main_split_bar)
 	split_main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	split_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_container.add_child(split_main)
 
 	toolbox_dock_panel = _build_toolbox_dock()
+	toolbox_dock_panel.custom_minimum_size = Vector2(220, 0)
+	toolbox_dock_panel.size_flags_stretch_ratio = 1.0
 	split_main.add_child(toolbox_dock_panel)
+
+	var workspace_and_docks := HSplitContainer.new()
+	workspace_and_docks.name = "WorkspaceAndDocksSplit"
+	workspace_and_docks.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workspace_and_docks.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace_and_docks.size_flags_stretch_ratio = 4.2
+	workspace_and_docks.add_theme_constant_override("separation", 6)
+	workspace_and_docks.add_theme_constant_override("minimum_grab_thickness", 12)
+	workspace_and_docks.touch_dragger_enabled = _is_mobile_studio_runtime()
+	workspace_and_docks.dragger_visibility = SplitContainer.DRAGGER_VISIBLE
+	workspace_and_docks.drag_nested_intersections = true
+	workspace_and_docks.add_theme_constant_override("autohide", 0)
+	workspace_and_docks.add_theme_stylebox_override("split_bar_background", main_split_bar)
+	split_main.add_child(workspace_and_docks)
 
 	var center_split := VBoxContainer.new()
 	center_split.name = "ViewportColumn"
+	center_split.custom_minimum_size = Vector2(360, 0)
 	center_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_split.size_flags_stretch_ratio = 3.2
 	center_split.add_theme_constant_override("separation", 0)
-	split_main.add_child(center_split)
+	workspace_and_docks.add_child(center_split)
 
 	_build_viewport_document_header(center_split)
 
@@ -2742,24 +2805,32 @@ func _build_main_white_layout() -> void:
 	script_editor_tabs.tabs_visible = false
 	script_editor_tabs.visible = false
 	center_split.add_child(script_editor_tabs)
+	script_editor_home = center_split
 
 	right_side = VSplitContainer.new()
 	right_side.name = "RightDockSplit"
-	right_side.custom_minimum_size = Vector2(286, 0)
+	right_side.custom_minimum_size = Vector2(250, 0)
 	right_side.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_side.add_theme_constant_override("separation", 1)
-	split_main.add_child(right_side)
+	right_side.size_flags_stretch_ratio = 1.0
+	right_side.add_theme_constant_override("separation", 6)
+	right_side.add_theme_constant_override("minimum_grab_thickness", 12)
+	right_side.touch_dragger_enabled = _is_mobile_studio_runtime()
+	right_side.dragger_visibility = SplitContainer.DRAGGER_VISIBLE
+	right_side.drag_nested_intersections = true
+	right_side.add_theme_constant_override("autohide", 0)
+	right_side.add_theme_stylebox_override("split_bar_background", main_split_bar)
+	workspace_and_docks.add_child(right_side)
 	explorer_dock_panel = _build_explorer_dock()
-	explorer_dock_panel.custom_minimum_size = Vector2(286, 260)
+	explorer_dock_panel.custom_minimum_size = Vector2(250, 220)
 	right_side.add_child(explorer_dock_panel)
 	properties_dock_panel = PanelContainer.new()
 	properties_dock_panel.name = "PropertiesPanel"
-	properties_dock_panel.custom_minimum_size = Vector2(286, 220)
+	properties_dock_panel.custom_minimum_size = Vector2(250, 180)
 	properties_dock_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	properties_dock_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F7F7F7"), Color("#C8C8C8"), 1))
 	right_side.add_child(properties_dock_panel)
 	var right_inspector_panel := _build_properties_dock(properties_dock_panel)
-	right_side.set_deferred("split_offset", 390)
+	right_side.set_deferred("split_offsets", PackedInt32Array([0]))
 
 	if right_inspector_panel != null:
 		inspector_panel = right_inspector_panel
@@ -4042,13 +4113,23 @@ func _populate_ui_ribbon() -> void:
 
 func _populate_script_ribbon() -> void:
 	_clear_ribbon_tools()
+	var insert_group := _create_ribbon_group("Insert")
+	ribbon_tools_container.add_child(insert_group)
+	var server_script_button := _add_ribbon_action(insert_group, "Script", _insert_script_class_from_ribbon.bind("Script"), 50)
+	server_script_button.tooltip_text = "Insert a server Script under the selected object"
+	var local_script_button := _add_ribbon_action(insert_group, "Local", _insert_script_class_from_ribbon.bind("LocalScript"), 50)
+	local_script_button.tooltip_text = "Insert a LocalScript under the selected object"
+	var module_script_button := _add_ribbon_action(insert_group, "Module", _insert_script_class_from_ribbon.bind("ModuleScript"), 58)
+	module_script_button.tooltip_text = "Insert a ModuleScript under the selected object"
+	var templates_button := _add_ribbon_action(insert_group, "Templates", _open_studio_script_library, 64)
+	templates_button.tooltip_text = "Browse code examples and add one to this place"
+	ribbon_tools_container.add_child(_create_ribbon_separator())
 	var navigation_group := _create_ribbon_group("Navigate")
 	ribbon_tools_container.add_child(navigation_group)
 	_add_ribbon_action(navigation_group, "Back", _script_history_back, 42)
 	_add_ribbon_action(navigation_group, "Forward", _script_history_forward, 48)
 	var source_group := _create_ribbon_group("Source")
 	ribbon_tools_container.add_child(source_group)
-	_add_ribbon_action(source_group, "Script", _insert_script_from_ribbon, 48)
 	_add_ribbon_action(source_group, "Format", _format_active_script, 50)
 	_add_ribbon_action(source_group, "Find", _find_in_active_script, 42)
 	_add_ribbon_action(source_group, "Go To Line", _go_to_line_in_active_script, 58)
@@ -4761,8 +4842,14 @@ func _build_viewport_document_header(parent: VBoxContainer) -> void:
 
 func _show_viewport_document() -> void:
 	active_document_script_id = 0
+	if _script_focus_mode:
+		_set_script_focus_mode(false)
 	if script_editor_tabs != null:
 		script_editor_tabs.visible = false
+	if _is_script_editor_floating() and is_instance_valid(script_editor_window):
+		script_editor_window.hide()
+	if viewport_frame_panel != null:
+		viewport_frame_panel.visible = true
 	if viewport_container_node != null:
 		viewport_container_node.visible = true
 	_refresh_document_tab_styles()
@@ -4773,12 +4860,101 @@ func _show_script_document(instance_id: int) -> void:
 	if not open_scripts.has(instance_id) or not is_instance_valid(open_scripts[instance_id]):
 		return
 	active_document_script_id = instance_id
-	viewport_container_node.visible = false
+	var floating := _is_script_editor_floating()
+	if viewport_frame_panel != null:
+		viewport_frame_panel.visible = floating
+	if viewport_container_node != null:
+		viewport_container_node.visible = floating
 	script_editor_tabs.visible = true
 	var index := script_editor_tabs.get_tab_idx_from_control(open_scripts[instance_id])
 	if index >= 0:
 		script_editor_tabs.current_tab = index
+	if floating and is_instance_valid(script_editor_window):
+		script_editor_window.title = "Luau Editor — %s" % str(open_scripts[instance_id].name)
+		script_editor_window.show()
 	_refresh_document_tab_styles()
+
+
+func _is_script_editor_floating() -> bool:
+	return script_editor_tabs != null and script_editor_window_content != null and script_editor_tabs.get_parent() == script_editor_window_content
+
+
+func _toggle_script_editor_window() -> void:
+	if _is_script_editor_floating():
+		_dock_script_editor_window()
+	else:
+		_float_script_editor_window()
+
+
+func _float_script_editor_window() -> void:
+	if script_editor_tabs == null or script_editor_home == null or script_editor_tabs.get_child_count() == 0:
+		return
+	if script_editor_window == null or not is_instance_valid(script_editor_window):
+		script_editor_window = Window.new()
+		script_editor_window.name = "LuauScriptEditorWindow"
+		script_editor_window.title = "Luau Editor"
+		script_editor_window.min_size = Vector2i(760, 500)
+		script_editor_window.unresizable = false
+		script_editor_window.close_requested.connect(_dock_script_editor_window)
+		add_child(script_editor_window)
+		var surface := PanelContainer.new()
+		surface.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		surface.add_theme_stylebox_override("panel", _studio_panel_style(Color("#FFFFFF"), Color("#D4D8DD"), 1))
+		script_editor_window.add_child(surface)
+		var margin := MarginContainer.new()
+		margin.add_theme_constant_override("margin_left", 8)
+		margin.add_theme_constant_override("margin_right", 8)
+		margin.add_theme_constant_override("margin_top", 8)
+		margin.add_theme_constant_override("margin_bottom", 8)
+		surface.add_child(margin)
+		script_editor_window_content = margin
+	var current_parent := script_editor_tabs.get_parent()
+	if current_parent != script_editor_window_content:
+		if current_parent != null:
+			current_parent.remove_child(script_editor_tabs)
+		script_editor_window_content.add_child(script_editor_tabs)
+	script_editor_tabs.visible = true
+	viewport_frame_panel.visible = true
+	viewport_container_node.visible = true
+	for instance_id in open_scripts:
+		var tab_root := open_scripts[instance_id] as Node
+		var toggle_button := tab_root.find_child("FloatScriptEditorButton", true, false) as Button if is_instance_valid(tab_root) else null
+		if toggle_button != null:
+			toggle_button.text = "Встроить окно"
+			toggle_button.tooltip_text = "Вернуть редактор в основное окно Studio"
+	_refresh_script_editor_window_title()
+	script_editor_window.popup_centered_ratio(0.9)
+
+
+func _dock_script_editor_window() -> void:
+	if script_editor_tabs == null or script_editor_home == null:
+		if is_instance_valid(script_editor_window):
+			script_editor_window.hide()
+		return
+	if script_editor_tabs.get_parent() != script_editor_home:
+		var current_parent := script_editor_tabs.get_parent()
+		if current_parent != null:
+			current_parent.remove_child(script_editor_tabs)
+		script_editor_home.add_child(script_editor_tabs)
+	if is_instance_valid(script_editor_window):
+		script_editor_window.hide()
+	for instance_id in open_scripts:
+		var tab_root := open_scripts[instance_id] as Node
+		var toggle_button := tab_root.find_child("FloatScriptEditorButton", true, false) as Button if is_instance_valid(tab_root) else null
+		if toggle_button != null:
+			toggle_button.text = "Отдельное окно"
+			toggle_button.tooltip_text = "Открыть редактор в отдельном изменяемом окне"
+	if active_document_script_id != 0 and open_scripts.has(active_document_script_id):
+		_show_script_document(active_document_script_id)
+
+
+func _refresh_script_editor_window_title() -> void:
+	if not is_instance_valid(script_editor_window):
+		return
+	if active_document_script_id != 0 and open_scripts.has(active_document_script_id):
+		script_editor_window.title = "Luau Editor — %s" % str(open_scripts[active_document_script_id].name)
+	else:
+		script_editor_window.title = "Luau Editor"
 
 func _ensure_script_document_button(script_node: Node) -> Button:
 	var instance_id := script_node.get_instance_id()
@@ -4895,15 +5071,21 @@ func _build_explorer_dock() -> PanelContainer:
 	explorer_tree.add_theme_stylebox_override("hovered", _studio_panel_style(Color("#E9F2FF"), Color("#E9F2FF"), 0, 3))
 	explorer_tree.add_theme_stylebox_override("hovered_dimmed", _studio_panel_style(Color("#F3F7FC"), Color("#F3F7FC"), 0, 3))
 	explorer_tree.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	explorer_tree.add_theme_stylebox_override("button_pressed", _studio_panel_style(Color("#DCEBFA"), Color("#B8D5F0"), 1, 3))
+	explorer_tree.add_theme_stylebox_override("button_hover", _studio_panel_style(Color("#EDF5FD"), Color("#D1E4F5"), 1, 3))
+	explorer_tree.add_theme_stylebox_override("button_normal", StyleBoxEmpty.new())
 	# Tree depth must remain visually obvious in a narrow dock. Two pixels made
 	# Workspace children look like top-level services even though the DataModel
 	# hierarchy was correct.
 	explorer_tree.add_theme_constant_override("item_margin", 14)
 	explorer_tree.add_theme_constant_override("v_separation", 2)
-	explorer_tree.add_theme_constant_override("icon_max_width", 16)
+	explorer_tree.add_theme_constant_override("icon_max_width", 20)
 	explorer_tree.item_selected.connect(_on_explorer_item_selected)
 	explorer_tree.item_mouse_selected.connect(_on_explorer_item_mouse_selected)
 	explorer_tree.item_activated.connect(_on_explorer_item_double_clicked)
+	explorer_tree.button_clicked.connect(_on_explorer_tree_button_clicked)
+	explorer_tree.gui_input.connect(_on_explorer_tree_gui_input)
+	explorer_tree.mouse_exited.connect(_on_explorer_tree_mouse_exited)
 	explorer_vbox.add_child(explorer_tree)
 	return explorer_container
 
@@ -5084,6 +5266,7 @@ func _style_toolbox_category_button(button: Button) -> void:
 
 func _show_explorer_options_menu(source_button: Button) -> void:
 	var menu := PopupMenu.new()
+	_style_explorer_popup(menu)
 	menu.add_item("Expand all", 1)
 	menu.add_item("Collapse all", 2)
 	menu.add_separator()
@@ -5544,10 +5727,15 @@ func _insert_local_audio_asset(path: String) -> void:
 	var sound := RobloxDataModelClass.create_instance("Sound", path.get_basename().get_file()) as AudioStreamPlayer3D
 	sound.stream = stream
 	sound.set_meta("SoundId", path)
-	sound.set_meta("roblox_properties", {"SoundId": path, "Volume": 1.0, "Looped": false, "Playing": false})
+	sound.set_meta("Volume", 1.0)
+	sound.set_meta("PlaybackSpeed", 1.0)
+	sound.set_meta("Looped", false)
+	sound.set_meta("Playing", false)
+	sound.set_meta("roblox_properties", {"SoundId": path, "Volume": 1.0, "PlaybackSpeed": 1.0, "Looped": false, "Playing": false})
 	var selected := _get_selected_editor_node()
-	var parent: Node = selected if selected is Node3D and not bool(selected.get_meta("is_roblox_service", false)) else data_model.ensure_service("SoundService")
+	var parent: Node = selected if selected is MeshInstance3D and not bool(selected.get_meta("is_roblox_service", false)) else data_model.ensure_service("SoundService")
 	parent.add_child(sound, true)
+	sound.position = Vector3.ZERO
 	explorer_selected_node = sound
 	_refresh_explorer()
 	_show_properties_for_node(sound)
@@ -6570,13 +6758,30 @@ func _insert_gui_placeholder() -> void:
 		toolbar_status_label.text = "Inserted ScreenGui in StarterGui"
 
 func _insert_script_from_ribbon() -> void:
-	var selected := _get_selected_editor_node()
-	if selected != null:
-		_add_script_to_node(selected)
-	elif data_model != null:
-		_add_script_to_node(data_model.ensure_service("ServerScriptService"), "", "Script")
-	else:
-		_add_script_to_node(null, "ServerScriptService", "Script")
+	_insert_script_class_from_ribbon("Script")
+
+
+func _insert_script_class_from_ribbon(script_class: String) -> void:
+	if data_model == null or _is_studio_editing_locked():
+		return
+	var has_explicit_target := (explorer_selected_node != null and is_instance_valid(explorer_selected_node)) or (selected_block != null and is_instance_valid(selected_block))
+	if has_explicit_target:
+		_add_script_to_node(_get_selected_editor_node(), "", script_class)
+		return
+	var target: Node = null
+	match script_class:
+		"LocalScript":
+			var starter_player := data_model.ensure_service("StarterPlayer")
+			target = starter_player.get_node_or_null("StarterPlayerScripts")
+		"ModuleScript":
+			target = data_model.ensure_service("ReplicatedStorage")
+		_:
+			target = data_model.ensure_service("ServerScriptService")
+	_add_script_to_node(target, "", script_class)
+
+
+func _open_studio_script_library() -> void:
+	preload("res://addons/roblox_studio/studio_script_library.gd").open(self, _apply_studio_ai_actions)
 
 func _open_material_selector() -> void:
 	var dialog := AcceptDialog.new()
@@ -7192,8 +7397,10 @@ func _get_ribbon_icon_color(label: String, active: bool) -> Color:
 			return Color("#0E9F9A")
 		"GUI":
 			return Color("#C04C8A")
-		"Script":
+		"Script", "Module", "Templates":
 			return Color("#4D8B1F")
+		"Local":
+			return Color("#2878C8")
 		"Import":
 			return Color("#2B7FD6")
 		"Material":
@@ -7888,70 +8095,110 @@ func _show_explorer_context_menu(item: TreeItem, pos: Vector2) -> void:
 	if explorer_popup:
 		explorer_popup.queue_free()
 	explorer_popup = PopupMenu.new()
+	_style_explorer_popup(explorer_popup)
 	add_child(explorer_popup)
-
-	var metadata = item.get_metadata(0)
-
-	if metadata is String:
-		var service_name: String = metadata
-		explorer_popup.add_item("Properties", 1)
-		explorer_popup.add_item("Add Script", 2)
-		explorer_popup.id_pressed.connect(func(id):
-			match id:
-				1:
-					_show_service_properties(service_name)
-				2:
-					_add_script_to_node(null, service_name)
-		)
-	else:
-		var instance_id: int = int(metadata)
-		var node := instance_from_id(instance_id)
-		if node:
-			var is_service := bool(node.get_meta("is_roblox_service", false))
-			explorer_popup.add_item("Properties", 1)
-			if not is_service:
-				explorer_popup.add_item("Rename (F2)", 10)
-				explorer_popup.add_item("Delete (Del)", 11)
-				explorer_popup.add_item("Duplicate (Ctrl+D)", 12)
-			explorer_popup.add_separator()
-
-			var add_submenu := PopupMenu.new()
-			add_submenu.name = "AddChildMenu"
-			var insert_classes := {
-				20: "Part", 21: "WedgePart", 22: "CornerWedgePart", 23: "TrussPart",
-				24: "MeshPart", 25: "SpawnLocation", 26: "Model", 27: "Folder",
-				28: "Character", 29: "Humanoid", 30: "Tool", 31: "Script",
-				32: "LocalScript", 33: "ModuleScript", 34: "ScreenGui",
-				35: "Frame", 36: "TextLabel", 37: "TextButton",
-				38: "TextBox", 39: "ImageLabel", 40: "ImageButton",
-				41: "Attachment", 42: "WeldConstraint", 43: "RemoteEvent",
-				44: "RemoteFunction", 45: "BindableEvent", 46: "NumberValue",
-				47: "BoolValue", 48: "StringValue", 49: "Sound", 50: "PointLight",
-			}
-			for insert_id_variant in insert_classes.keys():
-				var insert_id := int(insert_id_variant)
-				add_submenu.add_item(str(insert_classes[insert_id]), insert_id)
-			explorer_popup.add_child(add_submenu)
-			explorer_popup.add_submenu_item("Insert Object...", "AddChildMenu")
-
-			explorer_popup.id_pressed.connect(func(id):
-				match id:
-					1:
-						_show_properties_for_node(node)
-					10:
-						_rename_item_dialog(node)
-					11:
-						_delete_node(node)
-					12:
-						_duplicate_node(node)
-			)
-			add_submenu.id_pressed.connect(func(id):
-				if insert_classes.has(id):
-					_insert_roblox_instance(node, str(insert_classes[id]))
-			)
-
-	explorer_popup.position = get_viewport().get_mouse_position()
+	var metadata: Variant = item.get_metadata(0)
+	var node: Node = null
+	if metadata is int:
+		node = instance_from_id(int(metadata))
+	elif metadata is String and data_model != null and data_model.has_method("get_service"):
+		var resolved: Variant = data_model.call("get_service", str(metadata))
+		if resolved is Node:
+			node = resolved as Node
+	if node == null or not is_instance_valid(node):
+		return
+	var is_service := bool(node.get_meta("is_roblox_service", false))
+	var is_script := node.is_in_group("bobux_scripts")
+	explorer_popup.add_item("Properties", 1)
+	if is_script:
+		explorer_popup.add_item("Open Script", 2)
+	explorer_popup.add_separator()
+	explorer_popup.add_item("Insert Object...", 3)
+	explorer_popup.add_item("Add Script", 4)
+	if not is_service:
+		explorer_popup.add_separator()
+		explorer_popup.add_item("Rename (F2)", 10)
+		explorer_popup.add_item("Duplicate (Ctrl+D)", 12)
+		explorer_popup.add_item("Delete (Del)", 11)
+	if _is_studio_editing_locked():
+		for index in range(explorer_popup.item_count):
+			var action_id := explorer_popup.get_item_id(index)
+			if action_id in [3, 4, 10, 11, 12]:
+				explorer_popup.set_item_disabled(index, true)
+	explorer_popup.id_pressed.connect(func(id: int) -> void:
+		match id:
+			1:
+				_show_properties_for_node(node)
+			2:
+				_open_script_in_editor(node)
+			3:
+				_open_insert_object_dialog(node)
+			4:
+				_add_script_to_node(node)
+			10:
+				_rename_item_dialog(node)
+			11:
+				_delete_node(node)
+			12:
+				_duplicate_node(node)
+	)
+	var popup_global := explorer_tree.get_global_rect().position + pos
+	explorer_popup.position = Vector2i(roundi(popup_global.x), roundi(popup_global.y))
 	explorer_popup.popup()
+
+
+func _style_explorer_popup(menu: PopupMenu) -> void:
+	menu.add_theme_stylebox_override("panel", _studio_panel_style(Color("#FFFFFF"), Color("#C9D0D8"), 1, 4))
+	menu.add_theme_stylebox_override("hover", _studio_panel_style(Color("#EAF3FD"), Color("#EAF3FD"), 0, 2))
+	menu.add_theme_stylebox_override("pressed", _studio_panel_style(Color("#D8E9FA"), Color("#D8E9FA"), 0, 2))
+	menu.add_theme_stylebox_override("focus", _studio_panel_style(Color("#EDF5FC"), Color("#A9CDEB"), 1, 2))
+	menu.add_theme_stylebox_override("separator", _studio_panel_style(Color("#DCE1E7"), Color("#DCE1E7"), 0))
+	menu.add_theme_color_override("font_color", Color("#20252B"))
+	menu.add_theme_color_override("font_hover_color", Color("#145A96"))
+	menu.add_theme_color_override("font_pressed_color", Color("#104D82"))
+	menu.add_theme_color_override("font_disabled_color", Color("#8A929B"))
+	menu.add_theme_color_override("font_separator_color", Color("#68727E"))
+	menu.add_theme_color_override("icon_normal_color", Color("#4B5663"))
+	menu.add_theme_color_override("icon_hover_color", Color("#145A96"))
+	menu.add_theme_font_size_override("font_size", 12)
+	menu.add_theme_constant_override("item_start_padding", 10)
+	menu.add_theme_constant_override("item_end_padding", 10)
+	menu.add_theme_constant_override("v_separation", 2)
+
+
+func _on_explorer_tree_button_clicked(item: TreeItem, _column: int, button_id: int, _mouse_button_index: int) -> void:
+	if button_id != 1 or item == null:
+		return
+	var metadata: Variant = item.get_metadata(0)
+	if not (metadata is int):
+		return
+	var target := instance_from_id(int(metadata))
+	if target == null or not is_instance_valid(target):
+		return
+	explorer_tree.deselect_all()
+	item.select(0)
+	explorer_selected_node = target
+	_show_properties_for_node(target)
+	_open_insert_object_dialog(target)
+
+
+func _on_explorer_tree_gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseMotion) or explorer_tree == null:
+		return
+	var hovered := explorer_tree.get_item_at_position((event as InputEventMouseMotion).position)
+	if hovered == explorer_hover_item:
+		return
+	if explorer_hover_item != null and is_instance_valid(explorer_hover_item):
+		explorer_hover_item.set_button_color(0, 0, Color(0, 0, 0, 0))
+	explorer_hover_item = hovered
+	if explorer_hover_item != null:
+		explorer_hover_item.set_button_color(0, 0, Color("#1677D2"))
+
+
+func _on_explorer_tree_mouse_exited() -> void:
+	if explorer_hover_item != null and is_instance_valid(explorer_hover_item):
+		explorer_hover_item.set_button_color(0, 0, Color(0, 0, 0, 0))
+	explorer_hover_item = null
 
 
 func _explorer_get_drag_data(at_position: Vector2) -> Variant:
@@ -8009,6 +8256,7 @@ func _on_explorer_item_mouse_selected(pos: Vector2, button: int) -> void:
 	if button == MOUSE_BUTTON_RIGHT:
 		var item := explorer_tree.get_item_at_position(pos)
 		if item:
+			explorer_tree.deselect_all()
 			explorer_tree.set_selected(item, 0)
 			_show_explorer_context_menu(item, pos)
 
@@ -8025,11 +8273,12 @@ func _on_explorer_item_double_clicked() -> void:
 			_rename_item_dialog(node)
 
 
-func _open_insert_object_dialog() -> void:
+func _open_insert_object_dialog(selected_parent: Node = null) -> void:
 	if data_model == null or _is_studio_editing_locked():
 		return
-	var target_parent := _get_selected_editor_node()
+	var target_parent := selected_parent if selected_parent != null and is_instance_valid(selected_parent) else _get_selected_editor_node()
 	var dialog := ConfirmationDialog.new()
+	dialog.name = "InsertObjectDialog"
 	dialog.title = "Insert Object"
 	dialog.ok_button_text = "Insert"
 	dialog.cancel_button_text = "Cancel"
@@ -8039,17 +8288,32 @@ func _open_insert_object_dialog() -> void:
 	root.add_theme_constant_override("separation", 6)
 	dialog.add_child(root)
 	var parent_label := Label.new()
-	parent_label.text = "Parent: %s" % str(target_parent.get_meta("block_name", target_parent.name) if target_parent != null else "Workspace")
+	var parent_name := str(target_parent.get_meta("block_name", target_parent.name) if target_parent != null else "Workspace")
+	var parent_class := str(target_parent.get_meta("roblox_class", "Workspace") if target_parent != null else "Workspace")
+	parent_label.text = "Parent: %s  ·  %s" % [parent_name, parent_class]
 	parent_label.add_theme_color_override("font_color", Color("#55585C"))
+	parent_label.add_theme_font_size_override("font_size", 12)
 	root.add_child(parent_label)
 	var search := LineEdit.new()
+	search.name = "SearchObjects"
 	search.placeholder_text = "Search objects"
+	search.add_theme_color_override("font_color", Color("#20252B"))
+	search.add_theme_color_override("font_placeholder_color", Color("#7A838D"))
+	search.add_theme_font_size_override("font_size", 13)
 	search.add_theme_stylebox_override("normal", _studio_line_edit_style())
+	search.add_theme_stylebox_override("focus", _studio_panel_style(Color.WHITE, Color("#4A91D8"), 1, 4))
 	root.add_child(search)
 	var list := ItemList.new()
+	list.name = "InsertObjectList"
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.select_mode = ItemList.SELECT_SINGLE
-	list.add_theme_stylebox_override("panel", _studio_panel_style(Color.WHITE, Color("#D0D2D5"), 1, 2))
+	list.add_theme_font_size_override("font_size", 13)
+	list.add_theme_color_override("font_color", Color("#24292F"))
+	list.add_theme_color_override("font_selected_color", Color.WHITE)
+	list.add_theme_stylebox_override("panel", _studio_panel_style(Color.WHITE, Color("#D0D6DD"), 1, 3))
+	list.add_theme_stylebox_override("selected", _studio_panel_style(Color("#4D88F7"), Color("#4D88F7"), 0, 3))
+	list.add_theme_stylebox_override("selected_focus", _studio_panel_style(Color("#4D88F7"), Color("#4D88F7"), 0, 3))
+	list.add_theme_stylebox_override("hovered", _studio_panel_style(Color("#EDF5FD"), Color("#EDF5FD"), 0, 3))
 	root.add_child(list)
 	var classes: Array[String] = [
 		"Part", "WedgePart", "CornerWedgePart", "TrussPart", "MeshPart", "Seat", "VehicleSeat", "SpawnLocation",
@@ -8060,7 +8324,8 @@ func _open_insert_object_dialog() -> void:
 		"UIStroke", "UIAspectRatioConstraint", "Attachment", "WeldConstraint", "Motor6D",
 		"RemoteEvent", "RemoteFunction", "BindableEvent", "BindableFunction",
 		"NumberValue", "IntValue", "BoolValue", "StringValue", "ObjectValue", "Vector3Value",
-		"CFrameValue", "Color3Value", "Sound", "PointLight", "SpotLight", "ParticleEmitter"
+		"CFrameValue", "Color3Value", "Sound", "PointLight", "SpotLight", "ParticleEmitter",
+		"Configuration", "Beam", "Trail", "SurfaceAppearance", "Bone", "ProximityPrompt", "ClickDetector"
 	]
 	var populate := func(query: String) -> void:
 		list.clear()
@@ -8068,8 +8333,13 @@ func _open_insert_object_dialog() -> void:
 		for object_type in classes:
 			if not normalized.is_empty() and object_type.to_lower().find(normalized) < 0:
 				continue
-			list.add_item(object_type, _get_toolbar_icon(_studio_icon_name_for_class(object_type), Color("#39424E")))
-			list.set_item_metadata(list.item_count - 1, object_type)
+			var class_icon: Texture2D = roblox_explorer._get_runtime_icon(object_type) if roblox_explorer != null else _get_toolbar_icon(_studio_icon_name_for_class(object_type), Color("#39424E"))
+			list.add_item(object_type, class_icon)
+			var item_index := list.item_count - 1
+			if roblox_explorer != null:
+				list.set_item_icon_modulate(item_index, roblox_explorer._runtime_icon_color(object_type))
+			list.set_item_metadata(item_index, object_type)
+			list.set_item_tooltip(item_index, "Create a %s under %s" % [object_type, parent_name])
 		if list.item_count > 0:
 			list.select(0)
 		dialog.get_ok_button().disabled = list.item_count == 0
@@ -8090,6 +8360,11 @@ func _open_insert_object_dialog() -> void:
 	)
 	list.item_activated.connect(func(index: int) -> void: insert_selected.call(index))
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	dialog.close_requested.connect(func() -> void: dialog.queue_free())
+	dialog.get_ok_button().text = "Insert"
+	dialog.get_cancel_button().text = "Cancel"
+	_style_white_button(dialog.get_ok_button(), Color("#1677D2"))
+	_style_white_button(dialog.get_cancel_button(), Color("#C9D0D8"))
 	dialog.popup_centered(Vector2i(520, 500))
 	search.grab_focus()
 
@@ -8110,6 +8385,9 @@ func _studio_icon_name_for_class(object_type: String) -> String:
 
 func _insert_roblox_instance(selected_parent: Node, roblox_class: String) -> void:
 	if _is_studio_editing_locked() or data_model == null:
+		return
+	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
+		_add_script_to_node(_resolve_insert_parent(selected_parent, roblox_class), "", roblox_class)
 		return
 	if roblox_class in ["Part", "WedgePart", "CornerWedgePart", "TrussPart", "MeshPart", "Seat", "VehicleSeat"]:
 		_add_shape_to_node(_resolve_insert_parent(selected_parent, roblox_class), roblox_class)
@@ -8133,10 +8411,6 @@ func _insert_roblox_instance(selected_parent: Node, roblox_class: String) -> voi
 	if parent_node == null:
 		return
 	var instance := RobloxDataModelClass.create_instance(roblox_class, roblox_class)
-	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
-		instance.set_meta("code", "-- %s\r\nprint('%s started')\r\n" % [roblox_class, roblox_class])
-		instance.set_meta("lua_source", instance.get_meta("code"))
-		instance.set_meta("disabled", false)
 	if instance is Label:
 		(instance as Label).text = "TextLabel"
 	elif instance is Button:
@@ -8145,8 +8419,6 @@ func _insert_roblox_instance(selected_parent: Node, roblox_class: String) -> voi
 	_refresh_explorer()
 	explorer_selected_node = instance
 	_show_properties_for_node(instance)
-	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
-		_open_script_in_editor(instance)
 	if RobloxDataModelClass.default_service_for_class(roblox_class) == "StarterGui" or instance is Control:
 		_on_data_model_gui_changed()
 	_commit_editor_history("Insert %s" % roblox_class)
@@ -8165,6 +8437,11 @@ func _resolve_insert_parent(selected_parent: Node, roblox_class: String) -> Node
 		if selected_parent is Control or selected_parent is CanvasLayer:
 			return selected_parent
 		return data_model.ensure_service("StarterGui")
+	# The per-row Explorer + button means “insert under this row”. Honor the
+	# chosen service (for example Workspace or ServerScriptService) before falling
+	# back to the class default used by the global Insert Object action.
+	if selected_parent != null and bool(selected_parent.get_meta("is_roblox_service", false)):
+		return selected_parent
 	if roblox_class in ["Part", "Model", "WedgePart", "CornerWedgePart", "TrussPart", "MeshPart", "Seat", "VehicleSeat", "SpawnLocation"]:
 		if selected_parent is Node3D:
 			return selected_parent
@@ -8179,6 +8456,7 @@ func _rename_item_dialog(node: Node) -> void:
 	if _is_studio_editing_locked() or bool(node.get_meta("is_roblox_service", false)):
 		return
 	var dialog := ConfirmationDialog.new()
+	dialog.name = "ExplorerRenameDialog"
 	dialog.title = "Rename"
 	var edit := LineEdit.new()
 	edit.text = node.get_meta("block_name", node.name)
@@ -8188,28 +8466,108 @@ func _rename_item_dialog(node: Node) -> void:
 		if not new_name.is_empty():
 			node.set_meta("block_name", new_name)
 			node.name = new_name
+			_sync_script_document_name(node)
 			_refresh_explorer()
 			_commit_editor_history("Rename node")
+		dialog.queue_free()
 	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	dialog.close_requested.connect(func() -> void: dialog.queue_free())
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(300, 120))
 
 func _delete_node(node: Node) -> void:
-	if _is_studio_editing_locked() or bool(node.get_meta("is_roblox_service", false)):
+	if _is_studio_editing_locked() or node == null or not is_instance_valid(node) or bool(node.get_meta("is_roblox_service", false)):
 		return
+	var parent := node.get_parent()
+	if parent == null:
+		return
+	# Detach synchronously before rebuilding Explorer. queue_free() alone leaves
+	# the node visible until the frame ends, so it used to look as if Delete did
+	# nothing and the history snapshot still included the old instance.
+	var selection_intersects := false
+	if explorer_selected_node != null and is_instance_valid(explorer_selected_node):
+		selection_intersects = node == explorer_selected_node or node.is_ancestor_of(explorer_selected_node)
+	for selected_variant in _get_valid_selected_blocks():
+		var selected := selected_variant as Node
+		if selected == node or node.is_ancestor_of(selected):
+			selection_intersects = true
+			break
+	if selection_intersects:
+		_clear_selection()
+	if explorer_selected_node == node or (explorer_selected_node != null and is_instance_valid(explorer_selected_node) and node.is_ancestor_of(explorer_selected_node)):
+		explorer_selected_node = null
+	var was_gui := node is Control or str(node.get_meta("roblox_class", "")) in ["ScreenGui", "SurfaceGui", "BillboardGui"]
+	_close_script_documents_under(node)
+	parent.remove_child(node)
 	node.queue_free()
-	call_deferred("_refresh_explorer")
+	_refresh_explorer()
+	if was_gui:
+		_on_data_model_gui_changed()
 	_commit_editor_history("Delete node")
+
+
+func _sync_script_document_name(node: Node) -> void:
+	if not is_instance_valid(node) or not node.is_in_group("bobux_scripts"):
+		return
+	var instance_id := node.get_instance_id()
+	var tab_root := open_scripts.get(instance_id, null) as Control
+	var code_edit: CodeEdit = _find_code_edit(tab_root) if is_instance_valid(tab_root) else null
+	var dirty := _script_editor_has_unsaved_changes(code_edit) if is_instance_valid(code_edit) else false
+	if is_instance_valid(tab_root):
+		tab_root.name = node.name
+	var document_button := script_document_buttons.get(instance_id, null) as Button
+	if is_instance_valid(document_button):
+		document_button.text = "%s *" % node.name if dirty else node.name
+		document_button.tooltip_text = "%s (%s)" % [node.name, str(node.get_meta("script_type", "Script"))]
+	if active_document_script_id == instance_id:
+		_refresh_script_editor_window_title()
+
+
+func _close_script_documents_under(root_node: Node) -> void:
+	if not is_instance_valid(root_node):
+		return
+	var pending: Array[Node] = [root_node]
+	while not pending.is_empty():
+		var node: Node = pending.pop_back() as Node
+		if not is_instance_valid(node):
+			continue
+		if node.is_in_group("bobux_scripts"):
+			var instance_id: int = node.get_instance_id()
+			var tab_root := open_scripts.get(instance_id, null) as Control
+			var code_edit: CodeEdit = _find_code_edit(tab_root) if is_instance_valid(tab_root) else null
+			if is_instance_valid(code_edit):
+				_close_script_tab(code_edit, false)
+			else:
+				open_scripts.erase(instance_id)
+				var document_button := script_document_buttons.get(instance_id, null) as Button
+				if is_instance_valid(document_button):
+					document_button.queue_free()
+				script_document_buttons.erase(instance_id)
+				if active_document_script_id == instance_id:
+					_show_viewport_document()
+		pending.append_array(node.get_children())
 
 func _duplicate_node(node: Node) -> void:
 	if _is_studio_editing_locked() or bool(node.get_meta("is_roblox_service", false)):
 		return
-	var dupe = node.duplicate()
-	node.get_parent().add_child(dupe)
-	var new_name = _make_unique_block_copy_name(node.get_meta("block_name", node.name))
+	var parent := node.get_parent()
+	if parent == null:
+		return
+	var dupe := node.duplicate()
+	if dupe == null:
+		return
+	parent.add_child(dupe, true)
+	var new_name := _make_unique_block_copy_name(str(node.get_meta("block_name", node.name)))
 	dupe.set_meta("block_name", new_name)
 	dupe.name = new_name
-	call_deferred("_refresh_explorer")
+	if dupe is Node3D and dupe.is_in_group("studio_parts"):
+		explorer_selected_node = null
+		_set_selection([dupe as Node3D])
+	else:
+		explorer_selected_node = dupe
+	_refresh_explorer()
+	_show_properties_for_node(dupe)
 	_commit_editor_history("Duplicate node")
 
 func _add_part(parent_node: Node) -> void:
@@ -8298,12 +8656,27 @@ func _add_light_to_node(parent_node: Node) -> void:
 func _add_sound_to_node(parent_node: Node) -> void:
 	if _is_studio_editing_locked():
 		return
-	var sound := AudioStreamPlayer3D.new()
-	sound.name = "Sound_%04d" % (randi() % 10000)
-	sound.set_meta("roblox_class", "Sound")
-	_resolve_studio_3d_parent(parent_node).add_child(sound)
-	sound.global_position = _get_editor_drop_position(10.0)
+	if parent_node == null:
+		parent_node = data_model.ensure_service("SoundService")
+	var sound := RobloxDataModelClass.create_instance("Sound", "Sound_%04d" % (randi() % 10000)) as AudioStreamPlayer3D
+	if sound == null:
+		return
+	sound.set_meta("SoundId", "")
+	sound.set_meta("Volume", 0.5)
+	sound.set_meta("PlaybackSpeed", 1.0)
+	sound.set_meta("Looped", false)
+	sound.set_meta("Playing", false)
+	sound.set_meta("roblox_properties", {
+		"SoundId": "", "Volume": 0.5, "PlaybackSpeed": 1.0, "Looped": false, "Playing": false,
+	})
+	# Sounds under a BasePart/Attachment are spatial. Sounds under SoundService
+	# remain global; do not silently move them into Workspace.
+	parent_node.add_child(sound, true)
+	if parent_node is Node3D and not bool(parent_node.get_meta("is_roblox_service", false)):
+		sound.position = Vector3.ZERO
 	_refresh_explorer()
+	explorer_selected_node = sound
+	_show_properties_for_node(sound)
 	_commit_editor_history("Add Sound")
 
 func _add_spawn_to_node(parent_node: Node) -> void:
@@ -8353,6 +8726,8 @@ func _add_script_to_node(parent_node: Node, service_name: String = "", requested
 	var source := "-- Server Script\r\nlocal object = script.Parent\r\nprint('Script loaded in: ' .. object.Name)\r\n"
 	if script_class == "LocalScript":
 		source = "-- LocalScript: runs on the player's copy during Play\r\nlocal player = game:GetService('Players').LocalPlayer\r\nprint('LocalScript loaded for ' .. player.Name)\r\n"
+	elif script_class == "ModuleScript":
+		source = "-- ModuleScript: return values or functions for require()\r\nlocal module = {}\r\n\nreturn module\r\n"
 	new_script.set_meta("code", source)
 	new_script.set_meta("lua_source", source)
 
@@ -9257,6 +9632,16 @@ func _open_script_in_editor(script_node: Node) -> void:
 	validate_btn.tooltip_text = "Check syntax (Ctrl+Shift+V)"
 	_style_white_button(validate_btn)
 	toolbar.add_child(validate_btn)
+	var output_toggle_btn := Button.new()
+	output_toggle_btn.text = "Hide Output"
+	output_toggle_btn.tooltip_text = "Show or hide the script output panel"
+	_style_white_button(output_toggle_btn)
+	toolbar.add_child(output_toggle_btn)
+	var focus_btn := Button.new()
+	focus_btn.text = "Restore Docks" if _script_focus_mode else "Focus Editor"
+	focus_btn.tooltip_text = "Hide Studio side docks to give the code editor more space"
+	_style_white_button(focus_btn)
+	toolbar.add_child(focus_btn)
 
 	var keyboard_btn: Button = null
 	if _is_mobile_studio_runtime():
@@ -9266,24 +9651,49 @@ func _open_script_in_editor(script_node: Node) -> void:
 		_style_white_button(keyboard_btn)
 		toolbar.add_child(keyboard_btn)
 
+	# Keep the close action at the far end of the toolbar.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	toolbar.add_child(spacer)
 	var close_btn := Button.new()
 	close_btn.text = "Close"
 	close_btn.tooltip_text = "Close tab (Ctrl+W)"
 	_style_white_button(close_btn)
 	toolbar.add_child(close_btn)
 
-	# Spacer to push close button right
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	toolbar.add_child(spacer)
+	var editor_output_split := VSplitContainer.new()
+	editor_output_split.name = "EditorOutputSplit"
+	editor_output_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	editor_output_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	editor_output_split.add_theme_constant_override("separation", 8)
+	editor_output_split.add_theme_constant_override("minimum_grab_thickness", 14)
+	editor_output_split.touch_dragger_enabled = _is_mobile_studio_runtime()
+	editor_output_split.dragger_visibility = SplitContainer.DRAGGER_VISIBLE
+	editor_output_split.drag_nested_intersections = true
+	editor_output_split.add_theme_constant_override("autohide", 0)
+	var split_bar_style := StyleBoxFlat.new()
+	split_bar_style.bg_color = Color("#D8DDE3")
+	editor_output_split.add_theme_stylebox_override("split_bar_background", split_bar_style)
+	tab_root.add_child(editor_output_split)
 
 	# --- Editor ---
 	var code_edit := CodeEdit.new()
 	code_edit.text = script_node.get_meta("code", "")
+	code_edit.set_meta("_saved_source", code_edit.text)
+	code_edit.set_meta("_script_dirty", false)
+	code_edit.custom_minimum_size = Vector2(0, 170 if _is_mobile_studio_runtime() else 220)
 	code_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	code_edit.size_flags_stretch_ratio = 3.2
 	setup_lua_editor(code_edit)
-	tab_root.add_child(code_edit)
+	editor_output_split.add_child(code_edit)
+	var validation_timer := Timer.new()
+	validation_timer.name = "ScriptValidationDebounce"
+	validation_timer.one_shot = true
+	validation_timer.wait_time = 0.45
+	tab_root.add_child(validation_timer)
+	code_edit.set_meta("_validation_timer", validation_timer)
+	validation_timer.timeout.connect(_validate_script_realtime.bind(code_edit, inst_id))
 
 	if keyboard_btn != null:
 		keyboard_btn.pressed.connect(func() -> void:
@@ -9292,21 +9702,24 @@ func _open_script_in_editor(script_node: Node) -> void:
 		code_edit.call_deferred("grab_focus")
 
 	var document_button := script_document_buttons.get(inst_id, null) as Button
-	var is_dirty := false
 	code_edit.text_changed.connect(func() -> void:
-		is_dirty = true
-		if document_button != null and is_instance_valid(document_button) and not document_button.text.ends_with(" *"):
-			document_button.text = "%s *" % script_node.name
-		# Real-time validation (debounced)
-		call_deferred("_validate_script_realtime", code_edit, inst_id)
+		var is_dirty := code_edit.text != str(code_edit.get_meta("_saved_source", ""))
+		code_edit.set_meta("_script_dirty", is_dirty)
+		if document_button != null and is_instance_valid(document_button):
+			document_button.text = "%s *" % script_node.name if is_dirty else script_node.name
+		# Validate after the user pauses typing. Creating/compiling a Luau state
+		# for every keystroke made large scripts noticeably stall the Studio UI.
+		validation_timer.start()
 	)
 
 	# --- Output Panel (resizable) ---
 	var console_panel := PanelContainer.new()
-	console_panel.custom_minimum_size = Vector2(0, 150 if _is_mobile_studio_runtime() else 200)
-	console_panel.size_flags_vertical = Control.SIZE_SHRINK_END
-	console_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#17191D"), Color("#333840"), 1))
-	tab_root.add_child(console_panel)
+	console_panel.custom_minimum_size = Vector2(0, 100 if _is_mobile_studio_runtime() else 120)
+	console_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	console_panel.size_flags_stretch_ratio = 1.0
+	console_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#FFFFFF"), Color("#D4D8DD"), 1))
+	editor_output_split.add_child(console_panel)
+	editor_output_split.set_deferred("split_offsets", PackedInt32Array([0]))
 
 	var console_vbox := VBoxContainer.new()
 	console_vbox.add_theme_constant_override("separation", 4)
@@ -9323,7 +9736,7 @@ func _open_script_in_editor(script_node: Node) -> void:
 	var console_title := Label.new()
 	console_title.text = "Output Log"
 	console_title.add_theme_font_size_override("font_size", 11)
-	console_title.add_theme_color_override("font_color", Color("#D9DCE1"))
+	console_title.add_theme_color_override("font_color", Color("#3B4652"))
 	console_header.add_child(console_title)
 
 	var clear_console_btn := Button.new()
@@ -9336,10 +9749,36 @@ func _open_script_in_editor(script_node: Node) -> void:
 	console_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	console_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	console_text.scroll_following = true
-	console_text.add_theme_color_override("default_color", Color("#C8CDD5"))
+	console_text.add_theme_color_override("default_color", Color("#263238"))
 	console_text.add_theme_font_size_override("normal_font_size", 12)
 	console_text.bbcode_enabled = true
 	console_vbox.add_child(console_text)
+
+	var editor_status_panel := PanelContainer.new()
+	editor_status_panel.custom_minimum_size = Vector2(0, 24)
+	editor_status_panel.add_theme_stylebox_override("panel", _studio_panel_style(Color("#F3F5F7"), Color("#D4D8DD"), 1))
+	tab_root.add_child(editor_status_panel)
+	var editor_status_row := HBoxContainer.new()
+	editor_status_row.add_theme_constant_override("separation", 12)
+	editor_status_panel.add_child(editor_status_row)
+	var language_status := Label.new()
+	language_status.text = "Luau"
+	language_status.add_theme_color_override("font_color", Color("#3F4852"))
+	editor_status_row.add_child(language_status)
+	var indent_status := Label.new()
+	indent_status.text = "Spaces: 4"
+	indent_status.add_theme_color_override("font_color", Color("#68727E"))
+	editor_status_row.add_child(indent_status)
+	var status_spacer := Control.new()
+	status_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	editor_status_row.add_child(status_spacer)
+	var cursor_status := Label.new()
+	cursor_status.text = "Ln 1, Col 1"
+	cursor_status.add_theme_color_override("font_color", Color("#3F4852"))
+	editor_status_row.add_child(cursor_status)
+	code_edit.caret_changed.connect(func() -> void:
+		cursor_status.text = "Ln %d, Col %d" % [code_edit.get_caret_line() + 1, code_edit.get_caret_column() + 1]
+	)
 
 	# Store references for external access
 	code_edit.set_meta("_script_inst_id", inst_id)
@@ -9355,45 +9794,106 @@ func _open_script_in_editor(script_node: Node) -> void:
 	validate_btn.pressed.connect(func() -> void: _validate_script_now(code_edit, console_text))
 	clear_console_btn.pressed.connect(func() -> void: console_text.clear())
 
-	close_btn.pressed.connect(func() -> void:
-		if is_dirty:
-			var confirm := ConfirmationDialog.new()
-			confirm.title = "Unsaved Changes"
-			confirm.dialog_text = "Save changes to %s before closing?" % script_node.name
-			confirm.ok_button_text = "Save"
-			confirm.add_button("Don't Save", true, "dont_save")
-			confirm.add_button("Cancel", false, "cancel")
-			add_child(confirm)
-			confirm.confirmed.connect(func() -> void: _save_and_close_tab(code_edit))
-			confirm.custom_action.connect(func(action: String) -> void:
-				if action == "dont_save":
-					_close_script_tab(code_edit, false)
-			)
-			confirm.popup_centered()
-		else:
-			_close_script_tab(code_edit, false)
+	close_btn.pressed.connect(_request_close_script_tab.bind(code_edit))
+	output_toggle_btn.pressed.connect(func() -> void:
+		console_panel.visible = not console_panel.visible
+		output_toggle_btn.text = "Hide Output" if console_panel.visible else "Output"
 	)
+	focus_btn.pressed.connect(func() -> void:
+		_set_script_focus_mode(not _script_focus_mode)
+		focus_btn.text = "Restore Docks" if _script_focus_mode else "Focus Editor"
+	)
+	var float_editor_btn := Button.new()
+	float_editor_btn.name = "FloatScriptEditorButton"
+	float_editor_btn.text = "Отдельное окно"
+	float_editor_btn.tooltip_text = "Открыть редактор в отдельном изменяемом окне"
+	float_editor_btn.visible = not _is_mobile_studio_runtime()
+	_style_white_button(float_editor_btn)
+	toolbar.add_child(float_editor_btn)
+	float_editor_btn.pressed.connect(_toggle_script_editor_window)
 
-	# Shortcuts
-	var shortcuts := [
-		["ui_save", func() -> void: _save_script_tab(code_edit)],
-		["ui_find", func() -> void: _show_find_dialog(code_edit)],
-		["ui_replace", func() -> void: _show_replace_dialog(code_edit)],
-		["ui_goto_line", func() -> void: _show_goto_line_dialog(code_edit)],
-		["ui_toggle_breakpoint", func() -> void: _toggle_breakpoint_at_caret(code_edit)],
-	]
-	for sc in shortcuts:
-		var sc_name: Variant = sc[0]
-		var sc_func: Variant = sc[1]
-		var shortcut := InputMap.action_get_events(sc_name)
-		if shortcut.size() > 0:
-			code_edit.add_shortcut(shortcut[0], sc_func.callable())
+	# CodeEdit has no add_shortcut() method in Godot 4. Route editor shortcuts
+	# through its focused gui_input signal instead of silently failing at runtime.
+	code_edit.gui_input.connect(_on_script_editor_gui_input.bind(code_edit, console_text))
 
 	script_editor_tabs.current_tab = script_editor_tabs.get_tab_idx_from_control(tab_root)
 
 
 # ===== Script Editor Helpers =====
-func _save_script_tab(code_edit: CodeEdit) -> void:
+func _on_script_editor_gui_input(event: InputEvent, code_edit: CodeEdit, console_text: RichTextLabel) -> void:
+	if not (event is InputEventKey) or not (event as InputEventKey).pressed or (event as InputEventKey).echo:
+		return
+	var key_event := event as InputEventKey
+	if not key_event.ctrl_pressed:
+		return
+	var handled := true
+	match key_event.keycode:
+		KEY_S:
+			_save_script_tab(code_edit)
+		KEY_F:
+			_show_find_dialog(code_edit)
+		KEY_H:
+			_show_replace_dialog(code_edit)
+		KEY_G:
+			_show_goto_line_dialog(code_edit)
+		KEY_W:
+			_request_close_script_tab(code_edit)
+		KEY_V:
+			if key_event.shift_pressed:
+				_validate_script_now(code_edit, console_text)
+			else:
+				handled = false
+		_:
+			handled = false
+	if handled:
+		code_edit.accept_event()
+
+
+func _request_close_script_tab(code_edit: CodeEdit) -> void:
+	if not is_instance_valid(code_edit):
+		return
+	if not _script_editor_has_unsaved_changes(code_edit):
+		_close_script_tab(code_edit, false)
+		return
+	var script_node := code_edit.get_meta("_script_node", null) as Node
+	var confirm := ConfirmationDialog.new()
+	confirm.title = "Unsaved Changes"
+	confirm.dialog_text = "Save changes to %s before closing?" % (script_node.name if is_instance_valid(script_node) else "this script")
+	confirm.ok_button_text = "Save"
+	confirm.add_button("Don't Save", true, "dont_save")
+	confirm.add_button("Cancel", false, "cancel")
+	add_child(confirm)
+	confirm.confirmed.connect(func() -> void:
+		_save_and_close_tab(code_edit)
+		if is_instance_valid(confirm): confirm.queue_free()
+	)
+	confirm.custom_action.connect(func(action: String) -> void:
+		if action == "dont_save":
+			_close_script_tab(code_edit, false)
+		if is_instance_valid(confirm): confirm.queue_free()
+	)
+	confirm.canceled.connect(func() -> void:
+		if is_instance_valid(confirm): confirm.queue_free()
+	)
+	confirm.close_requested.connect(func() -> void:
+		if is_instance_valid(confirm): confirm.queue_free()
+	)
+	confirm.popup_centered()
+
+
+func _script_editor_has_unsaved_changes(code_edit: CodeEdit) -> bool:
+	if not is_instance_valid(code_edit):
+		return false
+	var dirty := code_edit.text != str(code_edit.get_meta("_saved_source", ""))
+	code_edit.set_meta("_script_dirty", dirty)
+	var document_button := code_edit.get_meta("_document_button", null) as Button
+	var script_node := code_edit.get_meta("_script_node", null) as Node
+	if is_instance_valid(document_button) and is_instance_valid(script_node):
+		document_button.text = "%s *" % script_node.name if dirty else script_node.name
+	return dirty
+
+
+func _save_script_tab(code_edit: CodeEdit) -> bool:
 	var inst_id := int(code_edit.get_meta("_script_inst_id", 0))
 	var console_text := code_edit.get_meta("_console_text", null) as RichTextLabel
 	var document_button := code_edit.get_meta("_document_button", null) as Button
@@ -9401,26 +9901,31 @@ func _save_script_tab(code_edit: CodeEdit) -> void:
 
 	if not is_instance_valid(script_node):
 		if console_text: console_text.append_text("[Error] Script instance no longer exists.\r\n")
-		return
+		return false
 
 	code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
 	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
+	_display_script_validation(code_edit, validation)
 	if not bool(validation.get("ok", false)):
 		if console_text: console_text.append_text("[Compile Error] %s\r\n" % str(validation.get("error", "Unknown syntax error")))
-		return
+		return false
 
 	_commit_script_editor_source(script_node, code_edit.text)
+	code_edit.set_meta("_saved_source", code_edit.text)
+	code_edit.set_meta("_script_dirty", false)
 	if document_button != null and is_instance_valid(document_button):
 		document_button.text = script_node.name
 	if console_text: console_text.append_text("[System] Saved successfully.\r\n")
+	return true
 
 
 func _save_and_close_tab(code_edit: CodeEdit) -> void:
-	_save_script_tab(code_edit)
+	if not _save_script_tab(code_edit):
+		return
 	_close_script_tab(code_edit, true)
 
 
-func _close_script_tab(code_edit: CodeEdit, saved: bool) -> void:
+func _close_script_tab(code_edit: CodeEdit, _saved: bool) -> void:
 	var inst_id := int(code_edit.get_meta("_script_inst_id", 0))
 	var doc_button := code_edit.get_meta("_document_button", null) as Button
 
@@ -9660,6 +10165,7 @@ func _show_goto_line_dialog(code_edit: CodeEdit) -> void:
 func _validate_script_now(code_edit: CodeEdit, console_text: RichTextLabel) -> void:
 	code_edit.text = LuaScriptEngine.normalize_script_source(code_edit.text)
 	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
+	_display_script_validation(code_edit, validation)
 	if bool(validation.get("ok", false)):
 		console_text.append_text("[color=#4EC9B0][Validate] Syntax OK[/color]\r\n")
 	else:
@@ -9667,11 +10173,55 @@ func _validate_script_now(code_edit: CodeEdit, console_text: RichTextLabel) -> v
 
 
 func _validate_script_realtime(code_edit: CodeEdit, inst_id: int) -> void:
-	# Debounced real-time validation - only show errors, not success
+	if not is_instance_valid(code_edit) or int(code_edit.get_meta("_script_inst_id", 0)) != inst_id:
+		return
 	var validation: Dictionary = LuaScriptEngine.validate_script_source(code_edit.text)
-	if not bool(validation.get("ok", false)):
-		# Could show inline error markers here in future
-		pass
+	_display_script_validation(code_edit, validation)
+
+
+func _display_script_validation(code_edit: CodeEdit, validation: Dictionary) -> void:
+	var old_line := int(code_edit.get_meta("_validation_error_line", -1))
+	if old_line >= 0 and old_line < code_edit.get_line_count():
+		code_edit.set_line_background_color(old_line, Color(0, 0, 0, 0))
+	code_edit.set_meta("_validation_error_line", -1)
+	if bool(validation.get("ok", false)):
+		code_edit.tooltip_text = "Luau syntax: OK"
+		if toolbar_status_label != null and int(code_edit.get_meta("_script_inst_id", 0)) == active_document_script_id:
+			toolbar_status_label.text = "Luau syntax OK · %d lines" % code_edit.get_line_count()
+		return
+	var message := str(validation.get("error", "Unknown syntax error"))
+	var source_line := int(validation.get("line", 0))
+	if source_line > 0 and source_line <= code_edit.get_line_count():
+		var line_index := source_line - 1
+		code_edit.set_line_background_color(line_index, Color(0.42, 0.08, 0.08, 0.62))
+		code_edit.set_meta("_validation_error_line", line_index)
+		code_edit.set_caret_line(line_index)
+		code_edit.center_viewport_to_caret()
+		code_edit.tooltip_text = "Luau syntax error · line %d: %s" % [source_line, message]
+		if toolbar_status_label != null and int(code_edit.get_meta("_script_inst_id", 0)) == active_document_script_id:
+			toolbar_status_label.text = "Luau error · line %d: %s" % [source_line, message.left(150)]
+	else:
+		code_edit.tooltip_text = "Luau syntax error: " + message
+		if toolbar_status_label != null and int(code_edit.get_meta("_script_inst_id", 0)) == active_document_script_id:
+			toolbar_status_label.text = "Luau error: " + message.left(180)
+
+
+func _set_script_focus_mode(enabled: bool) -> void:
+	if enabled == _script_focus_mode:
+		return
+	if enabled:
+		_script_focus_restore = {
+			"toolbox": toolbox_dock_panel.visible if is_instance_valid(toolbox_dock_panel) else false,
+			"right": right_side.visible if is_instance_valid(right_side) else false,
+		}
+		_script_focus_mode = true
+		if is_instance_valid(toolbox_dock_panel): toolbox_dock_panel.visible = false
+		if is_instance_valid(right_side): right_side.visible = false
+	else:
+		_script_focus_mode = false
+		if is_instance_valid(toolbox_dock_panel): toolbox_dock_panel.visible = bool(_script_focus_restore.get("toolbox", true))
+		if is_instance_valid(right_side): right_side.visible = bool(_script_focus_restore.get("right", true))
+		_script_focus_restore.clear()
 
 
 func _toggle_breakpoint_at_caret(code_edit: CodeEdit) -> void:
@@ -9716,9 +10266,9 @@ func setup_lua_editor(code_edit: CodeEdit) -> void:
 		"function", "if", "in", "local", "nil", "not", "or", "repeat",
 		"return", "then", "true", "until", "while", "continue"
 	]:
-		highlighter.add_keyword_color(kw, Color("#CC7832"))
+		highlighter.add_keyword_color(kw, Color("#0451A5"))
 	for type_name in ["number", "string", "boolean", "table", "any", "void"]:
-		highlighter.add_keyword_color(type_name, Color("#4EC9B0"))
+		highlighter.add_keyword_color(type_name, Color("#267F99"))
 	for api in [
 		"game", "workspace", "script", "print", "warn", "error",
 		"wait", "task", "Instance", "Vector3", "Vector2", "CFrame",
@@ -9726,7 +10276,7 @@ func setup_lua_editor(code_edit: CodeEdit) -> void:
 		"string", "table", "pairs", "ipairs", "next", "select",
 		"tostring", "tonumber", "type", "typeof", "rawget", "rawset"
 	]:
-		highlighter.add_keyword_color(api, Color("#9CDCFE"))
+		highlighter.add_keyword_color(api, Color("#267F99"))
 	for roblox_api in [
 		"Game", "Workspace", "Players", "Lighting", "ReplicatedStorage",
 		"ServerScriptService", "ServerStorage", "StarterGui", "StarterPack",
@@ -9737,31 +10287,152 @@ func setup_lua_editor(code_edit: CodeEdit) -> void:
 		"HttpService", "TeleportService", "LocalizationService", "coroutine",
 		"os", "debug", "bit32", "utf8", "buffer", "super"
 	]:
-		highlighter.add_keyword_color(roblox_api, Color("#9CDCFE"))
-	highlighter.add_color_region('"', '"', Color("#CE9178"))
-	highlighter.add_color_region("'", "'", Color("#CE9178"))
-	highlighter.add_color_region("[[", "]]", Color("#CE9178"))
-	highlighter.add_color_region("--[[", "]]", Color("#6A9955"), false)
-	highlighter.add_color_region("--", "", Color("#6A9955"), true)
-	highlighter.number_color = Color("#B5CEA8")
+		highlighter.add_keyword_color(roblox_api, Color("#267F99"))
+	for member_name in [
+		"GetService", "FindFirstChild", "FindFirstChildOfClass", "WaitForChild",
+		"GetChildren", "GetDescendants", "IsA", "Clone", "Destroy", "GetAttribute",
+		"SetAttribute", "GetPivot", "PivotTo", "Connect", "Once", "Disconnect",
+		"Fire", "FireServer", "FireClient", "FireAllClients", "Invoke", "InvokeServer",
+		"Play", "Stop", "GetPropertyChangedSignal", "GetAttributeChangedSignal",
+		"Lerp", "Dot", "Cross", "Magnitude", "Unit", "Name", "Parent", "Position",
+		"CFrame", "Size", "Color", "Transparency", "Anchored", "CanCollide", "Health",
+		"WalkSpeed", "JumpPower", "Touched", "Changed", "Heartbeat", "RenderStepped",
+		"OnServerEvent", "OnClientEvent", "OnServerInvoke", "OnClientInvoke",
+		"FillBlock", "FillBall", "FillCylinder", "FillWedge", "FillRegion", "Clear",
+		"WorldToCell", "CellCenterToWorld", "CellCornerToWorld", "CountCells", "Terrain", "Sound",
+		"SoundId", "Volume", "Looped", "Playing", "PlaybackSpeed", "TimePosition",
+		"Create", "Cancel", "Pause", "PlaybackState", "Completed",
+		"Air", "Asphalt", "Basalt", "Brick", "Cobblestone", "Concrete", "Grass", "Ground",
+		"Ice", "LeafyGrass", "Limestone", "Marble", "Metal", "Mud", "Neon", "Plastic",
+		"Rock", "Salt", "Sand", "Sandstone", "Slate", "Snow", "SmoothPlastic", "Water",
+		"Wood", "WoodPlanks", "Linear", "Sine", "Quad", "Cubic", "Bounce", "Elastic", "InOut"
+	]:
+		highlighter.add_member_keyword_color(member_name, Color("#795E26"))
+	highlighter.add_color_region('"', '"', Color("#A31515"))
+	highlighter.add_color_region("'", "'", Color("#A31515"))
+	highlighter.add_color_region("[[", "]]", Color("#A31515"))
+	highlighter.add_color_region("--[[", "]]", Color("#008000"), false)
+	highlighter.add_color_region("--", "", Color("#008000"), true)
+	highlighter.number_color = Color("#098658")
+	highlighter.symbol_color = Color("#333333")
+	highlighter.function_color = Color("#795E26")
+	highlighter.member_variable_color = Color("#001080")
 	code_edit.syntax_highlighter = highlighter
 	code_edit.indent_automatic = true
 	code_edit.indent_size = 4
 	code_edit.line_folding = true
+	code_edit.gutters_draw_fold_gutter = true
 	code_edit.gutters_draw_line_numbers = true
+	code_edit.indent_use_spaces = true
 	code_edit.highlight_current_line = true
 	code_edit.minimap_draw = not _is_mobile_studio_runtime()
-	code_edit.minimap_width = 96
+	code_edit.minimap_width = 88
 	code_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY if _is_mobile_studio_runtime() else TextEdit.LINE_WRAPPING_NONE
 	code_edit.virtual_keyboard_enabled = true
+	code_edit.code_completion_enabled = true
+	code_edit.code_completion_prefixes = [".", ":"]
+	if not code_edit.code_completion_requested.is_connected(_on_lua_code_completion_requested.bind(code_edit)):
+		code_edit.code_completion_requested.connect(_on_lua_code_completion_requested.bind(code_edit))
+	code_edit.auto_brace_completion_enabled = true
+	code_edit.add_theme_font_override("font", CASCADIA_MONO_FONT)
 	code_edit.add_theme_font_size_override("font_size", 17 if _is_mobile_studio_runtime() else 14)
-	code_edit.add_theme_color_override("background_color", Color("#1E1E1E"))
-	code_edit.add_theme_color_override("font_color", Color("#D4D4D4"))
-	code_edit.add_theme_color_override("font_readonly_color", Color("#A7ACB5"))
-	code_edit.add_theme_color_override("caret_color", Color("#F0F0F0"))
-	code_edit.add_theme_color_override("current_line_color", Color("#292D33"))
-	code_edit.add_theme_color_override("selection_color", Color("#264F78"))
-	code_edit.add_theme_color_override("line_number_color", Color("#858585"))
+	code_edit.add_theme_color_override("background_color", Color("#FFFFFF"))
+	code_edit.add_theme_color_override("font_color", Color("#202124"))
+	code_edit.add_theme_color_override("font_readonly_color", Color("#6B7280"))
+	code_edit.add_theme_color_override("caret_color", Color("#202124"))
+	code_edit.add_theme_color_override("current_line_color", Color("#F3F6FA"))
+	code_edit.add_theme_color_override("selection_color", Color("#B7D7F8"))
+	code_edit.add_theme_color_override("line_number_color", Color("#7A828C"))
+	code_edit.add_theme_color_override("completion_background_color", Color("#FFFFFF"))
+	code_edit.add_theme_color_override("completion_selected_color", Color("#DCEBFA"))
+	code_edit.add_theme_color_override("completion_existing_color", Color("#EAF2FB"))
+	code_edit.add_theme_color_override("completion_scroll_color", Color("#AAB4BF"))
+	code_edit.add_theme_color_override("completion_scroll_hovered_color", Color("#7E8995"))
+	var completion_style := StyleBoxFlat.new()
+	completion_style.bg_color = Color("#FFFFFF")
+	completion_style.border_color = Color("#B9C3CF")
+	completion_style.set_border_width_all(1)
+	completion_style.set_corner_radius_all(3)
+	completion_style.content_margin_left = 4
+	completion_style.content_margin_right = 4
+	code_edit.add_theme_stylebox_override("completion", completion_style)
+
+
+func _on_lua_code_completion_requested(code_edit: CodeEdit) -> void:
+	if not is_instance_valid(code_edit):
+		return
+	var caret_line := code_edit.get_caret_line()
+	var caret_column := code_edit.get_caret_column()
+	var before_caret := code_edit.get_line(caret_line).left(caret_column)
+	var member_regex := RegEx.new()
+	member_regex.compile("[.:]([A-Za-z_][A-Za-z0-9_]*)?$")
+	var member_match := member_regex.search(before_caret)
+	var member_context := member_match != null
+	var query := str(member_match.get_string(1)) if member_context else ""
+	if not member_context:
+		var word_regex := RegEx.new()
+		word_regex.compile("[A-Za-z_][A-Za-z0-9_]*$")
+		var word_match := word_regex.search(before_caret)
+		if word_match != null:
+			query = word_match.get_string()
+	var candidates: Array[Dictionary] = []
+	if before_caret.ends_with("Enum.Material."):
+		for name in ["Air", "Asphalt", "Basalt", "Brick", "Cobblestone", "Concrete", "CorrodedMetal", "CrackedLava", "DiamondPlate", "Fabric", "Foil", "ForceField", "Glacier", "Glass", "Granite", "Grass", "Ground", "Ice", "LeafyGrass", "Leather", "Limestone", "Marble", "Metal", "Mud", "Neon", "Pavement", "Pebble", "Plastic", "Rock", "Salt", "Sand", "Sandstone", "Slate", "Snow", "SmoothPlastic", "Water", "Wood", "WoodPlanks"]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_VARIABLE})
+	elif before_caret.ends_with("Enum.EasingStyle."):
+		for name in ["Back", "Bounce", "Circular", "Cubic", "Elastic", "Exponential", "Linear", "Quad", "Quart", "Quint", "Sine"]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_VARIABLE})
+	elif before_caret.ends_with("Enum.EasingDirection."):
+		for name in ["In", "InOut", "Out"]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_VARIABLE})
+	elif before_caret.ends_with("Enum.HumanoidStateType."):
+		for name in ["Climbing", "Dead", "Freefall", "GettingUp", "Jumping", "Landed", "Running", "Seated", "Swimming"]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_VARIABLE})
+	elif before_caret.ends_with("Vector3.") or before_caret.ends_with("Vector2.") or before_caret.ends_with("CFrame.") or before_caret.ends_with("TweenInfo."):
+		candidates.append({"name": "new", "kind": CodeEdit.KIND_FUNCTION})
+	elif before_caret.ends_with("Color3."):
+		for name in ["fromRGB", "fromHSV", "new"]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_FUNCTION})
+	elif member_context:
+		for name in [
+			"GetService", "FindFirstChild", "FindFirstChildOfClass", "FindFirstAncestor",
+			"WaitForChild", "GetChildren", "GetDescendants", "IsA", "Clone", "Destroy",
+			"GetAttribute", "SetAttribute", "GetAttributes", "GetPivot", "PivotTo",
+			"Connect", "Once", "Disconnect", "Wait", "Fire", "FireServer", "FireClient",
+			"FireAllClients", "Invoke", "InvokeServer", "InvokeClient", "Play", "Stop",
+			"FillBlock", "FillBall", "FillCylinder", "FillWedge", "FillRegion", "Clear",
+			"WorldToCell", "CellCenterToWorld", "CellCornerToWorld", "CountCells",
+			"GetPropertyChangedSignal", "GetAttributeChangedSignal", "Lerp", "Dot", "Cross",
+			"Magnitude", "Unit", "Name", "Parent", "Position", "CFrame", "Size", "Color",
+			"SoundId", "Volume", "Looped", "Playing", "PlaybackSpeed", "TimePosition",
+			"Create", "Cancel", "Pause", "PlaybackState", "Completed",
+			"Transparency", "Anchored", "CanCollide", "Health", "WalkSpeed", "JumpPower",
+			"Touched", "Changed", "Heartbeat", "RenderStepped", "OnServerEvent", "OnClientEvent",
+			"OnServerInvoke", "OnClientInvoke", "LocalPlayer", "Character", "PlayerGui", "Backpack"
+		]:
+			candidates.append({"name": name, "kind": CodeEdit.KIND_FUNCTION})
+	else:
+		for name in [
+			"game", "workspace", "script", "Instance", "Vector3", "Vector2", "CFrame", "Color3",
+			"BrickColor", "UDim", "UDim2", "Enum", "task", "TweenInfo", "RaycastParams",
+			"print", "warn", "error", "assert", "pairs", "ipairs", "next", "pcall", "xpcall",
+			"require", "typeof", "tostring", "tonumber", "math", "string", "table", "coroutine",
+			"RunService", "Players", "Workspace", "Lighting", "ReplicatedStorage", "ServerStorage",
+			"ServerScriptService", "StarterGui", "StarterPlayer", "StarterPack", "SoundService",
+			"CollectionService", "TweenService", "Debris", "UserInputService", "HttpService"
+		]:
+			var kind := CodeEdit.KIND_CLASS if name in ["Instance", "Vector3", "Vector2", "CFrame", "Color3", "BrickColor", "UDim", "UDim2", "Enum", "TweenInfo", "RaycastParams"] else CodeEdit.KIND_FUNCTION if name in ["print", "warn", "error", "assert", "pairs", "ipairs", "next", "pcall", "xpcall", "require", "typeof", "tostring", "tonumber"] else CodeEdit.KIND_VARIABLE
+			candidates.append({"name": name, "kind": kind})
+	var added := 0
+	for candidate in candidates:
+		var name := str(candidate.name)
+		if not query.is_empty() and not name.to_lower().begins_with(query.to_lower()):
+			continue
+		code_edit.add_code_completion_option(int(candidate.kind), name, name, Color("#9CDCFE"))
+		added += 1
+		if added >= 48:
+			break
+	code_edit.update_code_completion_options(true)
 
 func _set_item_icon(item: TreeItem, type_name: String) -> void:
 	var icon: Texture2D = null
@@ -10650,7 +11321,10 @@ func _refresh_explorer() -> void:
 ## tags every TreeItem with the underlying node's instance_id so selection,
 ## context menus and the Properties panel all route back to the real node.
 func _refresh_explorer_from_data_model() -> void:
+	explorer_hover_item = null
 	roblox_explorer.show_runtime = studio_playtest_active
+	roblox_explorer.show_insert_buttons = true
+	roblox_explorer.insert_button_icon = _get_toolbar_icon("Add", Color("#1677D2"))
 	roblox_explorer.rebuild(explorer_tree, data_model)
 	# Rebuild the compatibility lookup: service name -> TreeItem. Several
 	# legacy helpers (`_manifest_entry_service_name`, manifest population) key
@@ -11317,11 +11991,6 @@ func _on_music_file_selected(path: String) -> void:
 	if AudioFileLoader.load_stream(path, false) == null:
 		if toolbar_status_label: toolbar_status_label.text = "Файл не является поддерживаемым аудио."
 		return
-	if current_music_source_paths.size() >= CLOUD_INLINE_ASSET_MAX_TRACKS:
-		push_warning("[Studio] Track limit reached (%d). Remove some tracks before adding new ones." % CLOUD_INLINE_ASSET_MAX_TRACKS)
-		if toolbar_status_label:
-			toolbar_status_label.text = "Track limit reached (%d max)" % CLOUD_INLINE_ASSET_MAX_TRACKS
-		return
 	if not current_music_source_paths.has(path):
 		current_music_source_paths.append(path)
 	_refresh_atmosphere_path_labels()
@@ -11329,9 +11998,6 @@ func _on_music_file_selected(path: String) -> void:
 func _on_music_files_selected(paths: PackedStringArray) -> void:
 	var skipped: int = 0
 	for path in paths:
-		if current_music_source_paths.size() >= CLOUD_INLINE_ASSET_MAX_TRACKS:
-			skipped += 1
-			continue
 		var clean_path: String = str(path).strip_edges()
 		if clean_path.is_empty() or current_music_source_paths.has(clean_path):
 			continue
@@ -11340,9 +12006,9 @@ func _on_music_files_selected(paths: PackedStringArray) -> void:
 			continue
 		current_music_source_paths.append(clean_path)
 	if skipped > 0:
-		push_warning("[Studio] Skipped %d track(s) — playlist limit is %d." % [skipped, CLOUD_INLINE_ASSET_MAX_TRACKS])
+		push_warning("[Studio] Skipped %d unsupported audio file(s)." % skipped)
 		if toolbar_status_label:
-			toolbar_status_label.text = "Skipped %d track(s) (max %d)" % [skipped, CLOUD_INLINE_ASSET_MAX_TRACKS]
+			toolbar_status_label.text = "Skipped %d unsupported audio file(s)" % skipped
 	_refresh_atmosphere_path_labels()
 
 func _remove_music_track_at(index: int) -> void:

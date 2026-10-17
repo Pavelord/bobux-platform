@@ -128,6 +128,8 @@ var _reported_cache_refresh_reasons: Dictionary = {}
 var _auth_operation_epoch: int = 0
 var _avatar_outfit_refresh_in_flight: bool = false
 var _avatar_outfit_refresh_user_id: String = ""
+var _halloween_editor_account := ""
+var _halloween_editor_gift := false
 
 func _ready() -> void:
 	_is_shutting_down = false
@@ -936,13 +938,24 @@ func _print_cache_refresh_once(map_id: String, reason_key: String, message: Stri
 	_reported_cache_refresh_reasons[dedupe_key] = true
 	print("[CloudAPI] Cached map '%s' %s" % [map_id, message])
 
+var _published_map_fetches: Dictionary = {}
+
 func fetch_published_maps(limit: int = 20) -> Dictionary:
-	var query: String = "%s?select=id,name,owner_id,owner_name,description,thumbnail,cloud_version_id,updated_at,likes_count,visits_count&is_published=eq.true&order=updated_at.desc&limit=%d" % [maps_endpoint, maxi(limit, 1)]
-	var response: Dictionary = await _request_json_with_retries(query, HTTPClient.METHOD_GET, null, "fetch_published_maps", PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, HTTP_READ_RETRY_ATTEMPTS)
+	var key := str(limit)
+	if _published_map_fetches.has(key):
+		var pending: Dictionary = _published_map_fetches[key]
+		while not pending["done"]: await get_tree().process_frame
+		return pending["response"].duplicate(true)
+	var pending := {"done": false, "response": {}}
+	_published_map_fetches[key] = pending
+	var response: Dictionary = await _fetch_published_map_pages("", limit, "fetch_published_maps")
 	if bool(response.get("ok", false)):
 		var maps: Array = _dedupe_published_maps_by_owner_and_name(_extract_array_payload(response.get("data", [])))
 		response["data"] = maps
 		published_maps_fetched.emit(maps)
+	pending["response"] = response
+	pending["done"] = true
+	_published_map_fetches.erase(key)
 	return response
 
 func fetch_published_maps_for_owner(owner_user_id: String, limit: int = 20) -> Dictionary:
@@ -954,11 +967,36 @@ func fetch_published_maps_for_owner(owner_user_id: String, limit: int = 20) -> D
 			"status": 200,
 			"data": []
 		}
-	var query: String = "%s?select=id,name,owner_id,owner_name,description,thumbnail,cloud_version_id,updated_at,likes_count,visits_count&is_published=eq.true&owner_id=eq.%s&order=updated_at.desc&limit=%d" % [maps_endpoint, clean_owner_user_id.uri_encode(), maxi(limit, 1)]
-	var response: Dictionary = await _request_json_with_retries(query, HTTPClient.METHOD_GET, null, "fetch_published_maps_for_owner", PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, HTTP_READ_RETRY_ATTEMPTS)
+	var response: Dictionary = await _fetch_published_map_pages("&owner_id=eq." + clean_owner_user_id.uri_encode(), limit, "fetch_published_maps_for_owner")
 	if bool(response.get("ok", false)):
 		response["data"] = _dedupe_published_maps_by_owner_and_name(_extract_array_payload(response.get("data", [])))
 	return response
+
+func _fetch_published_map_pages(filter: String, limit: int, operation: String) -> Dictionary:
+	# A full Games list uses limit=-1. Keep each response small and metadata-only
+	# instead of either downloading the map scenes or silently keeping page one.
+	var maps: Array = []
+	var seen: Dictionary = {}
+	var offset := 0
+	while limit < 0 or maps.size() < maxi(limit, 1):
+		var page_size := 100 if limit < 0 else mini(100, maxi(limit, 1) - maps.size())
+		var query := "%s?select=id,name,owner_id,owner_name,description,thumbnail,cloud_version_id,updated_at,likes_count,visits_count&is_published=eq.true%s&order=updated_at.desc,id.asc&limit=%d&offset=%d" % [maps_endpoint, filter, page_size, offset]
+		var response: Dictionary = await _request_json_with_retries(query, HTTPClient.METHOD_GET, null, operation, PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, HTTP_READ_RETRY_ATTEMPTS)
+		if not bool(response.get("ok", false)): return response
+		var page := _extract_array_payload(response.get("data", []))
+		var added := 0
+		for record in page:
+			if not (record is Dictionary): continue
+			var record_id := str(record.get("id", record.get("map_id", ""))).strip_edges()
+			if record_id.is_empty() or seen.has(record_id): continue
+			seen[record_id] = true
+			maps.append(record)
+			added += 1
+		if page.size() < page_size: break
+		if added == 0: return _make_error_result(operation, "Server did not advance the published map page. Try refreshing.")
+		offset += page.size()
+		await get_tree().process_frame
+	return {"ok": true, "endpoint": operation, "status": 200, "data": maps}
 
 func fetch_published_map_metadata(map_id: String) -> Dictionary:
 	var clean_map_id: String = map_id.strip_edges()
@@ -1408,6 +1446,28 @@ func fetch_owned_avatar_items() -> Dictionary:
 	if not auth_result.get("ok", false): return auth_result
 	return await _request_json_with_retries("/rpc/fetch_owned_avatar_items", HTTPClient.METHOD_POST, {}, "fetch_owned_avatar_items")
 
+func fetch_halloween_event(claim: String = "") -> Dictionary:
+	# Editor testing remains local until the event API ships with the release.
+	# No production inventory request is made and no reward is persisted here.
+	if OS.has_feature("editor"):
+		if UserSession.user_id.is_empty(): return _make_error_result("halloween_event", "Войдите в аккаунт.")
+		if _halloween_editor_account != UserSession.user_id:
+			_halloween_editor_account = UserSession.user_id
+			_halloween_editor_gift = false
+		var event_data := preload("res://scripts/ui/halloween_event_data.gd")
+		if not claim.is_empty() and claim != event_data.GIFT_ID: return _make_error_result("halloween_event", "В локальном предпросмотре доступен только гроб-подарок.")
+		if claim == event_data.GIFT_ID: _halloween_editor_gift = true
+		var state := event_data.unavailable_state()
+		state["service_available"] = true
+		state["development_preview"] = true
+		state["gift_owned"] = _halloween_editor_gift
+		state["can_claim_gift"] = not _halloween_editor_gift
+		for item in state.items: item["owned"] = _halloween_editor_gift if item.id == event_data.GIFT_ID else false
+		return {"ok": true, "data": state}
+	var auth_result: Dictionary = await _ensure_data_api_session("halloween_event")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_json_with_retries("/rpc/halloween_event", HTTPClient.METHOD_POST, {"claim": claim}, "halloween_event", PackedStringArray(), true)
+
 func fetch_my_creations() -> Dictionary:
 	var auth_result: Dictionary = await _ensure_data_api_session("fetch_my_creations")
 	if not bool(auth_result.get("ok", false)):
@@ -1689,6 +1749,22 @@ func load_avatar_outfit(user_id: String, use_service_role: bool = false) -> Dict
 	response["data"] = rows[0] if not rows.is_empty() and rows[0] is Dictionary else {}
 	return response
 
+func update_profile_about(bio: String) -> Dictionary:
+	var auth_result := await _ensure_data_api_session("update_profile_about")
+	if not bool(auth_result.get("ok", false)): return auth_result
+	return await _request_json_with_retries("/rpc/update_profile_about", HTTPClient.METHOD_POST, {"bio": bio}, "update_profile_about", PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, 1)
+
+func record_profile_visit(map_id: String) -> Dictionary:
+	# World/character readiness owns this call; diagnostics and unauthenticated
+	# clients must not bootstrap an account or fabricate successful visits.
+	if not has_authenticated_session() or map_id.strip_edges().is_empty():
+		return {"ok": false, "error": "No authenticated visit context."}
+	return await _request_json_with_retries("/rpc/record_profile_visit", HTTPClient.METHOD_POST, {"map_id": map_id.strip_edges()}, "record_profile_visit", PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, 1)
+
+func import_recent_profile_visits(map_ids: Array[String]) -> Dictionary:
+	if not has_authenticated_session(): return {"ok": false}
+	return await _request_json_with_retries("/rpc/import_recent_profile_visits", HTTPClient.METHOD_POST, {"map_ids": map_ids}, "import_recent_profile_visits", PackedStringArray(), false, HTTP_REQUEST_TIMEOUT_SECONDS, 1)
+
 func load_player_profile(user_id: String, use_service_role: bool = false) -> Dictionary:
 	var clean_user_id: String = user_id.strip_edges()
 	if clean_user_id.is_empty():
@@ -1707,6 +1783,10 @@ func load_player_profile(user_id: String, use_service_role: bool = false) -> Dic
 	var rows: Array = _extract_array_payload(response.get("data", []))
 	var profile_data: Dictionary = (rows[0] as Dictionary).duplicate(true) if not rows.is_empty() and rows[0] is Dictionary else {}
 	if not profile_data.is_empty():
+		if not use_service_role:
+			var details := await _request_json_with_retries("/rpc/profile_details", HTTPClient.METHOD_POST, {"user_id": clean_user_id}, "profile_details", PackedStringArray(), false, HTTP_AVATAR_PROFILE_TIMEOUT_SECONDS, 1)
+			if bool(details.get("ok", false)) and details.get("data") is Dictionary:
+				profile_data.merge(details.data, true)
 		var outfit_result: Dictionary = await load_avatar_outfit(clean_user_id, use_service_role)
 		if bool(outfit_result.get("ok", false)) and outfit_result.get("data", {}) is Dictionary:
 			var outfit: Dictionary = (outfit_result.get("data", {}) as Dictionary).duplicate(true)
@@ -2204,6 +2284,7 @@ func _apply_auth_response_payload(response: Dictionary, request_name: String) ->
 		var expires_in: int = int(payload.get("expires_in", 0))
 		if expires_in > 0:
 			expires_at = int(Time.get_unix_time_from_system()) + expires_in
+	expires_at = preload("res://autoload/auth_token_expiry.gd").clamp_expiry(expires_at, access_token)
 	if access_token.is_empty() or refresh_token.is_empty() or user_id.is_empty():
 		return _make_error_result(request_name, "Bobux auth response did not contain a complete session.", ERR_PARSE_ERROR, int(response.get("status", 0)), payload)
 
@@ -2380,7 +2461,7 @@ func _load_saved_auth_session() -> void:
 		_auth_access_token = str(data.get("access_token", "")).strip_edges()
 		_auth_refresh_token = str(data.get("refresh_token", "")).strip_edges()
 		_auth_user_id = str(data.get("user_id", "")).strip_edges()
-		_auth_expires_at = int(data.get("expires_at", 0))
+		_auth_expires_at = preload("res://autoload/auth_token_expiry.gd").clamp_expiry(int(data.get("expires_at", 0)), _auth_access_token)
 		_auth_is_anonymous = bool(data.get("is_anonymous", false))
 		_auth_email = str(data.get("email", "")).strip_edges()
 		_current_profile_username = str(data.get("username", "")).strip_edges()
@@ -2552,19 +2633,32 @@ func _request_json_with_retries(endpoint: String, method: HTTPClient.Method, bod
 	var last_response: Dictionary = {}
 	var safe_attempts: int = maxi(attempts, 1)
 	var auth_retry_used := false
+	var request_epoch := _auth_operation_epoch
 	if use_auth_session and not _has_valid_access_session() and not _auth_refresh_token.strip_edges().is_empty():
 		var preflight_refresh_result: Dictionary = await ensure_authenticated_session()
+		if request_epoch != _auth_operation_epoch:
+			return _make_error_result(request_name, "Account changed while the request was pending.")
 		if not bool(preflight_refresh_result.get("ok", false)):
 			return _handle_expired_auth_session(request_name, preflight_refresh_result)
+	var request_owner := _auth_user_id
 	for attempt_index in range(safe_attempts):
+		if use_auth_session and (request_epoch != _auth_operation_epoch or request_owner != _auth_user_id):
+			return _make_error_result(request_name, "Account changed while the request was pending.")
 		last_response = await _request_json(endpoint, method, body, request_name, extra_headers, use_auth_session, timeout_seconds)
+		# An old 401 must not refresh or clear the account that replaced it.
+		if use_auth_session and (request_epoch != _auth_operation_epoch or request_owner != _auth_user_id):
+			return _make_error_result(request_name, "Account changed while the request was pending.")
 		if bool(last_response.get("ok", false)):
 			return last_response
 		if use_auth_session and not auth_retry_used and _should_refresh_auth_after_response(last_response):
 			auth_retry_used = true
 			var refresh_result: Dictionary = await _refresh_authenticated_session()
+			if request_epoch != _auth_operation_epoch or request_owner != _auth_user_id:
+				return _make_error_result(request_name, "Account changed while the request was pending.")
 			if bool(refresh_result.get("ok", false)):
 				last_response = await _request_json(endpoint, method, body, request_name, extra_headers, use_auth_session, timeout_seconds)
+				if request_epoch != _auth_operation_epoch or request_owner != _auth_user_id:
+					return _make_error_result(request_name, "Account changed while the request was pending.")
 				if bool(last_response.get("ok", false)):
 					return last_response
 			else:
@@ -2864,7 +2958,26 @@ func _compact_error_body(data: Variant) -> String:
 		text = text.substr(0, 500) + "..."
 	return text
 
+var _asset_download_jobs: Dictionary = {}
+
 func _download_file_to_path(url: String, target_path: String) -> Dictionary:
+	# Map prefetch, live replicas and Sound can request the same asset together.
+	# One owner writes the temporary file; all other callers share its result.
+	var key := ProjectSettings.globalize_path(target_path).replace("\\", "/").simplify_path()
+	while _asset_download_jobs.has(key):
+		var existing: Dictionary = _asset_download_jobs[key]
+		while not bool(existing.done):
+			await get_tree().process_frame
+		if str(existing.url) == url: return existing.result
+	var job := {"done": false, "result": {}, "url": url}
+	_asset_download_jobs[key] = job
+	var result := await _download_file_to_path_owned(url, target_path)
+	job.result = result
+	job.done = true
+	_asset_download_jobs.erase(key)
+	return result
+
+func _download_file_to_path_owned(url: String, target_path: String) -> Dictionary:
 	if url.strip_edges().is_empty() or target_path.strip_edges().is_empty():
 		return _make_error_result("download_map_asset_file", "Asset URL or target path is empty.")
 	var headers: PackedStringArray = PackedStringArray(["Accept: */*"])
@@ -3036,7 +3149,7 @@ func _ensure_cached_map_visual_assets(folder: String, cloud_version_id: String, 
 	var version_token := cloud_version_id.strip_edges()
 	if version_token.is_empty():
 		version_token = "unversioned"
-	version_token = "%s:%s" % [MAP_VISUAL_ASSET_PREFETCH_SCHEMA, version_token]
+	version_token = "%s:script-audio-1:%s" % [MAP_VISUAL_ASSET_PREFETCH_SCHEMA, version_token]
 	var marker_path := clean_folder.path_join("visual_assets.ready")
 	if FileAccess.file_exists(marker_path):
 		var marker := FileAccess.get_file_as_string(marker_path).strip_edges()
@@ -3066,15 +3179,15 @@ func _ensure_cached_map_visual_assets(folder: String, cloud_version_id: String, 
 	for file_variant in asset_urls.keys():
 		var file_name := _sanitize_storage_relative_path(str(file_variant))
 		var asset_url := str(asset_urls.get(file_variant, "")).strip_edges()
-		if file_name.is_empty() or asset_url.is_empty() or _is_audio_asset_name(file_name):
+		if file_name.is_empty() or asset_url.is_empty():
 			continue
-		if not _is_map_visual_asset_name(file_name):
+		if not _is_map_visual_asset_name(file_name) and not _is_audio_asset_name(file_name):
 			continue
 		var target_path := clean_folder.path_join(file_name)
 		if FileAccess.file_exists(target_path) and _get_file_size_bytes(target_path) > 0:
 			continue
 		var entry := {"file": file_name, "url": asset_url, "target": target_path}
-		if essentials_only and file_name.get_extension().to_lower() in ["png", "jpg", "jpeg", "webp", "bmp", "tga"]:
+		if _is_audio_asset_name(file_name) or (essentials_only and file_name.get_extension().to_lower() in ["png", "jpg", "jpeg", "webp", "bmp", "tga"]):
 			images.append(entry)
 			MapMediaStream.expect_file(target_path)
 		else:
@@ -3084,20 +3197,18 @@ func _ensure_cached_map_visual_assets(folder: String, cloud_version_id: String, 
 	if entries.is_empty():
 		if images.is_empty(): _write_text_file(marker_path, version_token)
 		return {"ok": true, "from_cache": true, "downloaded": 0, "failed": 0, "streaming": images.size()}
-	var downloaded := 0
-	var failed := 0
-	var cursor := 0
-	while cursor < entries.size():
-		var batch_end := mini(entries.size(), cursor + MAP_VISUAL_ASSET_PREFETCH_CONCURRENCY)
-		var state := {"pending": batch_end - cursor, "downloaded": 0, "failed": 0}
-		for index in range(cursor, batch_end):
-			var entry: Dictionary = entries[index]
-			call_deferred("_download_cached_map_visual_asset_async", entry, state)
-		while int(state.get("pending", 0)) > 0:
+	# Keep the bounded pool occupied: one slow resource must not hold up all
+	# other slots until an entire batch finishes (large maps have hundreds).
+	var state := {"pending": 0, "downloaded": 0, "failed": 0}
+	for entry in entries:
+		while int(state.pending) >= MAP_VISUAL_ASSET_PREFETCH_CONCURRENCY:
 			await get_tree().process_frame
-		downloaded += int(state.get("downloaded", 0))
-		failed += int(state.get("failed", 0))
-		cursor = batch_end
+		state.pending += 1
+		call_deferred("_download_cached_map_visual_asset_async", entry, state)
+	while int(state.pending) > 0:
+		await get_tree().process_frame
+	var downloaded := int(state.downloaded)
+	var failed := int(state.failed)
 	if failed == 0 and images.is_empty():
 		_write_text_file(marker_path, version_token)
 	return {

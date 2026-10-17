@@ -2,6 +2,7 @@ extends RefCounted
 
 const Recipes = preload("res://addons/roblox_studio/studio_script_recipes.gd")
 const Gameplay = preload("res://addons/roblox_studio/studio_gameplay_library.gd")
+const CASCADIA_MONO_FONT = preload("res://assets/fonts/CascadiaMono.ttf")
 
 static func entries() -> Array[Dictionary]:
 	return [
@@ -20,6 +21,8 @@ static func entries() -> Array[Dictionary]:
 		_part("События · Опасный блок с задержкой", "Флаг debounce исключает многократный урон в одном касании.", "local busy = false\nscript.Parent.Touched:Connect(function(hit)\n    if busy then return end\n    local humanoid = hit.Parent and hit.Parent:FindFirstChildOfClass('Humanoid')\n    if not humanoid then return end\n    busy = true\n    humanoid:TakeDamage(10)\n    task.wait(1)\n    busy = false\nend)"),
 		_part("Движение · Вращение", "Heartbeat передаёт длительность кадра. CFrame.Angles задаёт угол в радианах.", "local part = script.Parent\ngame:GetService('RunService').Heartbeat:Connect(function(dt)\n    part.CFrame = part.CFrame * CFrame.Angles(0, dt, 0)\nend)"),
 		_part("Движение · Tween платформы", "TweenService плавно изменяет Position; повторение -1 и Reverses=true двигают платформу туда и обратно.", "local part = script.Parent\nlocal info = TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)\nlocal tween = game:GetService('TweenService'):Create(part, info, {Position = part.Position + Vector3.new(0, 5, 0)})\ntween:Play()"),
+		_part("Terrain · Небольшой остров", "Создаёт объём Terrain рядом с началом координат. FillBlock принимает CFrame и размер в Roblox studs.", "local terrain = workspace.Terrain\nterrain:FillBlock(CFrame.new(0, 4, -32), Vector3.new(32, 8, 32), Enum.Material.Grass)\nterrain:FillBall(Vector3.new(0, 10, -32), 10, Enum.Material.Rock)"),
+		_part("Звук · Проиграть у детали", "Создаёт пространственный Sound внутри детали. Вставьте ID доступного аудио; Play запускает звук рядом с блоком.", "local part = script.Parent\nlocal sound = Instance.new('Sound')\nsound.SoundId = 'rbxassetid://YOUR_AUDIO_ID'\nsound.Volume = 0.5\nsound.Looped = false\nsound.Parent = part\npart.ClickDetector.MouseClick:Connect(function()\n    sound:Play()\nend)", true),
 		_part("Планировщик · Мигающий блок", "task.wait приостанавливает только этот скрипт. Цикл останавливается вместе с Play.", "local part = script.Parent\nwhile true do\n    part.Transparency = 0.7\n    task.wait(0.5)\n    part.Transparency = 0\n    task.wait(0.5)\nend"),
 	]
 
@@ -62,6 +65,30 @@ static func open(owner: Node, insert_example: Callable = Callable()) -> AcceptDi
 	var code := CodeEdit.new()
 	code.editable = false
 	code.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var highlighter := CodeHighlighter.new()
+	for keyword in ["and", "break", "do", "else", "elseif", "end", "false", "for", "function", "if", "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"]:
+		highlighter.add_keyword_color(keyword, Color("#0451A5"))
+	for builtin in ["game", "workspace", "script", "Instance", "Vector3", "CFrame", "Color3", "Enum", "task", "TweenInfo", "print", "warn", "math", "string", "table"]:
+		highlighter.add_keyword_color(builtin, Color("#267F99"))
+	highlighter.add_color_region("'", "'", Color("#A31515"))
+	highlighter.add_color_region("\"", "\"", Color("#A31515"))
+	highlighter.add_color_region("--[[", "]]", Color("#008000"), false)
+	highlighter.add_color_region("--", "", Color("#008000"), true)
+	highlighter.number_color = Color("#098658")
+	highlighter.symbol_color = Color("#333333")
+	code.syntax_highlighter = highlighter
+	code.add_theme_font_override("font", CASCADIA_MONO_FONT)
+	code.add_theme_font_size_override("font_size", 14)
+	code.add_theme_color_override("background_color", Color("#FFFFFF"))
+	code.add_theme_color_override("font_color", Color("#202124"))
+	code.add_theme_color_override("line_number_color", Color("#7A828C"))
+	code.add_theme_color_override("current_line_color", Color("#F3F6FA"))
+	code.add_theme_color_override("selection_color", Color("#B7D7F8"))
+	code.gutters_draw_line_numbers = true
+	code.highlight_current_line = true
+	code.indent_size = 4
+	code.indent_use_spaces = true
+	code.minimap_draw = true
 	details.add_child(code)
 	var buttons := HBoxContainer.new()
 	details.add_child(buttons)

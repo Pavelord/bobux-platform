@@ -536,7 +536,7 @@ func _build_sound_properties(container: VBoxContainer, node: Node) -> void:
 	var properties: Dictionary = node.get_meta("roblox_properties", {}).duplicate(true)
 	var data := _add_section(container, "Data")
 	_string_row(data, "Name", str(node.name), _on_node_name_changed.bind(node))
-	_string_row(data, "SoundId", str(properties.get("SoundId", node.get_meta("SoundId", ""))), _on_meta_string_changed.bind(node, "SoundId"))
+	_string_row(data, "SoundId", str(properties.get("SoundId", node.get_meta("SoundId", ""))), _on_sound_id_changed.bind(node))
 	var behavior := _add_section(container, "Behavior")
 	_slider_row(behavior, "Volume", float(properties.get("Volume", 0.5)), 0.0, 4.0, 0.05, _on_sound_volume_changed.bind(node))
 	_slider_row(behavior, "PlaybackSpeed", float(properties.get("PlaybackSpeed", 1.0)), 0.05, 4.0, 0.05, _on_sound_speed_changed.bind(node))
@@ -1165,38 +1165,37 @@ func _open_script_editor(node: Node) -> void:
 
 func _on_sound_volume_changed(value: float, node: Node) -> void:
 	_on_meta_number_changed(value, node, "Volume")
-	if node is AudioStreamPlayer3D:
-		(node as AudioStreamPlayer3D).volume_db = linear_to_db(maxf(value, 0.0001)) if value > 0.0 else -80.0
-	elif node is AudioStreamPlayer:
-		(node as AudioStreamPlayer).volume_db = linear_to_db(maxf(value, 0.0001)) if value > 0.0 else -80.0
+	if node.is_inside_tree():
+		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").configure(node)
 
 
 func _on_sound_speed_changed(value: float, node: Node) -> void:
 	_on_meta_number_changed(value, node, "PlaybackSpeed")
-	if node is AudioStreamPlayer3D:
-		(node as AudioStreamPlayer3D).pitch_scale = maxf(value, 0.05)
-	elif node is AudioStreamPlayer:
-		(node as AudioStreamPlayer).pitch_scale = maxf(value, 0.05)
+	if node.is_inside_tree():
+		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").configure(node)
 
 
 func _on_sound_looped_changed(value: bool, node: Node) -> void:
 	_on_meta_bool_changed(value, node, "Looped")
+	if node.is_inside_tree():
+		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").configure(node)
+
+
+func _on_sound_id_changed(value: String, node: Node) -> void:
+	_on_meta_string_changed(value, node, "SoundId")
+	if node.is_inside_tree():
+		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").configure(node)
 
 
 func _on_sound_playing_changed(value: bool, node: Node) -> void:
 	_on_meta_bool_changed(value, node, "Playing")
 	if not node.is_inside_tree():
 		return
-	if node is AudioStreamPlayer3D:
-		if value:
-			(node as AudioStreamPlayer3D).play()
-		else:
-			(node as AudioStreamPlayer3D).stop()
-	elif node is AudioStreamPlayer:
-		if value:
-			(node as AudioStreamPlayer).play()
-		else:
-			(node as AudioStreamPlayer).stop()
+	var sound_runtime := preload("res://addons/roblox_runtime/roblox_sound_runtime.gd")
+	if value:
+		sound_runtime.play(node)
+	else:
+		sound_runtime.stop(node)
 
 
 func _on_light_color_changed(color: Color, light: Light3D) -> void:

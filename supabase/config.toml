@@ -1,2 +1,0 @@
-[functions.get-turn-credentials]
-verify_jwt = false

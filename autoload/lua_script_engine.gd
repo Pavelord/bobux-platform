@@ -4,6 +4,8 @@ extends Node
 
 const RobloxDataModelClass = preload("res://addons/roblox_studio/roblox_data_model.gd")
 const RobloxInputBridge = preload("res://addons/roblox_studio/roblox_input_bridge.gd")
+const RobloxEnumRegistry = preload("res://addons/roblox_runtime/enums/roblox_enum_registry.gd")
+const RobloxEnumVmBoundary = preload("res://addons/roblox_runtime/enums/roblox_enum_vm_boundary.gd")
 signal script_message(context: Node, message: String, is_error: bool)
 
 var _lua: Variant = null
@@ -18,7 +20,13 @@ var _module_cache: Dictionary = {}
 var _module_loading: Dictionary = {}
 var _module_cycle_warnings: Dictionary = {}
 var _pending_script_starts: Array[Dictionary] = []
+var _source_preparation_thread: Thread
+var _source_preparation_key := ""
+var _prepared_source_cache: Dictionary = {}
+var _prepared_source_cache_bytes := 0
+const PREPARED_SOURCE_CACHE_LIMIT_BYTES := 8 * 1024 * 1024
 var _stopped_lua_state_quarantine: Array = []
+var _stopped_state_cleanup_jobs: Array[Dictionary] = []
 var _next_script_runtime_id: int = 1
 var _scripts_paused: bool = false
 var _run_service_heartbeat: Variant = null
@@ -30,12 +38,15 @@ var _runtime_completed_total: int = 0
 var _runtime_failed_total: int = 0
 var _runtime_last_errors: Array[String] = []
 var _runtime_resume_started_usec: Dictionary = {}
+var _runtime_resume_started_vm_cpu_usec: Dictionary = {}
 var _runtime_native_spans: Dictionary = {}
 var _runtime_budget_exceeded: Dictionary = {}
 var _service_nodes_cache: Dictionary = {}
 var _task_runtime_ids: Dictionary = {}
 var _task_scheduler_cursor: int = 0
 var _runtime_tweens: Array = []
+var _profile_native_enabled := false
+var _native_access_profile: Dictionary = {}
 
 const SCRIPT_MEMORY_LIMIT_BYTES := 32 * 1024 * 1024
 const MAX_CONCURRENT_SCRIPTS := 2048
@@ -187,6 +198,12 @@ class BobuxTween extends RefCounted:
 		var starts := {}
 		for key in goals:
 			starts[key] = target._get(str(key))
+			# Controls expose their resolved pixel rectangle to Godot. Tween the
+			# authored UDim/UDim2 components so scale and offset both interpolate.
+			if target.node is Control and goals[key] is Dictionary:
+				var properties: Dictionary = target.node.get_meta("roblox_properties", {})
+				if properties.get(str(key)) is Dictionary:
+					starts[key] = properties[str(key)].duplicate(true)
 		animation.tween_method(_apply_fraction.bind(starts, goals), 0.0, 1.0, duration)
 		if bool(info.get("Reverses", false)):
 			animation.tween_method(_apply_fraction.bind(goals, starts), 0.0, 1.0, duration)
@@ -207,8 +224,21 @@ class BobuxTween extends RefCounted:
 				target._set(str(key), lerpf(float(first), float(last), fraction))
 			elif (first is Vector3 and last is Vector3) or (first is Color and last is Color) or (first is Vector2 and last is Vector2):
 				target._set(str(key), first.lerp(last, fraction))
+			elif first is Dictionary and last is Dictionary:
+				target._set(str(key), _interpolate_components(first, last, fraction))
 			elif fraction >= 1.0:
 				target._set(str(key), last)
+
+	static func _interpolate_components(first: Dictionary, last: Dictionary, fraction: float) -> Dictionary:
+		var value := last.duplicate(false)
+		for key in last:
+			var begin: Variant = first.get(key)
+			var end: Variant = last[key]
+			if (begin is float or begin is int) and (end is float or end is int):
+				value[key] = lerpf(float(begin), float(end), fraction)
+			elif begin is Dictionary and end is Dictionary:
+				value[key] = _interpolate_components(begin, end, fraction)
+		return value
 
 	func Pause(_self_arg: Variant = null) -> void:
 		if animation != null and animation.is_valid() and PlaybackState == 2:
@@ -613,6 +643,14 @@ class BobuxInstance extends RefCounted:
 	var lua_metatable: Variant = null
 	const DEFAULT_ROBLOX_STUD_SCALE: float = 0.5
 	const STUDIO_WORLD_COLLISION_MASK: int = 1 | 2 | 4 | 16 | 64
+	static var _native_property_names: Dictionary = {}
+	# These built-in classes have a fixed native property schema. Scripted or
+	# extension classes retain the dynamic property-list path below.
+	const FIXED_PROPERTY_CLASSES := {"Node": true, "Node3D": true, "MeshInstance3D": true,
+		"Control": true, "Label": true, "Button": true, "LineEdit": true,
+		"Panel": true, "PanelContainer": true, "TextureRect": true,
+		"HBoxContainer": true, "VBoxContainer": true, "GridContainer": true,
+		"MarginContainer": true, "ScrollContainer": true}
 	const JOINT_CLASSES: Array[String] = [
 		"Weld", "ManualWeld", "WeldConstraint", "Motor6D", "Snap", "Motor",
 		"HingeConstraint", "BallSocketConstraint", "SpringConstraint",
@@ -825,6 +863,13 @@ class BobuxInstance extends RefCounted:
 			cursor = cursor.get_parent()
 		return null
 
+	func _forward_humanoid_property(property: String, value: Variant) -> void:
+		if str(node.get_meta("roblox_class", "")) != "Humanoid": return
+		if property not in ["JumpHeight", "HipHeight", "MaxHealth", "AutoRotate", "UseJumpPower", "Sit", "PlatformStand", "BreakJointsOnDeath", "AutoJumpEnabled"]: return
+		var body := _character_body()
+		if body != null and body.has_method("set_humanoid_property"):
+			body.call("set_humanoid_property", property, value)
+
 	func _bound_character() -> Node:
 		if not is_instance_valid(node):
 			return null
@@ -911,7 +956,7 @@ class BobuxInstance extends RefCounted:
 		# material_override takes precedence over every surface override in Godot.
 		# Mutating only the latter made imported parts ignore Lua Color/Transparency.
 		if mesh_node.material_override is StandardMaterial3D:
-			var override := mesh_node.material_override.duplicate(false) as StandardMaterial3D
+			var override := _editable_material(mesh_node.material_override)
 			mutator.call(override)
 			mesh_node.material_override = override
 			return
@@ -922,11 +967,21 @@ class BobuxInstance extends RefCounted:
 			var source := mesh_node.get_active_material(surface_index) as StandardMaterial3D
 			if source == null:
 				continue
-			var local_material := source.duplicate(false) as StandardMaterial3D
+			var local_material := _editable_material(source)
 			if local_material == null:
 				continue
 			mutator.call(local_material)
 			mesh_node.set_surface_override_material(surface_index, local_material)
+
+	func _editable_material(source: StandardMaterial3D) -> StandardMaterial3D:
+		# Detach shared assets on the first write. Subsequent animations update
+		# this part's own material instead of allocating a new GPU resource.
+		if source == null: return null
+		var owner_id := node.get_instance_id()
+		if int(source.get_meta("bobux_material_owner_id", 0)) == owner_id: return source
+		var editable := source.duplicate(false) as StandardMaterial3D
+		editable.set_meta("bobux_material_owner_id", owner_id)
+		return editable
 
 	func _ui_value_to_vector2(value: Variant, parent_control: Control = null) -> Vector2:
 		if value is Vector2:
@@ -949,13 +1004,24 @@ class BobuxInstance extends RefCounted:
 		var native_start := Time.get_ticks_usec()
 		var result: Variant = _get_impl(property)
 		var engine: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("LuaScriptEngine")
-		if engine != null: engine._exclude_native_work(native_start)
+		if engine != null:
+			engine._exclude_native_work(native_start)
+			if engine._profile_native_enabled: engine._profile_native_access("get", property, native_start)
 		return result
 
 	func _get_impl(property: StringName) -> Variant:
 		if not is_instance_valid(node):
 			return null
 		var prop_str := str(property)
+		if prop_str == "Gravity" and str(node.get_meta("roblox_class", "")) == "Workspace":
+			return node.get_meta("Gravity", node.get_meta("roblox_properties", {}).get("Gravity", 196.2))
+		if prop_str == "Move" and str(node.get_meta("roblox_class", "")) == "Humanoid":
+			return Callable(self, "_humanoid_move")
+		if prop_str.to_lower() == "layers" and node.has_meta("_bobux_render_batch"):
+			return node.get_meta("_bobux_render_batch")[2]
+		if prop_str == "Terrain" and str(node.get_meta("roblox_class", "")) == "Workspace":
+			var terrain_node := preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").terrain_for_workspace(node)
+			return BobuxInstance.wrap(terrain_node) if terrain_node != null else null
 		if prop_str in [
 			"Button1Down", "Button1Up", "KeyDown", "KeyUp", "MouseButton1Down",
 			"MouseButton1Up", "MouseButton1Click", "MouseButton2Click", "MouseEnter", "MouseLeave", "MouseClick", "Activated", "Equipped", "Unequipped", "Chatted", "Died",
@@ -963,8 +1029,8 @@ class BobuxInstance extends RefCounted:
 			"InputEnded", "DeviceRotationChanged", "CharacterAdded", "Move", "Seated",
 			"JumpRequest", "StateChanged", "Jumping", "FreeFalling", "DescendantAdded", "DescendantRemoving", "TouchMoved",
 			"MoveToFinished", "HealthChanged", "StateEnabledChanged", "Ended", "CharacterRemoving",
-			"TouchStarted", "TouchEnded", "Hit", "Running", "GettingUp", "Climbing", "FallingDown", "PlatformStanding", "Triggered",
-			"TriggerEnded", "PromptShown", "PromptHidden", "PromptTriggered",
+			"TouchStarted", "TouchEnded", "Hit", "Running", "GettingUp", "Climbing", "Swimming", "FallingDown", "PlatformStanding", "Ragdoll", "Strafing", "Triggered",
+			"TriggerEnded", "PromptShown", "PromptHidden", "PromptTriggered", "PromptTriggerEnded",
 			"PromptButtonHoldBegan", "PromptButtonHoldEnded",
 			"PromptGamePassPurchaseFinished", "PromptProductPurchaseFinished",
 			"PromptPurchaseFinished", "PromptBundlePurchaseFinished"
@@ -981,7 +1047,7 @@ class BobuxInstance extends RefCounted:
 					var importer := preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd").new()
 					return BobuxCFrame.new(_godot_transform_to_roblox(importer._cframe_to_transform(raw, _stud_scale()), false))
 				return BobuxCFrame.new()
-			"PrimaryPart", "Part0", "Part1", "Attachment0", "Attachment1", "Adornee", "RespawnLocation", "Team":
+			"PrimaryPart", "Part0", "Part1", "Attachment0", "Attachment1", "Adornee", "RespawnLocation", "Team", "Occupant", "SeatPart", "WalkToPart":
 				var stored: Variant = _stored_reference(prop_str)
 				return _resolve_instance_reference(stored)
 			"KeyboardEnabled", "MouseEnabled":
@@ -1001,9 +1067,9 @@ class BobuxInstance extends RefCounted:
 			"DataReady":
 				return str(node.get_meta("roblox_class", "")) == "Player"
 			"AbsoluteSize":
-				return node.get_global_rect().size if node is Control else Vector2.ZERO
+				return preload("res://addons/rbxl_importer/roblox_gui_runtime.gd").absolute_rect(node).size if node is Control else Vector2.ZERO
 			"AbsolutePosition":
-				return node.get_global_rect().position if node is Control else Vector2.ZERO
+				return preload("res://addons/rbxl_importer/roblox_gui_runtime.gd").absolute_rect(node).position if node is Control else Vector2.ZERO
 			"Parent":
 				var p := node.get_parent()
 				return BobuxInstance.wrap(p) if p else null
@@ -1077,16 +1143,24 @@ class BobuxInstance extends RefCounted:
 				return node.get_meta("transparency", 0.0)
 			"BrickColor":
 				if node is MeshInstance3D:
+					if node.has_meta("bobux_color"): return node.get_meta("bobux_color")
+					var props: Dictionary = node.get_meta("roblox_properties", {})
+					if props.has("Color") or props.has("BrickColor"): return preload("res://addons/rbxl_importer/material_cache.gd").part_color_from_properties(props)
 					var mat := node.get_active_material(0) as StandardMaterial3D
 					if mat:
 						return mat.albedo_color
 				return Color.WHITE
 			"Color":
+				if node is Light3D:
+					return (node as Light3D).light_color
 				if node is GPUParticles3D:
 					var particle_material := (node as GPUParticles3D).process_material as ParticleProcessMaterial
 					if particle_material != null:
 						return particle_material.color
 				if node is MeshInstance3D:
+					if node.has_meta("bobux_color"): return node.get_meta("bobux_color")
+					var props: Dictionary = node.get_meta("roblox_properties", {})
+					if props.has("Color") or props.has("BrickColor"): return preload("res://addons/rbxl_importer/material_cache.gd").part_color_from_properties(props)
 					var mat := node.get_active_material(0) as StandardMaterial3D
 					if mat:
 						return mat.albedo_color
@@ -1102,11 +1176,15 @@ class BobuxInstance extends RefCounted:
 				return BobuxInstance.wrap(character) if character else null
 			"Health":
 				var health_body := _character_body()
+				if health_body != null and health_body.has_method("get_humanoid_health"):
+					return health_body.call("get_humanoid_health")
 				if health_body != null and health_body.has_method("get_health"):
 					return health_body.call("get_health")
 				return node.get_meta("Health", 100.0)
 			"MaxHealth":
 				var max_health_body := _character_body()
+				if max_health_body != null and max_health_body.has_method("get_humanoid_max_health"):
+					return max_health_body.call("get_humanoid_max_health")
 				if max_health_body != null and max_health_body.has_method("get_max_health"):
 					return max_health_body.call("get_max_health")
 				return node.get_meta("MaxHealth", 100.0)
@@ -1124,6 +1202,29 @@ class BobuxInstance extends RefCounted:
 				return node.get_meta("JumpHeight", 7.2)
 			"UseJumpPower":
 				return node.get_meta("UseJumpPower", true)
+			"MoveDirection":
+				if str(node.get_meta("roblox_class", "")) == "Humanoid":
+					var move_body := _character_body()
+					if move_body != null and move_body.has_method("get_humanoid_move_direction"):
+						return _godot_direction_to_roblox(move_body.call("get_humanoid_move_direction"))
+					return Vector3.ZERO
+				return _stored_reference(prop_str)
+			"HipHeight":
+				return node.get_meta("HipHeight", node.get_meta("roblox_properties", {}).get("HipHeight", 0.0))
+			"RootPart":
+				if str(node.get_meta("roblox_class", "")) == "Humanoid":
+					var root_part := node.get_parent().get_node_or_null("HumanoidRootPart") if node.get_parent() != null else null
+					return BobuxInstance.wrap(root_part) if root_part != null else null
+				return _stored_reference(prop_str)
+			"MaxSlopeAngle":
+				return node.get_meta(prop_str, node.get_meta("roblox_properties", {}).get(prop_str, 89.0))
+			"CameraOffset":
+				return node.get_meta(prop_str, node.get_meta("roblox_properties", {}).get(prop_str, Vector3.ZERO))
+			"RigType":
+				var rig: Variant = node.get_meta(prop_str, node.get_meta("roblox_properties", {}).get(prop_str, 0))
+				return {"R6": 0, "R15": 1}.get(rig, 0) if rig is String else rig
+			"AutoJumpEnabled", "BreakJointsOnDeath", "RequiresNeck":
+				return node.get_meta(prop_str, node.get_meta("roblox_properties", {}).get(prop_str, true))
 			"Jump":
 				return node.get_meta("Jump", false)
 			"PlatformStand", "Sit", "AutoRotate":
@@ -1134,6 +1235,13 @@ class BobuxInstance extends RefCounted:
 				return node.get_meta("TimeOfDay", "14:00:00")
 			"ClockTime":
 				return node.get_meta("ClockTime", 14.0)
+			"Brightness":
+				if node is Light3D: return (node as Light3D).light_energy
+				return _stored_reference(prop_str)
+			"Range":
+				if node is OmniLight3D: return (node as OmniLight3D).omni_range / _stud_scale()
+				if node is SpotLight3D: return (node as SpotLight3D).spot_range / _stud_scale()
+				return _stored_reference(prop_str)
 			_:
 				var direct_child := node.get_node_or_null(prop_str)
 				if direct_child != null:
@@ -1144,6 +1252,19 @@ class BobuxInstance extends RefCounted:
 				for key_variant in properties.keys():
 					if str(key_variant).nocasecmp_to(prop_str) == 0:
 						return properties[key_variant]
+				var native_class := node.get_class()
+				# Metadata, theme overrides and blend shapes are dynamic native
+				# properties. Never negative-cache those or script-defined fields.
+				if node.get_script() == null and FIXED_PROPERTY_CLASSES.has(native_class) and not "/" in prop_str:
+					if not _native_property_names.has(native_class):
+						var names := {}
+						for info in ClassDB.class_get_property_list(native_class):
+							var name: String = info.name
+							var lower := name.to_lower()
+							if not names.has(lower): names[lower] = name
+						_native_property_names[native_class] = names
+					var native_name := str(_native_property_names[native_class].get(prop_str.to_lower(), ""))
+					return node.get(native_name) if not native_name.is_empty() else null
 				for property_info_variant in node.get_property_list():
 					if not (property_info_variant is Dictionary):
 						continue
@@ -1177,17 +1298,33 @@ class BobuxInstance extends RefCounted:
 		var native_start := Time.get_ticks_usec()
 		var result: bool = _set_impl(property, value)
 		var engine: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("LuaScriptEngine")
-		if engine != null: engine._exclude_native_work(native_start)
+		if engine != null:
+			engine._exclude_native_work(native_start)
+			if engine._profile_native_enabled: engine._profile_native_access("set", property, native_start)
 		return result
 
 	func _set_impl(property: StringName, value: Variant) -> bool:
 		if not is_instance_valid(node):
 			return false
 		var prop_str := str(property)
-		var previous: Variant = _get(property)
-		if typeof(previous) == typeof(value) and typeof(value) in [TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_VECTOR2, TYPE_VECTOR3, TYPE_COLOR]:
-			if previous == value:
-				return true
+		if prop_str in ["Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight", "HipHeight", "MaxSlopeAngle"]:
+			# Reject invalid numbers before conversion, metadata writes, network
+			# forwarding or lazy NPC motor creation. Preserve the previous state.
+			if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or is_nan(float(value)): return false
+			# Studio permits positive infinity for logical health. Keep the common
+			# math.huge invulnerability pattern, while rejecting invalid actuators.
+			if not is_finite(float(value)) and not (prop_str in ["Health", "MaxHealth"] and float(value) == INF): return false
+		# Only scalar equality can suppress a write. CFrame/Parent/UDim2 writes
+		# always proceed; reading their old value allocated an unused proxy and
+		# repeated coordinate conversion for every animated part every frame.
+		var value_type := typeof(value)
+		if value_type in [TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_VECTOR2, TYPE_VECTOR3, TYPE_COLOR]:
+			var previous: Variant = _get(property)
+			if typeof(previous) == value_type and previous == value: return true
+		if node.has_meta("_bobux_render_batch"):
+			preload("res://addons/roblox_runtime/roblox_render_batches.gd").detach(node)
+		elif prop_str in ["Parent", "CFrame", "Position", "Rotation", "Size"] and node.has_meta("_bobux_contains_render_batches"):
+			preload("res://addons/roblox_runtime/roblox_render_batches.gd").detach_tree(node)
 		match prop_str:
 			"Source":
 				node.set_meta("code", str(value))
@@ -1270,7 +1407,26 @@ class BobuxInstance extends RefCounted:
 					(node as Node3D).basis = _roblox_transform_to_godot(Transform3D(roblox_rotation, Vector3.ZERO)).basis.scaled_local((node as Node3D).scale)
 					_notify_property_changed("Rotation")
 					return true
+			"CameraType":
+				if node is Camera3D:
+					node.set_meta("CameraType", value)
+					var scriptable := ((value is int or value is float) and int(value) == 6) or str(value) in ["Scriptable", "Enum.CameraType.Scriptable"]
+					# SpringArm writes its child's global transform on every physics
+					# tick, even when that child is top-level. A scripted camera must
+					# own its pose until Custom is restored.
+					var arm := node.get_parent() as SpringArm3D
+					if arm != null:
+						arm.set_physics_process_internal(not scriptable)
+						var frame: Transform3D = node.global_transform
+						(node as Camera3D).top_level = scriptable
+						node.global_transform = frame
+					if ((value is int or value is float) and int(value) == 5) or str(value) in ["Custom", "Enum.CameraType.Custom"]:
+						node.set_meta("bobux_camera_written_msec", Time.get_ticks_msec() - 201)
+					_notify_property_changed("CameraType")
+					return true
 			"CFrame":
+				if node is Camera3D:
+					node.set_meta("bobux_camera_written_msec", Time.get_ticks_msec())
 				if node is Node3D:
 					if value is BobuxCFrame:
 						var target_frame := _roblox_transform_to_godot((value as BobuxCFrame).transform)
@@ -1383,16 +1539,26 @@ class BobuxInstance extends RefCounted:
 				return true
 			"Health":
 				var health_body := _character_body()
-				var target_health := maxf(0.0, float(value))
+				if health_body == null and str(node.get_meta("roblox_class", "")) == "Humanoid":
+					health_body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
+				var previous_health := float(_get(&"Health"))
+				var target_health := clampf(float(value), 0.0, float(_get(&"MaxHealth")))
 				if health_body != null:
 					if health_body.has_method("set_health"):
 						health_body.call("set_health", target_health)
+						if health_body.has_method("get_humanoid_health"): target_health = health_body.call("get_humanoid_health")
+						elif health_body.has_method("get_health"): target_health = health_body.call("get_health")
+				if target_health == previous_health: return true
 				node.set_meta("Health", target_health)
+				if health_body == null: _shared_event("HealthChanged").FireArgs([target_health])
 				_notify_property_changed("Health")
 				return true
 			"MaxHealth":
-				node.set_meta("MaxHealth", maxf(1.0, float(value)))
+				var maximum := maxf(0.0, float(value))
+				_forward_humanoid_property(prop_str, maximum)
+				node.set_meta("MaxHealth", maximum)
 				_notify_property_changed("MaxHealth")
+				if float(_get(&"Health")) > maximum: _set(&"Health", maximum)
 				return true
 			"WalkSpeed":
 				var walk_body := _character_body()
@@ -1415,9 +1581,26 @@ class BobuxInstance extends RefCounted:
 				_notify_property_changed("JumpPower")
 				return true
 			"JumpHeight", "UseJumpPower":
-				node.set_meta(prop_str, bool(value) if prop_str == "UseJumpPower" else maxf(0, float(value)))
+				var configured: Variant = bool(value) if prop_str == "UseJumpPower" else maxf(0, float(value))
+				_forward_humanoid_property(prop_str, configured)
+				node.set_meta(prop_str, configured)
 				_notify_property_changed(prop_str)
 				return true
+			"HipHeight", "MaxSlopeAngle":
+				var number := float(value)
+				if not is_finite(number): return false
+				var configured := clampf(number, 0.0, 89.0) if prop_str == "MaxSlopeAngle" else number
+				_forward_humanoid_property(prop_str, configured)
+				node.set_meta(prop_str, configured)
+				_notify_property_changed(prop_str)
+				return true
+			"AutoJumpEnabled", "BreakJointsOnDeath", "RequiresNeck":
+				_forward_humanoid_property(prop_str, bool(value))
+				node.set_meta(prop_str, bool(value))
+				_notify_property_changed(prop_str)
+				return true
+			"MoveDirection", "RootPart":
+				return false
 			"Jump":
 				node.set_meta("Jump", bool(value))
 				if bool(value):
@@ -1425,6 +1608,10 @@ class BobuxInstance extends RefCounted:
 				_notify_property_changed(prop_str)
 				return true
 			"PlatformStand", "Sit", "AutoRotate":
+				_forward_humanoid_property(prop_str, bool(value))
+				if prop_str == "Sit" and not bool(value) and str(node.get_meta("roblox_class", "")) == "Humanoid":
+					var body := _character_body()
+					if body != null and body.has_method("_leave_seat"): body.call("_leave_seat", false)
 				node.set_meta(prop_str, bool(value))
 				_notify_property_changed(prop_str)
 				return true
@@ -1436,17 +1623,54 @@ class BobuxInstance extends RefCounted:
 				if node is MeshInstance3D:
 					var material: Material = node.get_active_material(0) if node.mesh != null else null
 					var spherical := str(value) in ["Ball", "Sphere", "0", "0.0"]
-					node.mesh = SphereMesh.new() if spherical else BoxMesh.new()
+					var cylindrical := str(value) in ["Cylinder", "2", "2.0", "Enum.PartType.Cylinder"]
+					if cylindrical:
+						var cylinder := CylinderMesh.new()
+						cylinder.top_radius = 0.5
+						cylinder.bottom_radius = 0.5
+						cylinder.height = 1.0
+						node.mesh = cylinder
+					else: node.mesh = SphereMesh.new() if spherical else BoxMesh.new()
 					node.material_override = material
-					node.set_meta("shape_type", "Sphere" if spherical else "Box")
+					node.set_meta("shape_type", "Cylinder" if cylindrical else ("Sphere" if spherical else "Box"))
 					node.set_meta("Shape", value)
 					_notify_property_changed("Size")
 					return true
 			"CanCollide":
-				node.set_meta("can_collide", bool(value))
+				var can_collide := bool(value)
+				node.set_meta("can_collide", can_collide)
+				if node is MeshInstance3D and not bool(node.get_meta("bobux_character_part_proxy", false)):
+					var collision_shapes := node.find_children("*", "CollisionShape3D", true, false)
+					var query_props: Dictionary = node.get_meta("roblox_properties", {})
+					var can_query := bool(node.get_meta("CanQuery", query_props.get("CanQuery", true)))
+					if (can_collide or can_query) and collision_shapes.is_empty():
+						preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(node, true)
+						collision_shapes = node.find_children("*", "CollisionShape3D", true, false)
+					for collision_shape in collision_shapes:
+						(collision_shape as CollisionShape3D).disabled = not (can_collide or can_query)
+					var physics_adapter := node.get_node_or_null("RobloxPartPhysics")
+					if physics_adapter != null and physics_adapter.has_method("refresh_properties"):
+						physics_adapter.call("refresh_properties")
 				if node.has_method("_update_block_collision"):
 					node.call("_update_block_collision", node)
 				_notify_property_changed("CanCollide")
+				return true
+			"CanQuery":
+				var can_query := bool(value)
+				node.set_meta("CanQuery", can_query)
+				if node is MeshInstance3D and not bool(node.get_meta("bobux_character_part_proxy", false)):
+					var collision_shapes := node.find_children("*", "CollisionShape3D", true, false)
+					var collide_props: Dictionary = node.get_meta("roblox_properties", {})
+					var can_collide := bool(node.get_meta("can_collide", collide_props.get("CanCollide", true)))
+					if (can_collide or can_query) and collision_shapes.is_empty():
+						preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(node, true)
+						collision_shapes = node.find_children("*", "CollisionShape3D", true, false)
+					for collision_shape in collision_shapes:
+						(collision_shape as CollisionShape3D).disabled = not (can_collide or can_query)
+					var physics_adapter := node.get_node_or_null("RobloxPartPhysics")
+					if physics_adapter != null and physics_adapter.has_method("refresh_properties"):
+						physics_adapter.call("refresh_properties")
+				_notify_property_changed("CanQuery")
 				return true
 			"Transparency":
 				var trans := float(value)
@@ -1462,6 +1686,7 @@ class BobuxInstance extends RefCounted:
 				return true
 			"BrickColor":
 				var col: Color = preload("res://addons/roblox_runtime/brick_color_palette.gd").resolve(value)
+				_store_part_color(col)
 				_mutate_mesh_materials(func(material: StandardMaterial3D):
 					var alpha := material.albedo_color.a
 					material.albedo_color = Color(col.r, col.g, col.b, alpha)
@@ -1475,6 +1700,12 @@ class BobuxInstance extends RefCounted:
 				var color_value: Color = Color.WHITE
 				if value is Color:
 					color_value = value
+				if node is Light3D:
+					(node as Light3D).light_color = color_value
+					node.set_meta("Color", color_value)
+					_notify_property_changed("Color")
+					return true
+				_store_part_color(color_value)
 				if node is GPUParticles3D:
 					node.set_meta("Color", color_value)
 					var particles := node as GPUParticles3D
@@ -1499,6 +1730,20 @@ class BobuxInstance extends RefCounted:
 				node.set_meta(prop_str, value)
 				_notify_property_changed(prop_str)
 				return true
+			"Brightness":
+				if node is Light3D:
+					(node as Light3D).light_energy = maxf(0.0, float(value))
+					node.set_meta("Brightness", maxf(0.0, float(value)))
+					_notify_property_changed(prop_str)
+					return true
+			"Range":
+				if node is OmniLight3D or node is SpotLight3D:
+					var distance := maxf(0.0, float(value)) * _stud_scale()
+					if node is OmniLight3D: (node as OmniLight3D).omni_range = distance
+					else: (node as SpotLight3D).spot_range = distance
+					node.set_meta("Range", maxf(0.0, float(value)))
+					_notify_property_changed(prop_str)
+					return true
 		var properties: Dictionary = node.get_meta("roblox_properties", {}) if node.get_meta("roblox_properties", {}) is Dictionary else {}
 		properties[prop_str] = value
 		node.set_meta("roblox_properties", properties)
@@ -1517,6 +1762,134 @@ class BobuxInstance extends RefCounted:
 
 	func GetNode() -> Node:
 		return node
+
+	func FillBlock(cframe_or_self: Variant, cframe_or_size: Variant = null, size_or_material: Variant = null, maybe_material: Variant = null) -> void:
+		var cframe_value: Variant = cframe_or_size if cframe_or_self == self else cframe_or_self
+		var size_value: Variant = size_or_material if cframe_or_self == self else cframe_or_size
+		var material_value: Variant = maybe_material if cframe_or_self == self else size_or_material
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or not (size_value is Vector3):
+			return
+		var transform: Variant = _terrain_cframe_to_world(cframe_value)
+		if transform == null:
+			return
+		var changed: int = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").fill_block(
+			node, transform, (size_value as Vector3) * _stud_scale(), material_value
+		)
+		if changed > 0:
+			_notify_property_changed("Cells")
+
+	func FillBall(center_or_self: Variant, center_or_radius: Variant = null, radius_or_material: Variant = null, maybe_material: Variant = null) -> void:
+		var center_value: Variant = center_or_radius if center_or_self == self else center_or_self
+		var radius_value: Variant = radius_or_material if center_or_self == self else center_or_radius
+		var material_value: Variant = maybe_material if center_or_self == self else radius_or_material
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or not (center_value is Vector3):
+			return
+		if typeof(radius_value) not in [TYPE_INT, TYPE_FLOAT]:
+			return
+		var changed: int = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").fill_ball(
+			node, _roblox_point_to_godot(center_value), float(radius_value), material_value
+		)
+		if changed > 0:
+			_notify_property_changed("Cells")
+
+	func FillCylinder(cframe_or_self: Variant, cframe_or_height: Variant = null, height_or_radius: Variant = null, radius_or_material: Variant = null, maybe_material: Variant = null) -> void:
+		var cframe_value: Variant = cframe_or_height if cframe_or_self == self else cframe_or_self
+		var height_value: Variant = height_or_radius if cframe_or_self == self else cframe_or_height
+		var radius_value: Variant = radius_or_material if cframe_or_self == self else height_or_radius
+		var material_value: Variant = maybe_material if cframe_or_self == self else radius_or_material
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or typeof(height_value) not in [TYPE_INT, TYPE_FLOAT] or typeof(radius_value) not in [TYPE_INT, TYPE_FLOAT]:
+			return
+		var transform: Variant = _terrain_cframe_to_world(cframe_value)
+		if transform == null:
+			return
+		var scale := _stud_scale()
+		var changed: int = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").fill_cylinder(
+			node, transform, float(height_value) * scale, float(radius_value) * scale, material_value
+		)
+		if changed > 0:
+			_notify_property_changed("Cells")
+
+	func FillWedge(cframe_or_self: Variant, cframe_or_size: Variant = null, size_or_material: Variant = null, maybe_material: Variant = null) -> void:
+		var cframe_value: Variant = cframe_or_size if cframe_or_self == self else cframe_or_self
+		var size_value: Variant = size_or_material if cframe_or_self == self else cframe_or_size
+		var material_value: Variant = maybe_material if cframe_or_self == self else size_or_material
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or not (size_value is Vector3):
+			return
+		var transform: Variant = _terrain_cframe_to_world(cframe_value)
+		if transform == null:
+			return
+		var changed: int = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").fill_wedge(
+			node, transform, (size_value as Vector3) * _stud_scale(), material_value
+		)
+		if changed > 0:
+			_notify_property_changed("Cells")
+
+	func FillRegion(region_or_self: Variant, region_or_resolution: Variant = null, resolution_or_material: Variant = null, maybe_material: Variant = null) -> void:
+		var region: Variant = region_or_resolution if region_or_self == self else region_or_self
+		var resolution: Variant = resolution_or_material if region_or_self == self else region_or_resolution
+		var material_value: Variant = maybe_material if region_or_self == self else resolution_or_material
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or not (region is Dictionary):
+			return
+		if typeof(resolution) not in [TYPE_INT, TYPE_FLOAT] or int(resolution) != 4:
+			push_error("Terrain:FillRegion requires resolution 4")
+			return
+		var region_data: Dictionary = region
+		var transform: Variant = _terrain_cframe_to_world(region_data.get("CFrame"))
+		var size_value: Variant = region_data.get("Size")
+		if transform == null or not (size_value is Vector3):
+			return
+		var changed: int = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").fill_block(
+			node, transform, (size_value as Vector3) * _stud_scale(), material_value
+		)
+		if changed > 0:
+			_notify_property_changed("Cells")
+
+	func Clear(_self_arg: Variant = null) -> void:
+		if str(node.get_meta("roblox_class", "")) != "Terrain":
+			return
+		preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").clear(node)
+		_notify_property_changed("Cells")
+
+	func WorldToCell(position_or_self: Variant, maybe_position: Variant = null) -> Vector3:
+		var position_value: Variant = maybe_position if position_or_self == self else position_or_self
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or not (position_value is Vector3):
+			return Vector3.ZERO
+		var cell: Vector3 = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").world_to_cell(
+			node, _roblox_point_to_godot(position_value)
+		)
+		return Vector3(cell.x, cell.y, -cell.z)
+
+	func CellCenterToWorld(x_or_self: Variant, y_or_x: Variant = null, z_or_y: Variant = null, maybe_z: Variant = null) -> Vector3:
+		var x_value: Variant = y_or_x if x_or_self == self else x_or_self
+		var y_value: Variant = z_or_y if x_or_self == self else y_or_x
+		var z_value: Variant = maybe_z if x_or_self == self else z_or_y
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or typeof(x_value) not in [TYPE_INT, TYPE_FLOAT] or typeof(y_value) not in [TYPE_INT, TYPE_FLOAT] or typeof(z_value) not in [TYPE_INT, TYPE_FLOAT]:
+			return Vector3.ZERO
+		var point: Vector3 = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").cell_center_to_world(
+			node, int(x_value), int(y_value), -int(z_value)
+		)
+		return _godot_point_to_roblox(point)
+
+	func CellCornerToWorld(x_or_self: Variant, y_or_x: Variant = null, z_or_y: Variant = null, maybe_z: Variant = null) -> Vector3:
+		var x_value: Variant = y_or_x if x_or_self == self else x_or_self
+		var y_value: Variant = z_or_y if x_or_self == self else y_or_x
+		var z_value: Variant = maybe_z if x_or_self == self else z_or_y
+		if str(node.get_meta("roblox_class", "")) != "Terrain" or typeof(x_value) not in [TYPE_INT, TYPE_FLOAT] or typeof(y_value) not in [TYPE_INT, TYPE_FLOAT] or typeof(z_value) not in [TYPE_INT, TYPE_FLOAT]:
+			return Vector3.ZERO
+		var point: Vector3 = preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").cell_corner_to_world(
+			node, int(x_value), int(y_value), -int(z_value)
+		)
+		return _godot_point_to_roblox(point)
+
+	func CountCells(_self_arg: Variant = null) -> int:
+		return preload("res://addons/roblox_runtime/roblox_terrain_runtime.gd").count_cells(node) if str(node.get_meta("roblox_class", "")) == "Terrain" else 0
+
+	func _terrain_cframe_to_world(value: Variant) -> Variant:
+		if value is BobuxCFrame:
+			return _roblox_transform_to_godot((value as BobuxCFrame).transform)
+		if value is Transform3D:
+			return _roblox_transform_to_godot(value)
+		return null
 
 	func FindFirstChild(name_or_self: Variant, name_or_recursive: Variant = null, maybe_recursive: Variant = false) -> BobuxInstance:
 		var child_name := str(name_or_recursive if (name_or_self is Object and name_or_self == self) else name_or_self)
@@ -1620,6 +1993,8 @@ class BobuxInstance extends RefCounted:
 	func Clone(_self_arg: Variant = null) -> BobuxInstance:
 		if is_instance_valid(node):
 			var native_start := Time.get_ticks_usec()
+			if node.has_meta("_bobux_render_batch") or node.has_meta("_bobux_contains_render_batches"):
+				preload("res://addons/roblox_runtime/roblox_render_batches.gd").detach_tree(node)
 			var dupe := node.duplicate(Node.DUPLICATE_GROUPS | Node.DUPLICATE_SCRIPTS | Node.DUPLICATE_USE_INSTANTIATION)
 			_reset_clone_metadata(dupe)
 			_rekey_clone_tree(dupe)
@@ -2125,6 +2500,13 @@ class BobuxInstance extends RefCounted:
 		var property_name := str(maybe_property_name if property_or_self is BobuxInstance else property_or_self)
 		return _shared_event("PropertyChanged_" + property_name)
 
+	func _store_part_color(color: Color) -> void:
+		if not node is MeshInstance3D: return
+		node.set_meta("bobux_color", color)
+		var props: Dictionary = node.get_meta("roblox_properties", {}).duplicate(false)
+		props["Color"] = [color.r, color.g, color.b]
+		node.set_meta("roblox_properties", props)
+
 	func _notify_property_changed(property_name: String) -> void:
 		if node.is_inside_tree():
 			var replication := node.get_tree().root.get_node_or_null("ImportedPlaceNetwork")
@@ -2178,18 +2560,25 @@ class BobuxInstance extends RefCounted:
 					if adapter != null and property_name in ["Size", "Parent"]: adapter.sync_from_part()
 				if property_name in ["Anchored", "CanCollide", "CanQuery"]:
 					body.freeze = bool(_get(&"Anchored"))
-					body.collision_layer = 1 if bool(node.get_meta("can_collide", true)) else (16 if bool(node.get_meta("CanQuery", true)) else 0)
-					body.collision_mask = (1 | 2 | 4 | 64) if bool(node.get_meta("can_collide", true)) else 0
+					var part_props: Dictionary = node.get_meta("roblox_properties", {})
+					var part_collides := bool(node.get_meta("can_collide", part_props.get("CanCollide", true)))
+					var part_queries := bool(node.get_meta("CanQuery", part_props.get("CanQuery", true)))
+					body.collision_layer = 1 if part_collides else (16 if part_queries else 0)
+					body.collision_mask = (1 | 2 | 4 | 64) if part_collides else 0
 					body.sleeping = false
+					var adapter := node.get_node_or_null("RobloxPartPhysics")
+					if adapter != null: adapter.refresh_properties()
 			elif property_name in ["CanCollide", "CanQuery"]:
 				# Imported static helpers also need to follow Lua property changes.
 				# Keep a query-only shape for raycasts through non-solid Parts.
 				for helper in node.get_children():
 					if helper is StaticBody3D:
-						helper.collision_layer = 1 if bool(_get(&"CanCollide")) else (16 if bool(_get(&"CanQuery")) else 0)
-						helper.collision_mask = (1 | 2 | 4 | 64) if bool(_get(&"CanCollide")) else 0
+						var helper_collides := bool(_get(&"CanCollide"))
+						var helper_queries := bool(_get(&"CanQuery"))
+						helper.collision_layer = 1 if helper_collides else (16 if helper_queries else 0)
+						helper.collision_mask = (1 | 2 | 4 | 64) if helper_collides else 0
 						for collision in helper.get_children():
-							if collision is CollisionShape3D: collision.set_deferred("disabled", false)
+							if collision is CollisionShape3D: collision.set_deferred("disabled", not (helper_collides or helper_queries))
 		_shared_event("PropertyChanged_" + property_name).Fire()
 		if property_name == "Value" and str(node.get_meta("roblox_class", "")).ends_with("Value"):
 			Changed.Fire(_get(&"Value"))
@@ -2215,6 +2604,13 @@ class BobuxInstance extends RefCounted:
 				if team is BobuxInstance and team.node == node and not bool(player.node.get_meta("Neutral", false)): result.append(player)
 			return result
 		return GetChildren()
+
+	func GetTeams(_self_arg: Variant = null) -> Array[BobuxInstance]:
+		var teams: Array[BobuxInstance] = []
+		if not is_instance_valid(node) or str(node.get_meta("roblox_class", "")) != "Teams": return teams
+		for child in node.get_children():
+			if not child.is_queued_for_deletion() and str(child.get_meta("roblox_class", "")) == "Team": teams.append(BobuxInstance.wrap(child))
+		return teams
 
 	func GetPlayerFromCharacter(character_or_self: Variant, maybe_character: Variant = null) -> BobuxInstance:
 		if not is_instance_valid(node):
@@ -2275,10 +2671,12 @@ class BobuxInstance extends RefCounted:
 			engine.unequip_all_local_tools(character)
 
 	func Play(_self_arg: Variant = null) -> void:
-		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").play(node)
+		if is_instance_valid(node):
+			preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").play(node)
 
 	func Stop(_self_arg: Variant = null) -> void:
-		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").stop(node)
+		if is_instance_valid(node):
+			preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").stop(node)
 
 	func _queue_assembly_motion(value: Vector3, kind: String) -> bool:
 		var id := int(node.get_meta("_bobux_surface_assembly", 0))
@@ -2309,16 +2707,39 @@ class BobuxInstance extends RefCounted:
 		if body != null and not body.freeze:
 			body.apply_central_impulse(value)
 
-	func MoveTo(position_or_self: Variant, maybe_position: Variant = null) -> void:
-		var destination: Variant = maybe_position if (position_or_self is Object and position_or_self == self) else position_or_self
+	func _humanoid_move(direction_or_self: Variant, direction_or_relative: Variant = false, maybe_relative: Variant = false) -> void:
+		var colon: bool = direction_or_self is Object and direction_or_self == self
+		var direction: Variant = direction_or_relative if colon else direction_or_self
+		if not direction is Vector3 or not (direction as Vector3).is_finite(): return
+		var relative := bool(maybe_relative if colon else direction_or_relative)
+		var world_direction := _roblox_direction_to_godot(direction)
+		if relative and node.is_inside_tree():
+			var camera := node.get_viewport().get_camera_3d()
+			if camera != null:
+				# Camera-local -Z is the rendered forward direction in both APIs.
+				world_direction = camera.global_basis.orthonormalized() * (direction as Vector3)
+		var body := _character_body()
+		if body == null: body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
+		if body != null and body.has_method("set_humanoid_move"):
+			body.call("set_humanoid_move", world_direction)
+
+	func MoveTo(position_or_self: Variant, position_or_part: Variant = null, maybe_part: Variant = null) -> void:
+		var colon: bool = position_or_self is Object and position_or_self == self
+		var destination: Variant = position_or_part if colon else position_or_self
 		if not (destination is Vector3):
 			return
+		if not (destination as Vector3).is_finite(): return
 		var godot_destination := _roblox_point_to_godot(destination as Vector3)
 		var body := _character_body()
 		if str(node.get_meta("roblox_class", "")) == "Humanoid":
+			var part := _node_from_instance_variant(maybe_part if colon else position_or_part) as Node3D
+			node.set_meta("WalkToPoint", destination)
+			node.set_meta("WalkToPart", part)
 			if body == null:
 				body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
-			if body != null and body.has_method("move_to"):
+			if body != null and part != null and body.has_method("move_to_part"):
+				body.call("move_to_part", godot_destination, part)
+			elif body != null and body.has_method("move_to"):
 				body.call("move_to", godot_destination)
 			return
 		if body != null:
@@ -2329,10 +2750,15 @@ class BobuxInstance extends RefCounted:
 				body.velocity = Vector3.ZERO
 			return
 		if node is Node3D:
+			_detach_render_batches()
 			(node as Node3D).global_position = godot_destination
+			_sync_descendant_physics()
 
 	func TakeDamage(amount_or_self: Variant, maybe_amount: Variant = null) -> void:
 		var amount := float(maybe_amount if (amount_or_self is Object and amount_or_self == self) else amount_or_self)
+		if not is_finite(amount) or amount == 0.0: return
+		var engine := node.get_tree().root.get_node_or_null("LuaScriptEngine") if node.is_inside_tree() else null
+		if engine != null and engine.humanoid_is_forcefield_protected(node): return
 		var body := _character_body()
 		if body == null and str(node.get_meta("roblox_class", "")) == "Humanoid":
 			body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
@@ -2344,6 +2770,8 @@ class BobuxInstance extends RefCounted:
 		if not GetStateEnabled(state_value):
 			return
 		var body := _character_body()
+		if body == null and str(node.get_meta("roblox_class", "")) == "Humanoid":
+			body = preload("res://addons/roblox_runtime/roblox_humanoid_motor.gd").ensure(node)
 		if body != null and body.has_method("request_humanoid_state"):
 			body.call("request_humanoid_state", int(state_value))
 
@@ -2351,7 +2779,12 @@ class BobuxInstance extends RefCounted:
 		var state := int(state_or_enabled if (state_or_self is Object and state_or_self == self) else state_or_self)
 		var enabled := bool(maybe_enabled if (state_or_self is Object and state_or_self == self) else state_or_enabled)
 		if is_instance_valid(node):
-			node.set_meta("bobux_state_enabled_%d" % state, enabled)
+			var body := _character_body()
+			if body != null and body.has_method("set_humanoid_state_enabled"):
+				body.call("set_humanoid_state_enabled", state, enabled)
+			if bool(node.get_meta("bobux_state_enabled_%d" % state, true)) != enabled:
+				node.set_meta("bobux_state_enabled_%d" % state, enabled)
+			# Studio black-box run02: every call fires, even when unchanged.
 			_shared_event("StateEnabledChanged").Fire(state, enabled)
 
 	func GetStateEnabled(state_or_self: Variant, maybe_state: Variant = null) -> bool:
@@ -2363,7 +2796,7 @@ class BobuxInstance extends RefCounted:
 		if body != null and body.has_method("get_runtime_humanoid_state"):
 			return body.call("get_runtime_humanoid_state")
 		var state: Variant = node.get_meta("HumanoidState", 8) if is_instance_valid(node) else 8
-		return {"Running": 8, "RunningNoPhysics": 8, "Jumping": 3, "Freefall": 5, "Landed": 7, "Dead": 15, "Climbing": 12, "Swimming": 4, "Seated": 13}.get(state, 8) if state is String else state
+		return preload("res://scripts/player/humanoid/state_machine.gd").STATES.get(state, 8) if state is String else state
 
 	func IsKeyDown(key_or_self: Variant, maybe_key: Variant = null) -> bool:
 		var key := int(maybe_key if (key_or_self is Object and key_or_self == self) else key_or_self)
@@ -2404,6 +2837,7 @@ class BobuxInstance extends RefCounted:
 		var frame_value: Variant = maybe_frame if (frame_or_self is Object and frame_or_self == self) else frame_or_self
 		if not (frame_value is BobuxCFrame):
 			return
+		_detach_render_batches()
 		var desired := _roblox_transform_to_godot((frame_value as BobuxCFrame).transform)
 		var primary := _resolve_instance_reference(_stored_reference("PrimaryPart"))
 		if primary != null and primary.node is Node3D and node is Node3D:
@@ -2424,10 +2858,15 @@ class BobuxInstance extends RefCounted:
 	func PivotTo(frame_or_self: Variant, maybe_frame: Variant = null) -> void:
 		var frame: Variant = maybe_frame if frame_or_self is BobuxInstance else frame_or_self
 		if node is Node3D and frame is BobuxCFrame:
+			_detach_render_batches()
 			var desired := _roblox_transform_to_godot(frame.transform)
 			if node.is_inside_tree(): node.global_transform = desired
 			else: node.transform = desired
 			_sync_descendant_physics()
+
+	func _detach_render_batches() -> void:
+		if node.has_meta("_bobux_render_batch") or node.has_meta("_bobux_contains_render_batches"):
+			preload("res://addons/roblox_runtime/roblox_render_batches.gd").detach_tree(node)
 
 	func _sync_descendant_physics() -> void:
 		if not node.is_inside_tree(): return
@@ -2462,6 +2901,8 @@ class BobuxInstance extends RefCounted:
 			if target is BobuxInstance:
 				(target as BobuxInstance)._set(&"CFrame", frame)
 			elif target is Node3D:
+				if target.has_meta("_bobux_render_batch") or target.has_meta("_bobux_contains_render_batches"):
+					preload("res://addons/roblox_runtime/roblox_render_batches.gd").detach_tree(target)
 				(target as Node3D).global_transform = _roblox_transform_to_godot((frame as BobuxCFrame).transform)
 
 	func TweenPosition(goal_or_self: Variant, maybe_goal: Variant = null, _direction: Variant = null, _style: Variant = null, _time: Variant = 1.0, _override: Variant = false, callback: Variant = null) -> bool:
@@ -2810,6 +3251,7 @@ class BobuxInstanceCreator extends RefCounted:
 		return instance
 
 func _ready() -> void:
+	_profile_native_enabled = OS.get_cmdline_user_args().has("--profile-lua-native")
 	_init_lua_engine()
 	set_process(true)
 	if OS.get_cmdline_user_args().has("--verify-lua-runtime"):
@@ -2838,11 +3280,16 @@ script:SetAttribute('Passed', true)
 	await get_tree().create_timer(0.8).timeout
 	var passed := bool(result.get("ok", false)) and bool(context.get_meta("attribute_Passed", false)) and _runtime_failed_total == 0
 	stop_all_scripts(context)
+	queue_stopped_state_cleanup(context)
 	context.queue_free()
+	# LuaCallable destructors owned by the deferred-deleted context must finish
+	# before shutdown closes their native Lua state. Await the real cleanup job.
+	for frame in 4: await get_tree().process_frame
 	print("BOBUX_LUA_SMOKE_OK" if passed else "BOBUX_LUA_SMOKE_FAILED")
 	get_tree().quit(0 if passed else 1)
 
 func _exit_tree() -> void:
+	_finish_source_preparation()
 	stop_all_scripts()
 	release_stopped_script_states()
 	_service_nodes_cache.clear()
@@ -2858,8 +3305,10 @@ func _init_lua_engine() -> void:
 		_lua = null
 		is_active = false
 
-func run_script(lua_code: String, context_node: Node) -> Dictionary:
-	return start_script(lua_code, context_node, {"realm": "studio", "retain": true})
+func run_script(lua_code: String, context_node: Node, options: Dictionary = {}) -> Dictionary:
+	var runtime_options := {"realm": "studio", "retain": true}
+	runtime_options.merge(options, true)
+	return start_script(lua_code, context_node, runtime_options)
 	# Legacy synchronous implementation remains below as a compatibility
 	# reference; the coroutine scheduler above is now the active path.
 	print("[LuaScriptEngine] Executing Lua script on node: ", context_node.name)
@@ -2891,9 +3340,9 @@ func run_script(lua_code: String, context_node: Node) -> Dictionary:
 		"Heartbeat": BobuxEvent.new(),
 		"Stepped": BobuxEvent.new(),
 		"RenderStepped": BobuxEvent.new(),
-		"IsServer": func(): return true,
-		"IsClient": func(): return false,
-		"IsStudio": func(): return true,
+		"IsServer": func(_self_arg: Variant = null): return true,
+		"IsClient": func(_self_arg: Variant = null): return false,
+		"IsStudio": func(_self_arg: Variant = null): return true,
 	}
 	var debris_service := {
 		"AddItem": func(arg1: Variant, arg2: Variant = null, _arg3: Variant = null):
@@ -3003,6 +3452,11 @@ func run_script(lua_code: String, context_node: Node) -> Dictionary:
 func start_script(lua_code: String, context_node: Node, options: Dictionary = {}) -> Dictionary:
 	if context_node == null or not is_instance_valid(context_node):
 		return {"ok": false, "error": "Script context is invalid."}
+	var profile: Variant = options.get("enum_profile", RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS)
+	if not profile is String or profile not in [RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS, RobloxEnumRegistry.ROBLOX_PARITY_ENUM_ITEM]:
+		return {"ok": false, "error": "Unknown enum_profile. Use ExistingNumericEnums or RobloxParity.EnumItem."}
+	options = options.duplicate()
+	options["enum_profile"] = profile
 	var replication := get_node_or_null("/root/ImportedPlaceNetwork")
 	var realm := str(options.get("realm", "client" if str(context_node.get_meta("roblox_class", "Script")) == "LocalScript" else "server"))
 	if replication != null and not replication.script_allowed(context_node, realm):
@@ -3039,6 +3493,7 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 			"completed": false,
 		}
 
+	var compile_started := Time.get_ticks_usec()
 	var lua = ClassDB.instantiate("LuaAPI")
 	if lua == null:
 		return {"ok": false, "error": "Could not create LuaAPI state."}
@@ -3057,18 +3512,28 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 	var runtime_options := options.duplicate()
 	runtime_options["_runtime_id"] = runtime_id
 	_push_runtime_bindings(lua, context_node, runtime_options)
+	_trace_script_compile(context_node, "bindings", compile_started)
+	var vm_cpu_ref: WeakRef = weakref(lua)
 	var budget_callback := func(can_preempt: bool = false) -> int:
 		if not _runtime_resume_started_usec.has(runtime_id):
 			return 0
 		var elapsed := Time.get_ticks_usec() - int(_runtime_resume_started_usec[runtime_id])
+		# Frame fairness uses wall time, but a runaway script is charged only
+		# for its own VM CPU. OS descheduling and native Instance construction
+		# must not kill a finite script during a busy build or server load.
+		var vm_elapsed := elapsed
+		if _runtime_resume_started_vm_cpu_usec.has(runtime_id):
+			var cpu_owner: Object = vm_cpu_ref.get_ref()
+			if cpu_owner != null:
+				vm_elapsed = maxi(0, int(cpu_owner.call("get_vm_cpu_time_usec")) - int(_runtime_resume_started_vm_cpu_usec[runtime_id]))
 		var running: Dictionary = _script_runtimes.get(runtime_id, {})
 		if can_preempt:
-			if elapsed + int(running.get("unyielded_usec", 0)) > SCRIPT_UNYIELDED_TIME_LIMIT_USEC:
+			if vm_elapsed + int(running.get("unyielded_usec", 0)) > SCRIPT_UNYIELDED_TIME_LIMIT_USEC:
 				_runtime_budget_exceeded[runtime_id] = SCRIPT_UNYIELDED_TIME_LIMIT_USEC
 				return 2
 			if Time.get_ticks_usec() - int(running.get("resume_wall_usec", Time.get_ticks_usec())) >= SCRIPT_RESUME_TIME_BUDGET_USEC:
 				return 1
-		elif elapsed > SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC:
+		elif vm_elapsed > SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC:
 			_runtime_budget_exceeded[runtime_id] = SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC
 			return 2
 		return 0
@@ -3078,17 +3543,23 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 		_push_lua_binding(lua, "__bobux_budget_expired", func() -> bool: return budget_callback.call(false) == 2)
 	# Use native debug only to adapt value metatables, then remove it before
 	# authored code runs. Scripts receive the restricted compatibility debug API.
-	var type_setup: Variant = lua.do_string(_native_lua_type_setup())
+	var type_setup: Variant = lua.do_string(_native_lua_type_setup(profile))
+	_trace_script_compile(context_node, "types", compile_started)
 	var type_setup_error := _lua_error_message(type_setup)
 	if not type_setup_error.is_empty():
 		return {"ok": false, "error": type_setup_error}
 	# New coroutines inherit the private Lua hook. Throwing from Lua after the
 	# budget callback returns avoids longjmp across native Godot Ref destructors.
 	var coroutine = lua.new_coroutine()
+	_trace_script_compile(context_node, "coroutine", compile_started)
 	if coroutine == null:
 		return {"ok": false, "error": "Could not create Lua coroutine."}
-	var prepared_source := _prepare_scheduled_lua_source(lua_code)
+	var prepared_source := _prepare_scheduled_lua_source(lua_code, false, options.get("_prepared_body"))
+	if OS.get_cmdline_user_args().has("--profile-loading"):
+		print("[script-load] body_cached=", options.has("_prepared_body"), " body_type=", typeof(options.get("_prepared_body")))
+	_trace_script_compile(context_node, "source", compile_started)
 	var load_error = coroutine.load_string(prepared_source)
+	_trace_script_compile(context_node, "compile", compile_started)
 	var load_message := _lua_error_message(load_error)
 	if not load_message.is_empty():
 		return {"ok": false, "error": "[LUA LOAD ERROR] %s" % load_message}
@@ -3103,6 +3574,7 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 		"source_name": str(options.get("source_name", context_node.name)),
 		"retain": bool(options.get("retain", true)),
 		"last_error": "",
+		"enum_profile": profile,
 	}
 	_script_runtimes[runtime_id] = runtime
 	if not bool(options.get("_runtime_was_counted", false)):
@@ -3117,6 +3589,7 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 			"deferred": true,
 		}
 	var resume_result := _resume_script_runtime(runtime_id)
+	_trace_script_compile(context_node, "resume", compile_started)
 	if not bool(resume_result.get("ok", false)):
 		return resume_result
 	return {
@@ -3125,6 +3598,10 @@ func start_script(lua_code: String, context_node: Node, options: Dictionary = {}
 		"scheduled": _script_runtimes.has(runtime_id),
 		"completed": not _script_runtimes.has(runtime_id),
 	}
+
+func _trace_script_compile(context: Node, stage: String, started: int) -> void:
+	if OS.get_cmdline_user_args().has("--profile-loading"):
+		print("[script-load] ", context.name, " ", stage, " elapsed_ms=", (Time.get_ticks_usec() - started) / 1000.0)
 
 func validate_script_source(lua_code: String) -> Dictionary:
 	if not ClassDB.class_exists("LuaAPI"):
@@ -3141,12 +3618,24 @@ func validate_script_source(lua_code: String) -> Dictionary:
 	var coroutine = lua.new_coroutine()
 	if coroutine == null:
 		return {"ok": false, "error": "Could not create Lua coroutine."}
-	var prepared_source := _prepare_scheduled_lua_source(lua_code)
+	var prepared_source := _prepare_scheduled_lua_source(lua_code, true)
 	var load_error = coroutine.load_string(prepared_source)
 	var load_message := _lua_error_message(load_error)
+	var source_line := 0
+	if not load_message.is_empty():
+		var line_regex := RegEx.new()
+		if line_regex.compile(":(\\d+):") == OK:
+			var line_match := line_regex.search(load_message)
+			if line_match != null:
+				var prepared_line := int(line_match.get_string(1))
+				var source_marker := prepared_source.find("-- BOBUX_AUTHORED_SOURCE\n")
+				if source_marker >= 0:
+					var wrapper_lines := prepared_source.left(source_marker).count("\n") + 1
+					source_line = maxi(1, prepared_line - wrapper_lines)
 	return {
 		"ok": load_message.is_empty(),
 		"error": load_message,
+		"line": source_line,
 		"source_bytes": lua_code.to_utf8_buffer().size(),
 	}
 
@@ -3166,6 +3655,17 @@ func stop_script(context_or_runtime: Variant) -> void:
 			var retained: Dictionary = _retained_lua_states[runtime_id_variant]
 			if retained.get("context") == context_node:
 				runtime_ids.append(int(runtime_id_variant))
+	# A deferred Script already has a reserved runtime ID, but has no VM yet.
+	# Stopping it must remove that reservation as well; otherwise compilation
+	# can finish next frame and restart a disabled/destroyed Script.
+	for index in range(_pending_script_starts.size() - 1, -1, -1):
+		var pending: Dictionary = _pending_script_starts[index]
+		var pending_id := int(pending.get("id", -1))
+		var matches_id: bool = context_or_runtime is int and pending_id == int(context_or_runtime)
+		var matches_context: bool = context_or_runtime is Node and pending.get("context") == context_or_runtime
+		if matches_id or matches_context:
+			_clear_script_runtime_marker(pending.get("context"), pending_id)
+			_pending_script_starts.remove_at(index)
 	for runtime_id in runtime_ids:
 		_dispose_script_runtime(runtime_id)
 		_dispose_retained_lua_state(runtime_id)
@@ -3190,6 +3690,7 @@ func stop_all_scripts(root_context: Node = null) -> void:
 		for runtime_id_variant in _retained_lua_states.keys().duplicate():
 			_dispose_retained_lua_state(runtime_id_variant)
 		_runtime_resume_started_usec.clear()
+		_runtime_resume_started_vm_cpu_usec.clear()
 		_runtime_native_spans.clear()
 		_runtime_budget_exceeded.clear()
 		return
@@ -3222,6 +3723,7 @@ func _dispose_script_runtime(runtime_id: int) -> void:
 	_task_runtime_ids.erase(runtime_id)
 	_runtime_native_spans.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
+	_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	if not _script_runtimes.has(runtime_id):
 		return
@@ -3233,6 +3735,8 @@ func _dispose_script_runtime(runtime_id: int) -> void:
 	# have completed their deferred destruction and released every LuaCallable.
 	var lua: Variant = runtime.get("lua")
 	if lua != null:
+		if lua.has_meta(RobloxEnumVmBoundary.OWNER_META):
+			lua.get_meta(RobloxEnumVmBoundary.OWNER_META).disconnect_connections()
 		_stopped_lua_state_quarantine.append(lua)
 	runtime["lua"] = null
 	runtime["coroutine"] = null
@@ -3243,6 +3747,7 @@ func _dispose_retained_lua_state(runtime_id: Variant) -> void:
 	_task_runtime_ids.erase(runtime_id)
 	_runtime_native_spans.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
+	_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	if not _retained_lua_states.has(runtime_id):
 		return
@@ -3251,6 +3756,8 @@ func _dispose_retained_lua_state(runtime_id: Variant) -> void:
 	_clear_script_runtime_marker(retained.get("context"), runtime_id)
 	var lua: Variant = retained.get("lua")
 	if lua != null:
+		if lua.has_meta(RobloxEnumVmBoundary.OWNER_META):
+			lua.get_meta(RobloxEnumVmBoundary.OWNER_META).disconnect_connections()
 		_stopped_lua_state_quarantine.append(lua)
 	retained["lua"] = null
 	retained.clear()
@@ -3270,6 +3777,33 @@ func release_stopped_script_states() -> void:
 			# Closing the native state first leaves Godot proxy references behind.
 			lua.do_string("local gc, globals = collectgarbage, _G; for key in pairs(globals) do globals[key] = nil end; gc('collect'); gc('collect')")
 	_stopped_lua_state_quarantine.clear()
+	for job in _stopped_state_cleanup_jobs:
+		for lua in job.states: _release_stopped_lua_state(lua)
+	_stopped_state_cleanup_jobs.clear()
+
+func queue_stopped_state_cleanup(owner: Node) -> void:
+	# Runtime callbacks retain native state pointers until their whole scene
+	# and the gradually retired workspace are gone. Keep that lifetime barrier,
+	# then reclaim states instead of retaining every visited place until exit.
+	if _stopped_lua_state_quarantine.is_empty(): return
+	_stopped_state_cleanup_jobs.append({"owner": weakref(owner), "states": _stopped_lua_state_quarantine.duplicate()})
+	_stopped_lua_state_quarantine.clear()
+
+func _release_stopped_lua_state(lua: Variant) -> void:
+	if lua != null:
+		lua.do_string("local gc, globals = collectgarbage, _G; for key in pairs(globals) do globals[key] = nil end; gc('collect'); gc('collect')")
+
+func _process_stopped_state_cleanup() -> void:
+	if _stopped_state_cleanup_jobs.is_empty(): return
+	var replication := get_node_or_null("/root/ImportedPlaceNetwork")
+	if replication != null and not replication._retired.is_empty(): return
+	var started := Time.get_ticks_usec()
+	for job in _stopped_state_cleanup_jobs.duplicate():
+		if job.owner.get_ref() != null: continue
+		while not job.states.is_empty():
+			_release_stopped_lua_state(job.states.pop_back())
+			if Time.get_ticks_usec() - started >= 2000: return
+		_stopped_state_cleanup_jobs.erase(job)
 
 
 func set_scripts_paused(paused: bool) -> void:
@@ -3277,6 +3811,7 @@ func set_scripts_paused(paused: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	_process_stopped_state_cleanup()
 	var profile_start := Time.get_ticks_usec()
 	if _scripts_paused:
 		return
@@ -3284,29 +3819,14 @@ func _process(delta: float) -> void:
 	_process_lua_tasks()
 	var profile_tasks := Time.get_ticks_usec()
 	_ensure_run_service_events()
-	# Do not run an ever-growing set of frame callbacks while a large imported
-	# place is still compiling. Once ready, dispatch them round-robin under one
-	# shared deadline so a script-heavy place cannot freeze Studio or the client.
+	# Each frame signal reaches every connection with this frame's arguments.
+	# A shared deadline used to drop later callbacks and starve RenderStepped
+	# whenever Heartbeat needed more than 1.5 ms. Scheduling budgets apply to
+	# resumable tasks; they must not silently change signal delivery.
 	if _pending_script_starts.is_empty():
-		var event_deadline_usec := Time.get_ticks_usec() + SCRIPT_EVENT_TIME_BUDGET_USEC
-		_run_service_stepped.FireBudgeted(
-			SCRIPT_EVENT_CALLBACK_BUDGET_PER_FRAME,
-			event_deadline_usec,
-			Time.get_ticks_msec() / 1000.0,
-			delta
-		)
-		if Time.get_ticks_usec() < event_deadline_usec:
-			_run_service_heartbeat.FireBudgeted(
-				SCRIPT_EVENT_CALLBACK_BUDGET_PER_FRAME,
-				event_deadline_usec,
-				delta
-			)
-		if Time.get_ticks_usec() < event_deadline_usec:
-			_run_service_render_stepped.FireBudgeted(
-				SCRIPT_EVENT_CALLBACK_BUDGET_PER_FRAME,
-				event_deadline_usec,
-				delta
-			)
+		_run_service_stepped.Fire(Time.get_ticks_msec() / 1000.0, delta)
+		_run_service_heartbeat.Fire(delta)
+		_run_service_render_stepped.Fire(delta)
 	var now := Time.get_ticks_msec() / 1000.0
 	var profile_events := Time.get_ticks_usec()
 	var runtime_ids: Array = _script_runtimes.keys().duplicate()
@@ -3356,12 +3876,16 @@ func _process_lua_tasks() -> void:
 			_dispose_script_runtime(runtime_id)
 			_dispose_retained_lua_state(runtime_id)
 			continue
-		_runtime_resume_started_usec[runtime_id] = Time.get_ticks_usec()
+		# Each resumed task owns its watchdog. Do not charge the dispatcher
+		# for all tasks together: one timeout must not poison its siblings.
+		_runtime_resume_started_usec.erase(runtime_id)
+		_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 		_runtime_native_spans.erase(runtime_id)
 		_runtime_budget_exceeded.erase(runtime_id)
 		var result: Variant = lua.call_function("__bobux_step_tasks", [])
 		_runtime_native_spans.erase(runtime_id)
 		_runtime_resume_started_usec.erase(runtime_id)
+		_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 		var error_message := _lua_error_message(result)
 		if not error_message.is_empty():
 			_report_task_error(runtime_id, error_message)
@@ -3383,9 +3907,18 @@ func _report_task_error(runtime_id: int, message: String) -> void:
 
 
 var _native_profile: Dictionary = {}
+func _profile_native_access(operation: String, property: StringName, started: int) -> void:
+	var elapsed := Time.get_ticks_usec() - started
+	var key := operation + ":" + str(property)
+	var sample: Dictionary = _native_access_profile.get(key, {"calls": 0, "usec": 0, "max": 0})
+	sample.calls += 1
+	sample.usec += elapsed
+	sample.max = maxi(sample.max, elapsed)
+	_native_access_profile[key] = sample
+
 func _exclude_native_work(start_usec: int) -> void:
 	var end_usec := Time.get_ticks_usec()
-	if OS.get_cmdline_user_args().has("--profile-lua-native") and end_usec - start_usec > 500:
+	if _profile_native_enabled and end_usec - start_usec > 500:
 		var stack := get_stack()
 		var caller := str(stack[1].get("function", "?")) if stack.size() > 1 else "?"
 		var sample: Dictionary = _native_profile.get(caller, {"calls": 0, "usec": 0, "max": 0})
@@ -3415,14 +3948,19 @@ func _resume_script_runtime(runtime_id: int) -> Dictionary:
 		_dispose_script_runtime(runtime_id)
 		return {"ok": false, "error": "Script coroutine is missing."}
 	_runtime_resume_started_usec[runtime_id] = Time.get_ticks_usec()
+	if runtime.lua.has_method("get_vm_cpu_time_usec"):
+		_runtime_resume_started_vm_cpu_usec[runtime_id] = int(runtime.lua.get_vm_cpu_time_usec())
 	runtime["resume_wall_usec"] = Time.get_ticks_usec()
 	_runtime_native_spans.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	var result: Variant = coroutine.resume([])
 	var consumed_usec := maxi(0, Time.get_ticks_usec() - int(_runtime_resume_started_usec.get(runtime_id, Time.get_ticks_usec())))
+	if _runtime_resume_started_vm_cpu_usec.has(runtime_id):
+		consumed_usec = maxi(0, int(runtime.lua.get_vm_cpu_time_usec()) - int(_runtime_resume_started_vm_cpu_usec[runtime_id]))
 	var preempted: bool = coroutine.has_method("was_preempted") and coroutine.was_preempted()
 	_runtime_native_spans.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
+	_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 	var error_message := _lua_error_message(result)
 	if _runtime_budget_exceeded.has(runtime_id):
 		var limit := int(_runtime_budget_exceeded[runtime_id])
@@ -3458,6 +3996,7 @@ func _resume_script_runtime(runtime_id: int) -> Dictionary:
 				"context": runtime.get("context"),
 				"source_name": runtime.get("source_name", "Script"),
 				"realm": runtime.get("realm", "runtime"),
+				"enum_profile": runtime.get("enum_profile", RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS),
 			}
 		return {"ok": true, "completed": true, "runtime_id": runtime_id, "result": result}
 	var delay_seconds := 0.03
@@ -3473,6 +4012,7 @@ func _resume_script_runtime(runtime_id: int) -> Dictionary:
 func _retain_stopped_runtime(runtime_id: int, runtime: Dictionary) -> void:
 	_runtime_native_spans.erase(runtime_id)
 	_runtime_resume_started_usec.erase(runtime_id)
+	_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
 	_runtime_budget_exceeded.erase(runtime_id)
 	_script_runtimes.erase(runtime_id)
 	var lua: Variant = runtime.get("lua")
@@ -3483,6 +4023,7 @@ func _retain_stopped_runtime(runtime_id: int, runtime: Dictionary) -> void:
 			"context": runtime.get("context"),
 			"source_name": runtime.get("source_name", "Script"),
 			"realm": runtime.get("realm", "runtime"),
+			"enum_profile": runtime.get("enum_profile", RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS),
 		}
 	runtime["lua"] = null
 	runtime["coroutine"] = null
@@ -3531,17 +4072,34 @@ func get_runtime_diagnostics() -> Dictionary:
 
 
 func _process_pending_script_starts() -> void:
+	_collect_prepared_source()
 	var compiled := 0
 	var compile_started_usec := Time.get_ticks_usec()
 	while not _pending_script_starts.is_empty():
-		var pending: Dictionary = _pending_script_starts.pop_front()
+		var pending: Dictionary = _pending_script_starts.front()
 		var context := _live_node(pending.get("context"))
 		if context == null or context.is_queued_for_deletion() or not context.is_inside_tree():
+			_pending_script_starts.pop_front()
 			continue
+		var source := str(pending.get("source", ""))
+		var native_runtime: bool = _lua != null and _lua.has_method("get_runtime_name")
+		var source_key := str(native_runtime) + source.sha256_text()
+		if not _prepared_source_cache.has(source_key):
+			if _source_preparation_thread == null:
+				_source_preparation_key = source_key
+				_source_preparation_thread = Thread.new()
+				var error := _source_preparation_thread.start(_prepare_lua_body_for_runtime.bind(source, native_runtime))
+				if error != OK:
+					_source_preparation_thread = null
+					_cache_prepared_source(source_key, _prepare_lua_body_for_runtime(source, native_runtime))
+			if not _prepared_source_cache.has(source_key): break
+		_pending_script_starts.pop_front()
+		var prepared_options: Dictionary = (pending.get("options", {}) as Dictionary).duplicate()
+		prepared_options["_prepared_body"] = _prepared_source_cache[source_key]
 		var result := start_script(
-			str(pending.get("source", "")),
+			source,
 			context,
-			pending.get("options", {}) as Dictionary
+			prepared_options
 		)
 		if not bool(result.get("ok", false)):
 			_runtime_failed_total += 1
@@ -3553,6 +4111,24 @@ func _process_pending_script_starts() -> void:
 		compiled += 1
 		if compiled >= SCRIPT_COMPILE_BUDGET_PER_FRAME or Time.get_ticks_usec() - compile_started_usec >= SCRIPT_COMPILE_TIME_BUDGET_USEC:
 			break
+
+func _cache_prepared_source(key: String, body: String) -> void:
+	var size := body.to_utf8_buffer().size()
+	if _prepared_source_cache_bytes + size > PREPARED_SOURCE_CACHE_LIMIT_BYTES:
+		_prepared_source_cache.clear()
+		_prepared_source_cache_bytes = 0
+	_prepared_source_cache[key] = body
+	_prepared_source_cache_bytes += size
+
+func _collect_prepared_source() -> void:
+	if _source_preparation_thread != null and not _source_preparation_thread.is_alive():
+		_cache_prepared_source(_source_preparation_key, str(_source_preparation_thread.wait_to_finish()))
+		_source_preparation_thread = null
+
+func _finish_source_preparation() -> void:
+	if _source_preparation_thread != null:
+		_source_preparation_thread.wait_to_finish()
+		_source_preparation_thread = null
 
 
 func _clear_all_runtime_event_connections(root: Node) -> void:
@@ -3703,9 +4279,9 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 		"Heartbeat": _run_service_heartbeat,
 		"Stepped": _run_service_stepped,
 		"RenderStepped": _run_service_render_stepped,
-		"IsServer": func(): return is_server,
-		"IsClient": func(): return not is_server,
-		"IsStudio": func(): return str(options.get("realm", "")).to_lower() == "studio",
+		"IsServer": func(_self_arg: Variant = null): return is_server,
+		"IsClient": func(_self_arg: Variant = null): return not is_server,
+		"IsStudio": func(_self_arg: Variant = null): return str(options.get("realm", "")).to_lower() == "studio",
 	})
 	var tween_service: Dictionary = _owned_lua_bindings({"Create": _create_roblox_tween})
 	var debris_service: Dictionary = _owned_lua_bindings({
@@ -3780,24 +4356,78 @@ func _push_runtime_bindings(target: Object, context_node: Node, options: Diction
 			var unix_time := int(timestamp) if timestamp != null else int(Time.get_unix_time_from_system())
 			return Time.get_datetime_string_from_unix_time(unix_time, true),
 	})
-	_push_lua_binding(target, "Enum", _build_enum_proxy())
+	if options.get("enum_profile", RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS) == RobloxEnumRegistry.ROBLOX_PARITY_ENUM_ITEM:
+		var registry := RobloxEnumRegistry.new()
+		registry.attach_to_vm(target)
+		var humanoid_classifier := func(value: Variant) -> bool:
+			return value is BobuxInstance and is_instance_valid(value.node) and str(value.node.get_meta("roblox_class", "")) == "Humanoid"
+		var transport_classifier := func(value: Variant) -> bool:
+			return value is BobuxInstance and is_instance_valid(value.node) and str(value.node.get_meta("roblox_class", "")) in ["RemoteEvent", "RemoteFunction"]
+		var camera_classifier := func(value: Variant) -> bool:
+			return value is BobuxInstance and is_instance_valid(value.node) and value.node is Camera3D
+		var boundary := RobloxEnumVmBoundary.new(registry, humanoid_classifier, transport_classifier, camera_classifier)
+		target.set_meta(RobloxEnumVmBoundary.OWNER_META, boundary)
+		_push_lua_binding(target, "Enum", registry.enums())
+		_push_lua_binding(target, "__bobux_enum_sample", registry.item("HumanoidStateType", "Running"))
+		_push_lua_binding(target, "__bobux_enum_kind", boundary.kind)
+		_push_lua_binding(target, "__bobux_enum_humanoid", boundary.is_humanoid)
+		_push_lua_binding(target, "__bobux_enum_remote", boundary.is_remote)
+		_push_lua_binding(target, "__bobux_enum_camera", boundary.is_camera)
+		_push_lua_binding(target, "__bobux_enum_camera_get", boundary.camera_type)
+		_push_lua_binding(target, "__bobux_enum_camera_set", boundary.set_camera_type)
+		_push_lua_binding(target, "__bobux_enum_state", boundary.state_item)
+		_push_lua_binding(target, "__bobux_enum_track_connection", boundary.track_connection)
+		var invoke: Variant = ClassDB.instantiate("LuaCallableExtra")
+		invoke.set_info(Callable(boundary, "call_humanoid"), 2, true, false)
+		_push_lua_binding(target, "__bobux_enum_call", invoke)
+	else:
+		_push_lua_binding(target, "Enum", _build_enum_proxy())
 	_push_lua_binding(target, "script", BobuxInstance.wrap(context_node))
 	_push_lua_binding(target, "__bobux_log", func(message: String, is_error: bool): _emit_script_message(context_node, message, is_error))
 	_push_lua_binding(target, "tick", func(): return Time.get_ticks_msec() / 1000.0)
 	_push_lua_binding(target, "__bobux_module_source", _module_source_for_runtime)
 	var runtime_id := int(options.get("_runtime_id", 0))
-	_push_lua_binding(target, "__bobux_begin_task_slice", func() -> bool:
-		if _runtime_resume_started_usec.has(runtime_id):
-			return false
+	var binding_cpu_ref: WeakRef = weakref(target)
+	var task_slice_stack: Array[Dictionary] = []
+	_push_lua_binding(target, "__bobux_begin_task_slice", func() -> int:
+		# task.spawn can resume immediately inside its parent or an event.
+		# Each coroutine owns its watchdog; a caught child timeout must not
+		# leave the parent marked as failed or charge its siblings' CPU to it.
+		task_slice_stack.append({
+			"has_parent": _runtime_resume_started_usec.has(runtime_id),
+			"parent_started": int(_runtime_resume_started_usec.get(runtime_id, 0)),
+			"has_cpu": _runtime_resume_started_vm_cpu_usec.has(runtime_id),
+			"parent_cpu": int(_runtime_resume_started_vm_cpu_usec.get(runtime_id, 0)),
+			"parent_spans": _runtime_native_spans.get(runtime_id, []),
+			"has_exceeded": _runtime_budget_exceeded.has(runtime_id),
+			"parent_exceeded": _runtime_budget_exceeded.get(runtime_id),
+			"wall_started": Time.get_ticks_usec(),
+		})
 		_runtime_resume_started_usec[runtime_id] = Time.get_ticks_usec()
+		var cpu_owner: Object = binding_cpu_ref.get_ref()
+		if cpu_owner != null and cpu_owner.has_method("get_vm_cpu_time_usec"):
+			_runtime_resume_started_vm_cpu_usec[runtime_id] = int(cpu_owner.call("get_vm_cpu_time_usec"))
 		_runtime_native_spans.erase(runtime_id)
-		return true
+		_runtime_budget_exceeded.erase(runtime_id)
+		return task_slice_stack.size()
 	)
-	_push_lua_binding(target, "__bobux_end_task_slice", func(owned: bool):
-		if owned:
-			_runtime_native_spans.erase(runtime_id)
-			_runtime_resume_started_usec.erase(runtime_id)
-			_runtime_budget_exceeded.erase(runtime_id)
+	_push_lua_binding(target, "__bobux_end_task_slice", func(depth: int):
+		if depth <= 0 or depth != task_slice_stack.size(): return
+		var previous: Dictionary = task_slice_stack.pop_back()
+		var child_cpu := 0
+		var cpu_owner: Object = binding_cpu_ref.get_ref()
+		if cpu_owner != null and _runtime_resume_started_vm_cpu_usec.has(runtime_id):
+			child_cpu = maxi(0, int(cpu_owner.call("get_vm_cpu_time_usec")) - int(_runtime_resume_started_vm_cpu_usec[runtime_id]))
+		_runtime_native_spans.erase(runtime_id)
+		_runtime_resume_started_usec.erase(runtime_id)
+		_runtime_resume_started_vm_cpu_usec.erase(runtime_id)
+		_runtime_budget_exceeded.erase(runtime_id)
+		if previous.has_parent:
+			_runtime_resume_started_usec[runtime_id] = int(previous.parent_started) + Time.get_ticks_usec() - int(previous.wall_started)
+			_runtime_native_spans[runtime_id] = previous.parent_spans
+		if previous.has_cpu:
+			_runtime_resume_started_vm_cpu_usec[runtime_id] = int(previous.parent_cpu) + child_cpu
+		if previous.has_exceeded: _runtime_budget_exceeded[runtime_id] = previous.parent_exceeded
 	)
 	_push_lua_binding(target, "__bobux_tasks_active", func(active: bool):
 		if active:
@@ -3827,6 +4457,7 @@ func normalize_script_source(source: String) -> String:
 	# Pasted Windows scripts and multiline GDScript constants may carry CRLF.
 	# Lua itself normalizes physical line endings; compatibility parsing must too.
 	source = source.replace("\r\n", "\n").replace("\r", "\n")
+	if not "&#" in source and not "&nbsp;" in source.to_lower(): return source
 	# Decode whitespace artifacts only in code, preserving literals and comments.
 	var tokens := _lua_tokens(source)
 	var entities := {"&#x20;": " ", "&#32;": " ", "&#160;": " ", "&nbsp;": " ", "&#x9;": "\t", "&#9;": "\t"}
@@ -3841,8 +4472,13 @@ func normalize_script_source(source: String) -> String:
 	return source
 
 func _prepare_lua_body(lua_code: String) -> String:
+	return _prepare_lua_body_for_runtime(lua_code, _lua != null and _lua.has_method("get_runtime_name"))
+
+func _prepare_lua_body_for_runtime(lua_code: String, native_runtime: bool) -> String:
+	# Pure text only: deferred runtime starts can prepare on a worker without
+	# touching Lua states, Nodes, resources, or authored scene state.
 	var lexer = preload("res://addons/roblox_studio/roblox_lua_lexer.gd")
-	if _lua != null and _lua.has_method("get_runtime_name"):
+	if native_runtime:
 		# Luau's own parser owns types, compound assignments, continue and
 		# interpolation. Only Godot/Roblox API adapters remain source based.
 		# The embedded Luau VM misparses multiline backtick templates. Normalize
@@ -3860,7 +4496,7 @@ func _prepare_lua_body(lua_code: String) -> String:
 	# and attempts to connect a signal with an empty name.
 	return lexer.restore_strings(_rewrite_lua_async_calls(rewritten), protected.literals)
 
-func _native_lua_type_setup() -> String:
+func _native_lua_type_setup(enum_profile: String = RobloxEnumRegistry.EXISTING_NUMERIC_ENUMS) -> String:
 	return """
 do
     local getmeta = debug.getmetatable
@@ -3905,9 +4541,14 @@ do
         end
         return member
     end
+""" + (RobloxEnumVmBoundary.type_setup() if enum_profile == RobloxEnumRegistry.ROBLOX_PARITY_ENUM_ITEM else "    local enum_kind = nil\n") + """
     typeof = function(value)
         local kind = type(value)
 		if kind ~= 'userdata' then return kind end
+        if enum_kind then
+            local enum_type = enum_kind(value)
+			if enum_type ~= '' then return enum_type end
+        end
         local known = types[getmeta(value)]
         if known then return known end
         local ok, class = pcall(function() return value.ClassName end)
@@ -3937,13 +4578,17 @@ end
 """
 
 
-func _prepare_scheduled_lua_source(lua_code: String) -> String:
-	var rewritten := _prepare_lua_body(lua_code)
+func _prepare_scheduled_lua_source(lua_code: String, include_source_marker: bool = false, prepared_body: Variant = null) -> String:
+	var rewritten := str(prepared_body) if prepared_body is String else _prepare_lua_body(lua_code)
 	var prelude := """
 if __bobux_install_hook then __bobux_install_hook(); __bobux_install_hook = nil end
 local __bobux_native_set = __bobux_set
+local __bobux_camera_write=__bobux_enum_camera_write
+__bobux_enum_camera_write=nil
 function __bobux_set(target, key, value)
 	if type(target) == 'table' then target[key] = value
+    elseif __bobux_camera_write and __bobux_camera_write(target,key,value) then
+        -- Typed CameraType was validated and stored as a scalar in this VM.
     else __bobux_native_set(target, key, value) end
     return value
 end
@@ -4003,6 +4648,7 @@ math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
 math.pow = math.pow or function(x, y) return x ^ y end
 math.log10 = math.log10 or function(x) return math.log(x, 10) end
 local __bobux_tasks = {}
+local __bobux_task_cursor = 1
 local function __bobux_pack(...) return {n = select('#', ...), ...} end
 local function __bobux_dispatch(receiver, method, ...)
 	if type(receiver) == 'table' then return receiver[method](receiver, ...) end
@@ -4078,13 +4724,30 @@ function task.cancel(thread)
 end
 function __bobux_step_tasks()
 	local now, count = os.clock(), #__bobux_tasks
-	for index = 1, count do
+	if count == 0 then __bobux_tasks_active(false); return end
+	local start, inspected = ((__bobux_task_cursor - 1) % count) + 1, 0
+	while inspected < count do
+		local index = ((start + inspected - 1) % count) + 1
 		local entry = __bobux_tasks[index]
+		inspected += 1
 		if not entry.cancelled and entry.wake_at <= now then __bobux_resume_task(entry) end
 		if os.clock() - now > 0.002 then break end
 	end
+	-- Preserve the next entry through compaction. Starting at task 1 every
+	-- frame starved disaster/background tasks behind an expensive early task.
+	local next_entry
+	for offset = 0, count - 1 do
+		local candidate = __bobux_tasks[((start + inspected + offset - 1) % count) + 1]
+		if not candidate.cancelled then next_entry = candidate; break end
+	end
 	for index = #__bobux_tasks, 1, -1 do
 		if __bobux_tasks[index].cancelled then table.remove(__bobux_tasks, index) end
+	end
+	__bobux_task_cursor = 1
+	if next_entry then
+		for index, entry in ipairs(__bobux_tasks) do
+			if entry == next_entry then __bobux_task_cursor = index; break end
+		end
 	end
 	__bobux_tasks_active(#__bobux_tasks > 0)
 end
@@ -4115,22 +4778,48 @@ function require(module)
 	__bobux_modules[key] = results[2]
 	return results[2]
 end
+local __bobux_enum_raw_index, __bobux_enum_convert_args, __bobux_enum_track = __bobux_enum_raw_member, __bobux_enum_signal_args, __bobux_enum_track_connection
+__bobux_enum_raw_member, __bobux_enum_signal_args, __bobux_enum_track_connection = nil, nil, nil
+local function __bobux_signal_connection(connection)
+	if __bobux_enum_track then return __bobux_enum_track(connection) end
+	return connection
+end
+local function __bobux_signal_method(signal, method)
+	if __bobux_enum_raw_index then return __bobux_enum_raw_index(signal, method) end
+	return signal[method]
+end
+local function __bobux_signal_arguments(signal, ...)
+	if not __bobux_enum_convert_args then return ... end
+	local packed = __bobux_pack(...)
+	packed = __bobux_enum_convert_args(signal, packed)
+	return __bobux_unpack(packed, 1, packed.n)
+end
 function __bobux_connect(signal, callback)
 	if type(signal) == 'table' then return signal:Connect(callback) end
 	-- LuaAPI stores the exporting coroutine's lua_State pointer in a Callable.
 	-- Retain that thread through the registered function's upvalue until the
 	-- connection is released; a completed task may otherwise be collected.
 	local origin = coroutine.running()
-	return signal:Connect(function(...)
-		if origin then task.spawn(callback, ...) end
-	end)
+	if not __bobux_enum_raw_index then
+		return signal:Connect(function(...)
+			if origin then task.spawn(callback, ...) end
+		end)
+	end
+	return __bobux_signal_connection(__bobux_signal_method(signal, 'Connect')(signal, function(...)
+		if origin then task.spawn(callback, __bobux_signal_arguments(signal, ...)) end
+	end))
 end
 function __bobux_once(signal, callback)
 	if type(signal) == 'table' then return signal:Once(callback) end
 	local origin = coroutine.running()
-	return signal:Once(function(...)
-		if origin then task.spawn(callback, ...) end
-	end)
+	if not __bobux_enum_raw_index then
+		return signal:Once(function(...)
+			if origin then task.spawn(callback, ...) end
+		end)
+	end
+	return __bobux_signal_connection(__bobux_signal_method(signal, 'Once')(signal, function(...)
+		if origin then task.spawn(callback, __bobux_signal_arguments(signal, ...)) end
+	end))
 end
 function __bobux_disconnect(connection, ...)
 	if type(connection) == 'table' then
@@ -4152,9 +4841,9 @@ function __bobux_signal_wait(signal, ...)
 	if type(signal) == 'table' then return signal:Wait(...) end
 	local received
 	local origin = coroutine.running()
-	local connection = signal:Once(function(...)
-		if origin then received = __bobux_pack(...) end
-	end)
+	local connection = __bobux_signal_connection(__bobux_signal_method(signal, 'Once')(signal, function(...)
+		if origin then received = __bobux_pack(__bobux_signal_arguments(signal, ...)) end
+	end))
 	while received == nil do task.wait(0) end
 	return __bobux_unpack(received, 1, received.n)
 end
@@ -4214,7 +4903,8 @@ function __bobux_find_part_on_ray_with_ignore_list(workspace_proxy, ray, ignore,
 	return __bobux_unpack_raycast(workspace_proxy:FindPartOnRayWithIgnoreListResult(ray, ignore, terrain_cells_are_cubes))
 end
 """
-	return prelude + "\n" + rewritten
+	var source_marker := "-- BOBUX_AUTHORED_SOURCE\n" if include_source_marker else ""
+	return prelude + "\n" + source_marker + rewritten
 
 
 func _rewrite_luau_compatibility(lua_code: String) -> String:
@@ -4511,7 +5201,13 @@ func _lua_error_message(value: Variant) -> String:
 	if value == null:
 		return ""
 	if value is Object and (value as Object).has_method("get_message"):
-		return str((value as Object).call("get_message")).strip_edges()
+		var message := str((value as Object).call("get_message")).strip_edges()
+		if not message.is_empty():
+			return message
+		# Some bundled LuaAPI builds return a LuaError object for syntax failures
+		# but omit its message. Treat the object itself as failure so Studio never
+		# saves source that the runtime rejected as invalid.
+		return "Luau parser returned an error without details."
 	return ""
 
 
@@ -4617,6 +5313,7 @@ func _require_module(module_variant: Variant, context_node: Node, options: Dicti
 	_runtime_budget_exceeded.erase(module_runtime_id)
 	var result: Variant = coroutine.resume([])
 	_runtime_resume_started_usec.erase(module_runtime_id)
+	_runtime_resume_started_vm_cpu_usec.erase(module_runtime_id)
 	var error_message := _lua_error_message(result)
 	if _runtime_budget_exceeded.has(module_runtime_id):
 		error_message = "ModuleScript exceeded the %.1f ms execution budget without yielding." % [float(SCRIPT_SINGLE_RESUME_TIME_LIMIT_USEC) / 1000.0]
@@ -5062,12 +5759,24 @@ func _apply_manifest_properties_to_node(node: Node, properties: Dictionary) -> v
 		if not mesh_path.is_empty() and FileAccess.file_exists(mesh_path):
 			var mesh: Variant = ResourceLoader.load(mesh_path)
 			if mesh is Mesh:
-				node.mesh = mesh.duplicate(true)
+				preload("res://addons/roblox_runtime/roblox_shader_cache.gd").share_mesh_programs(mesh)
+				# Published geometry, textures and shaders are immutable assets.
+				# Instance appearance is isolated by material/surface overrides.
+				# Deep-copying here undid the loader's resource sharing on every
+				# network snapshot and compiled one shader per repeated prop.
+				node.mesh = mesh
 				node.material_override = null
 				node.set_meta("bobux_mesh_resource_asset", mesh_path)
 				node.set_meta("roblox_mesh_applied", true)
 	if node is GPUParticles3D:
 		preload("res://addons/roblox_runtime/roblox_particles.gd").configure(node)
+	if node is Light3D:
+		(node as Light3D).light_color = _color_from_manifest_value(properties.get("Color"), (node as Light3D).light_color)
+		(node as Light3D).light_energy = maxf(0.0, float(properties.get("Brightness", (node as Light3D).light_energy)))
+		(node as Light3D).visible = bool(properties.get("Enabled", true))
+		var scale_factor: float = BobuxInstance.wrap(node)._stud_scale()
+		if node is OmniLight3D: (node as OmniLight3D).omni_range = maxf(0.0, float(properties.get("Range", 8.0))) * scale_factor
+		elif node is SpotLight3D: (node as SpotLight3D).spot_range = maxf(0.0, float(properties.get("Range", 8.0))) * scale_factor
 	if node is AudioStreamPlayer3D:
 		preload("res://addons/roblox_runtime/roblox_sound_runtime.gd").configure(node)
 
@@ -5100,6 +5809,7 @@ func _apply_manifest_part_appearance(mesh_instance: MeshInstance3D, properties: 
 	if raw_color == null and properties.has("BrickColor"):
 		raw_color = _brick_color_from_variant(properties.get("BrickColor"))
 	var color := _color_from_manifest_value(raw_color, material.albedo_color if material else Color(0.639, 0.635, 0.647))
+	mesh_instance.set_meta("bobux_color", color)
 	var surface_props := properties.duplicate(false)
 	surface_props["BobuxStudScale"] = BobuxInstance.wrap(mesh_instance)._stud_scale()
 	var imported := _manifest_material_cache.get_part_material_with_color(surface_props, color)
@@ -5123,7 +5833,7 @@ func _apply_manifest_part_appearance(mesh_instance: MeshInstance3D, properties: 
 		var target_override := authored_override.duplicate(false) as Material
 		if target_override is StandardMaterial3D:
 			var standard := target_override as StandardMaterial3D
-			var source_color := standard.albedo_color
+			var source_color := standard.albedo_color if standard.albedo_texture != null else Color.WHITE
 			standard.albedo_color = Color(
 				source_color.r * imported.albedo_color.r,
 				source_color.g * imported.albedo_color.g,
@@ -5150,7 +5860,7 @@ func _apply_manifest_part_appearance(mesh_instance: MeshInstance3D, properties: 
 			var target := source.duplicate(false) as Material
 			if target is StandardMaterial3D:
 				var standard := target as StandardMaterial3D
-				var source_color := standard.albedo_color
+				var source_color := standard.albedo_color if standard.albedo_texture != null else Color.WHITE
 				standard.albedo_color = Color(
 					source_color.r * imported.albedo_color.r,
 					source_color.g * imported.albedo_color.g,
@@ -5413,12 +6123,19 @@ func fire_roblox_instance_event(target: Node, event_name: String, args: Array = 
 	# Instance wrapper, its signal bridges, or argument wrappers for each hit.
 	var registry: Dictionary = target.get_meta("_bobux_event_registry", {})
 	var event: Variant = registry.get(event_name.strip_edges())
-	if not event is BobuxEvent or event.connections.is_empty(): return true
+	var service_event: String = ""
+	var prompt_service: Node = null
+	if str(target.get_meta("roblox_class", "")) == "ProximityPrompt":
+		service_event = {"Triggered": "PromptTriggered", "TriggerEnded": "PromptTriggerEnded", "PromptShown": "PromptShown", "PromptHidden": "PromptHidden", "PromptButtonHoldBegan": "PromptButtonHoldBegan", "PromptButtonHoldEnded": "PromptButtonHoldEnded"}.get(event_name, "")
+		if not service_event.is_empty():
+			prompt_service = _find_existing_roblox_service(get_tree().root, "ProximityPromptService", _resolve_workspace_node(get_tree().root, target))
+	if (not event is BobuxEvent or event.connections.is_empty()) and prompt_service == null: return true
 	var normalized: Array = []
 	for arg in args.slice(0, 3):
 		normalized.append(BobuxInstance.wrap(arg as Node) if arg is Node and is_instance_valid(arg) else arg)
 	# Keep explicit nil arguments, e.g. Humanoid.Seated(false, nil).
-	event.FireArgs(normalized)
+	if event is BobuxEvent and not event.connections.is_empty(): event.FireArgs(normalized)
+	if prompt_service != null and is_instance_valid(target): fire_roblox_instance_event(prompt_service, service_event, [target] + normalized)
 	return true
 
 
@@ -5632,10 +6349,7 @@ func _rewrite_lua_async_calls(source: String) -> String:
 		replacements.append({"start": int(tokens[receiver_start].start), "end": int(tokens[receiver_start].start), "text": str(helpers[tokens[index + 1].text]) + "("})
 		var has_arguments: bool = index + 3 < tokens.size() and tokens[index + 3].text != ")"
 		replacements.append({"start": int(tokens[index].start), "end": int(tokens[index + 2].end), "text": ", " if has_arguments else ""})
-	replacements.sort_custom(func(first: Dictionary, second: Dictionary): return int(first.start) > int(second.start))
-	for replacement in replacements:
-		source = source.left(int(replacement.start)) + str(replacement.text) + source.substr(int(replacement.end))
-	return source
+	return preload("res://addons/roblox_studio/roblox_lua_lexer.gd").apply_edits(source, replacements)
 
 
 func _rewrite_lua_multi_return_calls(lua_code: String) -> String:
@@ -5718,7 +6432,7 @@ func _resolve_workspace_node(main_scene: Node, context_node: Node) -> Node:
 			return context_cursor
 		if context_cursor.has_method("get_workspace"):
 			var ancestor_workspace: Variant = context_cursor.call("get_workspace")
-			if ancestor_workspace is Node and is_instance_valid(ancestor_workspace):
+			if is_instance_valid(ancestor_workspace) and ancestor_workspace is Node:
 				return ancestor_workspace as Node
 		context_cursor = context_cursor.get_parent()
 	# Runtime scripts under ServerScriptService/StarterGui are siblings of the
@@ -5727,7 +6441,7 @@ func _resolve_workspace_node(main_scene: Node, context_node: Node) -> Node:
 	var data_model := _find_roblox_data_model_root(main_scene)
 	if data_model != null and data_model.has_method("get_workspace"):
 		var model_workspace: Variant = data_model.call("get_workspace")
-		if model_workspace is Node and is_instance_valid(model_workspace):
+		if is_instance_valid(model_workspace) and model_workspace is Node:
 			return model_workspace as Node
 	var candidates: Array[String] = [
 		"SubViewportContainer/SubViewport/World3D/Blocks",
@@ -5764,6 +6478,11 @@ func _ensure_roblox_service_nodes(main_scene: Node, workspace_node: Node) -> Dic
 	if root == null:
 		root = RobloxDataModelClass.new()
 		root.name = "RobloxDataModel"
+		# A SceneTree-root lookup must not give a map's services application
+		# lifetime. Keep them with the scene/room that owns its Workspace so
+		# leaving that map also stops PlayerScripts and releases their GUI.
+		if is_instance_valid(workspace_node) and workspace_node.get_parent() != null and (parent == get_tree().root or parent == self or not parent.is_ancestor_of(workspace_node)):
+			parent = workspace_node.get_parent()
 		parent.add_child(root)
 		if workspace_node is Node3D and root.has_method("register_workspace_alias"):
 			root.call("register_workspace_alias", workspace_node)
@@ -5839,10 +6558,16 @@ func _ensure_single_roblox_service(main_scene: Node, service_name: String, works
 	if root == null:
 		root = RobloxDataModelClass.new()
 		root.name = "RobloxDataModel"
+		if is_instance_valid(workspace_node) and workspace_node.get_parent() != null and (parent == get_tree().root or parent == self or not parent.is_ancestor_of(workspace_node)):
+			parent = workspace_node.get_parent()
 		parent.add_child(root)
 		if workspace_node is Node3D and root.has_method("register_workspace_alias"):
 			root.call("register_workspace_alias", workspace_node)
-	return _ensure_service_on_data_model(root, service_name)
+	var ensured_service := _ensure_service_on_data_model(root, service_name)
+	if workspace_node != null and is_instance_valid(workspace_node) and _service_nodes_cache.has(workspace_node.get_instance_id()):
+		var service_cache: Dictionary = _service_nodes_cache[workspace_node.get_instance_id()]
+		if service_cache.get("root") == root: service_cache.services[service_name] = ensured_service
+	return ensured_service
 
 
 func _find_existing_roblox_service(main_scene: Node, service_name: String, workspace_node: Node = null) -> Node:
@@ -6106,7 +6831,7 @@ func start_new_player_scripts(context_node: Node, character: Node = null) -> voi
 		if script_node.has_meta("bobux_script_runtime_id"): continue
 		var source := str(script_node.get_meta("code", script_node.get_meta("lua_source", "")))
 		if source.is_empty(): continue
-		start_script(source, script_node, {"realm": "client" if str(script_node.get_meta("roblox_class", "Script")) == "LocalScript" else "server", "retain": true})
+		start_script(source, script_node, {"realm": "client" if str(script_node.get_meta("roblox_class", "Script")) == "LocalScript" else "server", "retain": true, "defer_compilation": true})
 
 func _start_new_player_scripts_by_id(id: int) -> void:
 	var context: Variant = instance_from_id(id)
@@ -6388,11 +7113,36 @@ func _input(event: InputEvent) -> void:
 			_fire_existing_runtime_event(local_player, "Mouse_KeyDown" if data.UserInputState == 0 else "Mouse_KeyUp", [String.chr(int(data.KeyCode)).to_lower()])
 
 func notify_humanoid_state_changed(humanoid: Node, previous: int, next_state: int) -> void:
+	if previous == next_state: return
 	_fire_existing_runtime_event(humanoid, "StateChanged", [previous, next_state])
-	for signal_state in {"Jumping": 3, "FreeFalling": 5}:
-		var state_id: int = {"Jumping": 3, "FreeFalling": 5}[signal_state]
-		if previous == state_id or next_state == state_id:
-			_fire_existing_runtime_event(humanoid, signal_state, [next_state == state_id])
+	var boolean_events := {0: "FallingDown", 1: "Ragdoll", 2: "GettingUp", 3: "Jumping", 5: "FreeFalling", 11: "Strafing", 14: "PlatformStanding"}
+	if boolean_events.has(previous):
+		_fire_existing_runtime_event(humanoid, boolean_events[previous], [false])
+	if previous == 13:
+		_fire_existing_runtime_event(humanoid, "Seated", [false, null])
+	if boolean_events.has(next_state):
+		_fire_existing_runtime_event(humanoid, boolean_events[next_state], [true])
+	if next_state == 13:
+		var seat: Variant = BobuxInstance.wrap(humanoid)._get(&"SeatPart")
+		_fire_existing_runtime_event(humanoid, "Seated", [true, seat])
+
+func humanoid_is_forcefield_protected(humanoid: Node) -> bool:
+	# Source: public Humanoid:TakeDamage; protection follows class/hierarchy,
+	# including renamed ForceFields and ones parented to HumanoidRootPart.
+	if not is_instance_valid(humanoid): return false
+	var parent := humanoid.get_parent()
+	if parent != null:
+		var root_part := parent.get_node_or_null("HumanoidRootPart")
+		if root_part != null:
+			for child in root_part.get_children():
+				if str(child.get_meta("roblox_class", child.name)) == "ForceField": return true
+	var workspace: Node = _resolve_workspace_node(get_tree().root, humanoid) if humanoid.is_inside_tree() else null
+	var ancestor := parent
+	while ancestor != null and ancestor != workspace and str(ancestor.get_meta("roblox_class", "")) != "Workspace":
+		for child in ancestor.get_children():
+			if str(child.get_meta("roblox_class", child.name)) == "ForceField": return true
+		ancestor = ancestor.get_parent()
+	return false
 
 func _fire_existing_runtime_event(target: Node, event_name: String, args: Array) -> void:
 	if not is_instance_valid(target):
@@ -6400,7 +7150,12 @@ func _fire_existing_runtime_event(target: Node, event_name: String, args: Array)
 	var registry: Dictionary = target.get_meta("_bobux_event_registry", {})
 	var event: Variant = registry.get(event_name)
 	if event != null:
-		event.callv("Fire", args)
+		if event_name == "Seated":
+			# Seated(false, nil) still has two public arguments. The legacy Fire
+			# overload drops nils; preserve this Humanoid signature explicitly.
+			event.call("FireArgs", args)
+		else:
+			event.callv("Fire", args)
 
 func _clone_missing_children(source: Node, target: Node) -> void:
 	if source == null or target == null:
@@ -6691,6 +7446,7 @@ func _build_raycast_params_library() -> Dictionary:
 
 func _build_enum_proxy() -> Dictionary:
 	return {
+		"CameraType": {"Fixed": 0, "Attach": 1, "Watch": 2, "Track": 3, "Follow": 4, "Custom": 5, "Scriptable": 6},
 		"Material": preload("res://addons/rbxl_importer/material_cache.gd").NAMED_MATERIAL_ENUMS.duplicate(),
 		"PartType": {
 			"Ball": 0,
@@ -6731,10 +7487,8 @@ func _build_enum_proxy() -> Dictionary:
 		},
 		"UserInputState": {"Begin": 0, "Change": 1, "End": 2, "Cancel": 3, "None": 4},
 		"KeyCode": RobloxInputBridge.key_codes(),
-		"HumanoidStateType": {
-			"Running": 8, "Jumping": 3, "Freefall": 5, "Landed": 7,
-			"Climbing": 12, "Swimming": 4, "Seated": 13, "Dead": 15
-		},
+		"HumanoidStateType": preload("res://scripts/player/humanoid/state_machine.gd").STATES.duplicate(),
+		"HumanoidRigType": {"R6": 0, "R15": 1},
 		"ThumbnailType": {"HeadShot": 0, "AvatarBust": 1, "AvatarThumbnail": 2},
 		"ThumbnailSize": {"Size48x48": 0, "Size100x100": 1, "Size180x180": 2, "Size352x352": 3, "Size420x420": 4, "Size720x720": 5}
 	}

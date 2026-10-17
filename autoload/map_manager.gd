@@ -2,7 +2,9 @@ extends Node
 
 signal map_loaded(map_id: String, result: Dictionary)
 
-func load_map(map_id: String, map_name: String = "", cloud_version_id: String = "") -> Dictionary:
+func load_map(map_id: String, map_name: String = "", cloud_version_id: String = "", request_is_current: Callable = Callable()) -> Dictionary:
+	if request_is_current.is_valid() and not request_is_current.call():
+		return {"ok": false, "cancelled": true}
 	var clean_map_id: String = map_id.strip_edges()
 	var clean_map_name: String = map_name.strip_edges()
 	var clean_cloud_version_id: String = cloud_version_id.strip_edges()
@@ -40,6 +42,8 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 					clean_cloud_version_id,
 					clean_map_name if not clean_map_name.is_empty() else "Cloud Map"
 				)
+				if request_is_current.is_valid() and not request_is_current.call():
+					return {"ok": false, "cancelled": true}
 				if not bool(download_result.get("ok", false)):
 					return _map_load_failure(clean_map_id, "Could not download the server map: %s" % str(download_result.get("error", "unknown")))
 				else:
@@ -54,6 +58,8 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 	# Recheck every selected cache, including the already-selected local folder.
 	if not assets_prepared and not selected_folder.is_empty() and not is_builtin_map:
 		var assets: Dictionary = await CloudAPI._ensure_cached_map_visual_assets(selected_folder, clean_cloud_version_id, null, true)
+		if request_is_current.is_valid() and not request_is_current.call():
+			return {"ok": false, "cancelled": true}
 		if not bool(assets.get("ok", false)):
 			return _map_load_failure(clean_map_id, "The map geometry could not be downloaded. Please reconnect.")
 	if clean_map_name.is_empty() and not selected_folder.is_empty():
@@ -64,6 +70,8 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 	if clean_map_name.is_empty():
 		clean_map_name = "Untitled Experience"
 
+	if request_is_current.is_valid() and not request_is_current.call():
+		return {"ok": false, "cancelled": true}
 	GameState.selected_map = clean_map_id
 	GameState.selected_map_folder = selected_folder
 
@@ -71,6 +79,8 @@ func load_map(map_id: String, map_name: String = "", cloud_version_id: String = 
 	var current_scene: Node = scene_tree.current_scene if scene_tree != null else null
 	if current_scene != null and current_scene.has_method("reload_runtime_map_from_game_state"):
 		var reload_result: Dictionary = await current_scene.call("reload_runtime_map_from_game_state")
+		if request_is_current.is_valid() and not request_is_current.call():
+			return {"ok": false, "cancelled": true}
 		if not bool(reload_result.get("ok", false)):
 			map_loaded.emit(clean_map_id, reload_result)
 			return reload_result

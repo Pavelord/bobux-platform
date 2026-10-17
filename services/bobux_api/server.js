@@ -10,10 +10,16 @@ import express from "express";
 import { createBobloxFromEnv, mountBoblox } from "./boblox_routes.mjs";
 import { mountPlaceCommerce, definition as placeCommerceDefinition } from "./place_commerce.mjs";
 import { lookupMapRecords } from "./map_lookup.mjs";
+import { normalizeReadQuery, pageReadRows } from "./map_list_query.mjs";
+import { HalloweenEvent, eventCatalog, isHalloweenItem, assertEventInventoryWrite } from "./halloween_event.mjs";
+import { catalogItemHandler, mountHalloweenRoutes } from "./halloween_routes.mjs";
+import { ProfileDetailsStore, mountProfileDetails } from "./profile_details.mjs";
+import { sessionExpiry } from "./auth_session_expiry.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 let bobloxCommerce = null;
 let creatorPublishing = null;
+let halloweenEvent = null;
 const PB_URL = (process.env.POCKETBASE_URL || "http://127.0.0.1:8090").replace(/\/+$/, "");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "http://109.71.245.162").replace(/\/+$/, "");
 const STORAGE_DIR = process.env.STORAGE_DIR || "/var/www/bobux/storage";
@@ -38,7 +44,6 @@ const MAX_INLINE_THUMBNAIL_CHARS = 4500;
 const MAX_INLINE_MAP_ASSET_CHARS = 3_000_000;
 const MAX_INLINE_MAP_DATA_BYTES = 768 * 1024;
 const MAX_PUBLIC_AVATAR_INLINE_TEXTURE_CHARS = 140_000;
-const MAX_PUBLIC_AVATAR_ITEM_PAYLOADS = 6;
 
 let superuserToken = "";
 let superuserTokenExpiresAt = 0;
@@ -163,6 +168,24 @@ async function main() {
 
   await ensureCollections();
   await seedCatalog();
+  // Only these two engine-owned records are seeded; author assets/maps are unchanged.
+  for (const item of eventCatalog()) await upsertRow("avatar_items", item, ["id"]);
+  halloweenEvent = new HalloweenEvent({
+    readInventory: userId => listRows("user_inventory", ["user_id", "item_id", "item_type", "created_at"],
+      userId ? `user_id = ${JSON.stringify(userId)} && item_type = "avatar_item"` : 'item_id = "event_halloween_2026_gift" && item_type = "avatar_item"'),
+    grant: grantInventoryItemToUser
+  });
+  let rewardSweepDone = false;
+  let rewardSweepRunning = false;
+  const reconcileRewards = async () => {
+    if (rewardSweepDone || rewardSweepRunning) return;
+    rewardSweepRunning = true;
+    try { rewardSweepDone = await halloweenEvent.reconcileAll(); }
+    catch (error) { console.error("[Halloween] Reward reconciliation will retry:", error.message); }
+    finally { rewardSweepRunning = false; }
+  };
+  await reconcileRewards();
+  setInterval(reconcileRewards, 60_000).unref();
   await seedDefaultMaps();
   await fs.mkdir(STORAGE_DIR, { recursive: true });
   await cleanupTechnicalMapRows();
@@ -170,6 +193,18 @@ async function main() {
   const socialPath = process.env.BOBUX_SOCIAL_DB || path.resolve("data/social.sqlite");
   await fs.mkdir(path.dirname(socialPath), { recursive: true });
   const social = new SocialStore(socialPath);
+  const profileDetails = new ProfileDetailsStore(social.db);
+  mountProfileDetails(app, profileDetails, {
+    authenticate: userFromRequest,
+    loadProfile: async id => (await listRows("profiles", ["id", "created", "updated"],
+      `external_id = ${JSON.stringify(id)}`))[0] || null,
+    loadAccount: getAuthUserById,
+    resolveVisitedMap: async (mapId, userId) => {
+      const row = (await listRows("maps", ["id", "owner_id", "is_published", "is_public"],
+        `external_id = ${JSON.stringify(mapId)} || id = ${JSON.stringify(mapId)}`))[0];
+      return row && (row.is_published || row.is_public || row.owner_id === userId) ? row.id : "";
+    }
+  });
   social.seedLikes(await listRows("asset_likes", ["user_id", "target_type", "target_id"]));
   mountSocial(app, social, {
     authenticate: userFromRequest,
@@ -313,7 +348,7 @@ async function main() {
         user = await pbUserCreate(email, password, username, anonymous, existingProfileUserId);
         const auth = await pbUserAuth(email, password);
         await upsertRow("profiles", { id: user.id, username, updated_at: nowIso() }, ["id"]);
-        return res.json(toSupabaseSession(auth, anonymous, username));
+        return res.json(toBobuxSession(auth, anonymous, username));
       }
       try {
         user = await pbUserCreate(email, password, username, anonymous);
@@ -325,7 +360,7 @@ async function main() {
       }
       const auth = await pbUserAuth(email, password);
       await upsertRow("profiles", { id: user.id, username, updated_at: nowIso() }, ["id"]);
-      res.json(toSupabaseSession(auth, anonymous, username));
+      res.json(toBobuxSession(auth, anonymous, username));
     } catch (error) {
       sendError(res, error);
     }
@@ -338,13 +373,13 @@ async function main() {
       if (grant === "refresh_token") {
         const auth = await pbAuthRefresh(req.body?.refresh_token || bearerToken(req));
         await adoptProfileForUserRecord(auth.record);
-        return res.json(toSupabaseSession(auth, false, auth.record?.name || auth.record?.username || ""));
+        return res.json(toBobuxSession(auth, false, auth.record?.name || auth.record?.username || ""));
       }
       const email = String(req.body?.email || "").trim().toLowerCase();
       const password = String(req.body?.password || "");
       const auth = await pbUserAuthWithUsernameFallback(email, password);
       await adoptProfileForUserRecord(auth.record);
-      res.json(toSupabaseSession(auth, false, auth.record?.name || email.split("@")[0]));
+      res.json(toBobuxSession(auth, false, auth.record?.name || email.split("@")[0]));
     } catch (error) {
       sendError(res, error);
     }
@@ -353,7 +388,7 @@ async function main() {
   app.get("/api/auth/v1/user", async (req, res) => {
     try {
       const user = await userFromRequest(req);
-      res.json(toSupabaseUser(user.record, false));
+      res.json(toBobuxUser(user.record, false));
     } catch (error) {
       sendError(res, error, 401);
     }
@@ -580,6 +615,7 @@ async function main() {
       const itemName = String(payload.name || "Untitled Item").trim().slice(0, 80) || "Untitled Item";
       const now = nowIso();
       const itemId = String(payload.id || payload.item_id || crypto.randomUUID()).trim();
+      if (isHalloweenItem(itemId)) return res.status(403).json({ message: "Event accessories are managed by Bobux." });
       const visibility = normalizeVisibility(payload.visibility || (payload.is_public === false ? "private" : "public"));
       const payloadData = payload.data && typeof payload.data === "object" ? payload.data : {};
       const category = String(payload.category || payload.item_kind || payloadData.category || payloadData.item_kind || "model").trim().toLowerCase() || "model";
@@ -659,6 +695,7 @@ async function main() {
     try {
       const user = await userFromRequest(req);
       const userId = user.record.id;
+      await halloweenEvent.state(userId);
       const owned = await getOwnedInventoryItemIds(userId, "avatar_item");
       const items = (await listRows("avatar_items")).filter(row => row.owner_id === userId || owned.has(String(row.id || "")));
       res.json(items.map(row => ({ ...sanitizeMarketplaceOutput(row), owned: true })));
@@ -797,19 +834,9 @@ async function main() {
     }
   });
 
-  app.post("/api/rest/v1/rpc/get_catalog_item", express.json({ limit: "5mb" }), async (req, res) => {
-    try {
-      const user = await userFromRequest(req);
-      await adoptProfileForUserRecord(user.record);
-      const itemId = String(req.body?.item_id || req.body?.target_id || "").trim();
-      const itemType = String(req.body?.item_type || "avatar_item").trim();
-      if (!itemId) return res.status(400).json({ message: "Catalog item is empty." });
-      const inventory = await grantInventoryItemToUser(user.record.id, itemId, itemType);
-      res.status(201).json({ ...inventory, item_id: itemId, item_type: itemType, owned: true });
-    } catch (error) {
-      sendError(res, error);
-    }
-  });
+  const halloweenRoutes = { event: halloweenEvent, authenticate: userFromRequest, adoptProfile: adoptProfileForUserRecord, sendError };
+  app.post("/api/rest/v1/rpc/get_catalog_item", express.json({ limit: "5mb" }), catalogItemHandler({ ...halloweenRoutes, grantOrdinary: grantInventoryItemToUser }));
+  mountHalloweenRoutes(app, halloweenRoutes);
 
   app.post("/api/rest/v1/rpc/delete_own_maps_by_name_and_cleanup", express.json({ limit: "5mb" }), async (req, res) => {
     const user = await userFromRequest(req);
@@ -827,7 +854,7 @@ async function main() {
     res.json({ deleted_count: deleted });
   });
 
-  // PRACTICE SCREENSHOT: REST compatibility layer - exposes PocketBase collections through Supabase-like CRUD endpoints.
+  // PRACTICE SCREENSHOT: REST compatibility layer - exposes PocketBase collections through legacy REST CRUD endpoints.
   app.get("/api/rest/v1/:collection", async (req, res) => {
     try {
       assertCollection(req.params.collection);
@@ -844,9 +871,16 @@ async function main() {
       assertCollection(req.params.collection);
       if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const payloads = Array.isArray(req.body) ? req.body : [req.body || {}];
+      assertEventInventoryWrite(req.params.collection, payloads);
       const conflictKeys = conflictKeysFromQuery(req.query, req.params.collection);
       const saved = [];
-      for (const payload of payloads) saved.push(await upsertRow(req.params.collection, payload, conflictKeys));
+      for (const payload of payloads) {
+        if (req.params.collection === "user_inventory") {
+          const existing = await findExistingRowByConflict(req.params.collection, sanitizeForStorage(payload, req.params.collection), conflictKeys);
+          assertEventInventoryWrite(req.params.collection, [payload], existing ? [existing] : []);
+        }
+        saved.push(await upsertRow(req.params.collection, payload, conflictKeys));
+      }
       const responseRows = saved.map((row) => sanitizeOutputRow(req.params.collection, row));
       res.status(201).json(Array.isArray(req.body) ? responseRows : responseRows[0]);
     } catch (error) {
@@ -859,6 +893,7 @@ async function main() {
       assertCollection(req.params.collection);
       if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const rows = await queryRows(req.params.collection, req.query, false);
+      assertEventInventoryWrite(req.params.collection, [req.body || {}], rows);
       const updated = [];
       for (const row of rows) {
         updated.push(await updatePbRecord(req.params.collection, row._pb_id, sanitizeForStorage(req.body || {})));
@@ -874,6 +909,7 @@ async function main() {
       assertCollection(req.params.collection);
       if (["avatar_items", "model_assets"].includes(req.params.collection)) return res.status(403).json({ message: "Use the authenticated catalog publishing endpoints." });
       const rows = await queryRows(req.params.collection, req.query, false);
+      assertEventInventoryWrite(req.params.collection, [], rows);
       for (const row of rows) await pbDeleteRecord(req.params.collection, row._pb_id);
       res.status(204).send("");
     } catch (error) {
@@ -1400,19 +1436,18 @@ function bearerToken(req) {
   return header.replace(/^Bearer\s+/i, "").trim();
 }
 
-function toSupabaseSession(auth, anonymous, username) {
+function toBobuxSession(auth, anonymous, username) {
   const record = auth.record || {};
   return {
     access_token: auth.token,
     refresh_token: auth.token,
     token_type: "bearer",
-    expires_in: SESSION_TTL_SECONDS,
-    expires_at: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
-    user: toSupabaseUser(record, anonymous, username)
+    ...sessionExpiry(auth.token, Math.floor(Date.now() / 1000), SESSION_TTL_SECONDS),
+    user: toBobuxUser(record, anonymous, username)
   };
 }
 
-function toSupabaseUser(record, anonymous, username = "") {
+function toBobuxUser(record, anonymous, username = "") {
   return {
     id: record.id,
     email: record.email || "",
@@ -1423,13 +1458,14 @@ function toSupabaseUser(record, anonymous, username = "") {
   };
 }
 
-async function listRows(collection, requestedFields = []) {
+async function listRows(collection, requestedFields = [], filter = "") {
   const records = [];
   let page = 1;
   const fields = normalizePocketBaseFields(collection, requestedFields);
   const fieldsQuery = fields.length > 0 ? `&fields=${encodeURIComponent(fields.join(","))}` : "";
+  const filterQuery = filter ? `&filter=${encodeURIComponent(filter)}` : "";
   while (true) {
-    const result = await pbFetch(`/api/collections/${collection}/records?page=${page}&perPage=500${fieldsQuery}`, { admin: true });
+    const result = await pbFetch(`/api/collections/${collection}/records?page=${page}&perPage=500${fieldsQuery}${filterQuery}`, { admin: true });
     for (const item of result.items || []) records.push(fromPbRecord(item));
     if (page >= Number(result.totalPages || 1)) break;
     page += 1;
@@ -1438,6 +1474,7 @@ async function listRows(collection, requestedFields = []) {
 }
 
 async function queryRows(collection, rawQuery, applyLimit = true) {
+  if (applyLimit) rawQuery = normalizeReadQuery(collection, rawQuery);
   const requestedId = typeof rawQuery.id === 'string' && rawQuery.id.startsWith('eq.') ? decodeURIComponent(rawQuery.id.slice(3)) : '';
   const needed = fieldsNeededForQuery(collection, rawQuery);
   let rows = collection === 'maps' && requestedId
@@ -1446,7 +1483,7 @@ async function queryRows(collection, rawQuery, applyLimit = true) {
   rows = rows.filter((row) => matchesQuery(row, rawQuery));
   rows = applyOrder(rows, rawQuery.order);
   rows = rows.map((row) => sanitizeOutputRow(collection, row));
-  if (applyLimit && rawQuery.limit) rows = rows.slice(0, Math.max(0, Number(rawQuery.limit)));
+  if (applyLimit) rows = pageReadRows(rows, rawQuery);
   if (applyLimit && rawQuery.select) rows = applySelect(rows, rawQuery.select);
   return rows;
 }
@@ -1470,7 +1507,7 @@ function normalizePocketBaseFields(collection, requestedFields = []) {
 function fieldsNeededForQuery(collection, rawQuery = {}) {
   const fields = new Set(parseSelectFields(rawQuery.select));
   for (const key of Object.keys(rawQuery || {})) {
-    if (["select", "order", "limit", "on_conflict"].includes(key)) continue;
+    if (["select", "order", "limit", "offset", "on_conflict"].includes(key)) continue;
     if (key === "or") {
       for (const orField of parseOrFilterFields(rawQuery[key])) fields.add(orField);
       continue;
@@ -1575,7 +1612,7 @@ function pushSelectField(fields, rawField) {
 
 function matchesQuery(row, rawQuery) {
 	for (const [key, value] of Object.entries(rawQuery)) {
-		if (["select", "order", "limit", "on_conflict"].includes(key)) continue;
+		if (["select", "order", "limit", "offset", "on_conflict"].includes(key)) continue;
 		const values = Array.isArray(value) ? value : [value];
 		for (const oneValue of values) {
 			if (key === "or") {
@@ -1996,14 +2033,14 @@ function sanitizePublicAvatarOutfit(row, avatarItemPayloadById = new Map()) {
     if (Array.isArray(source[key])) output[key] = source[key].slice(-24).map((value) => lightweightPublicString(value)).filter(Boolean);
   }
   const equippedIds = Array.isArray(source.equipped_items)
-    ? source.equipped_items.map((value) => String(value || "").trim()).filter(Boolean).slice(0, 48)
+    ? source.equipped_items.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
   output.equipped_items = equippedIds;
   const payloads = [];
   for (const itemId of equippedIds) {
     const payload = avatarItemPayloadById.get(itemId);
     if (payload && typeof payload === "object") payloads.push(payload);
-    if (payloads.length >= MAX_PUBLIC_AVATAR_ITEM_PAYLOADS) break;
+
   }
   if (payloads.length > 0) output.equipped_avatar_item_payloads = payloads;
   return output;
@@ -2034,8 +2071,8 @@ function mergePublicProfileWithAvatarOutfit(profile, avatarOutfit) {
     if (avatarOutfit[key] !== undefined) avatarData[key] = cloneJson(avatarOutfit[key]);
   }
   if (Array.isArray(avatarOutfit.equipped_items)) {
-    avatarData.equipped_items = avatarOutfit.equipped_items.slice(0, 48);
-    avatarData.equipped = avatarOutfit.equipped_items.slice(0, 48);
+    avatarData.equipped_items = avatarOutfit.equipped_items.slice();
+    avatarData.equipped = avatarOutfit.equipped_items.slice();
   }
   output.avatar_data = avatarData;
   return output;
@@ -2141,13 +2178,13 @@ function sanitizePublicAvatarData(avatarData) {
     const value = lightweightPublicString(source[key]);
     if (value) output[key] = value;
   }
-  if (Array.isArray(source.equipped)) output.equipped = source.equipped.slice(0, 48);
-  if (Array.isArray(source.equipped_items)) output.equipped_items = source.equipped_items.slice(0, 48);
-  if (Array.isArray(source.avatar_items)) output.avatar_items = source.avatar_items.slice(0, 48);
-  if (Array.isArray(source.equipped_avatar_items)) output.equipped_avatar_items = source.equipped_avatar_items.slice(0, 48);
+  if (Array.isArray(source.equipped)) output.equipped = source.equipped.slice();
+  if (Array.isArray(source.equipped_items)) output.equipped_items = source.equipped_items.slice();
+  if (Array.isArray(source.avatar_items)) output.avatar_items = source.avatar_items.slice();
+  if (Array.isArray(source.equipped_avatar_items)) output.equipped_avatar_items = source.equipped_avatar_items.slice();
   const payloads = Array.isArray(source.equipped_avatar_item_payloads) ? source.equipped_avatar_item_payloads : [];
   if (payloads.length > 0) {
-    output.equipped_avatar_item_payloads = payloads.slice(0, MAX_PUBLIC_AVATAR_ITEM_PAYLOADS).map(sanitizePublicAvatarItemPayload);
+    output.equipped_avatar_item_payloads = payloads.map(sanitizePublicAvatarItemPayload);
   }
   return output;
 }
@@ -2209,16 +2246,20 @@ async function findAssetLike(userId, targetType, targetId) {
   return rows.find((row) => row.user_id === userId && row.target_type === targetType && row.target_id === targetId) || null;
 }
 
-async function grantInventoryItemToUser(userId, itemId, itemType = "avatar_item") {
+async function grantInventoryItemToUser(userId, itemId, itemType = "avatar_item", createdAt = nowIso()) {
   const cleanUserId = String(userId || "").trim();
   const cleanItemId = String(itemId || "").trim();
   const cleanItemType = String(itemType || "avatar_item").trim() || "avatar_item";
   if (!cleanUserId || !cleanItemId) throw new Error("Inventory grant requires a user and item id.");
-  const inventory = await upsertRow("user_inventory", {
+  return withMutationLock(`inventory:${cleanUserId}`, async () => {
+  const existing = (await listRows("user_inventory", ["user_id", "item_id", "item_type", "created_at"],
+    `user_id = ${JSON.stringify(cleanUserId)} && item_id = ${JSON.stringify(cleanItemId)} && item_type = ${JSON.stringify(cleanItemType)}`))
+    .find(row => row.user_id === cleanUserId && row.item_id === cleanItemId && row.item_type === cleanItemType);
+  const inventory = existing || await upsertRow("user_inventory", {
     user_id: cleanUserId,
     item_id: cleanItemId,
     item_type: cleanItemType,
-    created_at: nowIso()
+    created_at: createdAt
   }, ["user_id", "item_id", "item_type"]);
   const profile = await getProfileByExternalId(cleanUserId);
   if (profile && profile._pb_id) {
@@ -2227,6 +2268,7 @@ async function grantInventoryItemToUser(userId, itemId, itemType = "avatar_item"
     await updatePbRecord("profiles", profile._pb_id, { inventory_items: inventoryItems, updated_at: nowIso() });
   }
   return inventory;
+  });
 }
 
 async function getOwnedInventoryItemIds(userId, itemType = "avatar_item") {

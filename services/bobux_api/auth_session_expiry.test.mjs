@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { tokenExpiresAt, sessionExpiry } from "./auth_session_expiry.mjs";
+const now = 1791800000;
+const ttl = 30 * 86400;
+const jwt = claims => `header.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
+assert.deepEqual(sessionExpiry(jwt({ exp: now + 900 }), now, ttl), { expires_at: now + 900, expires_in: 900 });
+assert.deepEqual(sessionExpiry(jwt({ exp: now - 2 }), now, ttl), { expires_at: now - 2, expires_in: 0 });
+assert.deepEqual(sessionExpiry("opaque-test-token", now, ttl), { expires_at: now + ttl, expires_in: ttl });
+assert.equal(tokenExpiresAt(jwt({ exp: now + 120, extra: "игрок" })), now + 120);
+for (const exp of [0, -1, 1.5, "1791800000", null, true, 253402300800, 1e100]) assert.equal(tokenExpiresAt(jwt({ exp })), 0);
+for (const token of ["", "header.!.signature", "header.a.signature", "header.bm90LWpzb24.signature", "header.eyJleHAiOjEy.signature", ".payload.signature", "header.payload."]) assert.equal(tokenExpiresAt(token), 0);
+console.log("Auth expiry PASS: actual JWT lifetime, elapsed token, opaque fallback, malformed/range/type guards. Decoding grants no authentication.");

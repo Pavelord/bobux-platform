@@ -1,7 +1,7 @@
 extends Node
 ## Renders the asset itself, not its old screenshot or clothing atlas.
 const PLAYER_PATH := "res://scenes/player/player.tscn"
-const CACHE := "user://catalog_previews/v4/"
+const CACHE := "user://catalog_previews/v7/"
 var _queue: Array[Dictionary] = []
 var _running := false
 var _viewport: SubViewport
@@ -10,6 +10,8 @@ var _helper: Node3D
 var _camera: Camera3D
 var failures: Array[Dictionary] = []
 var _tree_generation := 0
+var _environment: WorldEnvironment
+var _preview_targets: Dictionary = {}
 
 func _enter_tree() -> void:
 	_tree_generation += 1
@@ -20,7 +22,7 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE))
 	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(384, 384)
+	_viewport.size = Vector2i(192, 192) if OS.has_feature("mobile") else Vector2i(384, 384)
 	_viewport.own_world_3d = true
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_viewport.msaa_3d = Viewport.MSAA_4X
@@ -29,6 +31,7 @@ func _ready() -> void:
 	_world.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_viewport.add_child(_world)
 	var environment := WorldEnvironment.new()
+	_environment = environment
 	environment.environment = Environment.new()
 	environment.environment.background_mode = Environment.BG_COLOR
 	environment.environment.background_color = Color.WHITE
@@ -50,6 +53,8 @@ func _ready() -> void:
 	_helper = _mannequin()
 	_world.add_child(_helper)
 	_helper.hide()
+	var preferences := get_node_or_null("/root/ClientPreferences")
+	if preferences != null: preferences.changed.connect(_on_preferences_changed)
 
 func _exit_tree() -> void:
 	_tree_generation += 1
@@ -57,7 +62,30 @@ func _exit_tree() -> void:
 	_running = false
 
 func request_preview(item: Dictionary, target: TextureRect) -> void:
-	_queue.append({"item": item, "target": weakref(target)})
+	if not is_instance_valid(target): return
+	var entry := {"item": item, "target": weakref(target), "queued": false, "rendered_theme": ""}
+	_preview_targets[target.get_instance_id()] = entry
+	target.visibility_changed.connect(_queue_preview.bind(entry))
+	target.tree_entered.connect(func(): _queue_preview.call_deferred(entry))
+	_queue_preview(entry)
+
+func _theme_name() -> String:
+	var preferences := get_node_or_null("/root/ClientPreferences")
+	return str(preferences.values.get("app_theme", "classic")) if preferences != null else "classic"
+
+func _on_preferences_changed(key: String, _value: Variant) -> void:
+	if key != "app_theme": return
+	for id in _preview_targets.keys():
+		var entry: Dictionary = _preview_targets[id]
+		if not is_instance_valid(entry.target.get_ref()): _preview_targets.erase(id)
+		else: _queue_preview(entry)
+
+func _queue_preview(entry: Dictionary) -> void:
+	var target: Variant = entry.target.get_ref()
+	if not is_instance_valid(target) or not target.is_visible_in_tree() or bool(entry.queued): return
+	if str(entry.rendered_theme) == _theme_name() and target.texture != null: return
+	entry.queued = true
+	_queue.append(entry)
 	if not _running:
 		_running = true
 		call_deferred("_drain")
@@ -76,11 +104,16 @@ func _drain() -> void:
 				return
 		var job: Dictionary = _queue.pop_front()
 		var target: Variant = job.target.get_ref()
-		if not is_instance_valid(target): continue
+		if not is_instance_valid(target) or not target.is_visible_in_tree():
+			job.queued = false
+			continue
+		var rendered_theme := _theme_name()
 		var texture := await render_item(job.item)
 		if generation != _tree_generation or not is_inside_tree():
 			return
 		target = job.target.get_ref()
+		job.queued = false
+		job.rendered_theme = rendered_theme
 		if is_instance_valid(target):
 			target.texture = texture
 			target.tooltip_text = "Исходная модель или текстура недоступна" if texture == null else ""
@@ -96,15 +129,16 @@ func _drain() -> void:
 				note.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 				note.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				target.add_child(note)
+			if rendered_theme != _theme_name(): _queue_preview(job)
 	_running = false
 
-static func cache_key(item: Dictionary) -> String:
+static func cache_key(item: Dictionary, theme_name: String = "classic") -> String:
 	var data: Variant = item.get("data", {})
 	if data is String: data = JSON.parse_string(data)
 	if not data is Dictionary: data = {}
 	var kind := str(item.get("item_kind", item.get("category", data.get("item_kind", "model")))).to_lower()
 	if kind == "shirts": kind = "shirt"
-	var identity := {"kind": kind, "data": data.duplicate(true)}
+	var identity := {"kind": kind, "data": data.duplicate(true), "theme": theme_name}
 	for key in ["source_url", "source_path", "template_url", "texture_path", "atlas_path", "parts"]:
 		if item.has(key): identity[key] = item[key]
 	if kind == "boblox_promo": identity["art_version"] = 2
@@ -122,7 +156,8 @@ static func _remove_previews(value: Variant) -> void:
 
 func render_item(item: Dictionary, force := false) -> Texture2D:
 	var generation := _tree_generation
-	var path := CACHE + cache_key(item) + ".png"
+	var theme_name := _theme_name()
+	var path := CACHE + cache_key(item, theme_name) + ".png"
 	if not force and FileAccess.file_exists(path):
 		return ImageTexture.create_from_image(Image.load_from_file(path))
 	if DisplayServer.get_name() == "headless": return null
@@ -131,6 +166,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 		await ready
 	if generation != _tree_generation or not is_inside_tree() or not is_instance_valid(_helper):
 		return _fail(item, "Preview renderer is no longer available")
+	_environment.environment.background_color = Color("24212b") if theme_name == "halloween" else Color.WHITE
 	var data: Dictionary = _helper.call("_avatar_attachment_item_data", item)
 	var kind := str(item.get("item_kind", item.get("category", data.get("item_kind", "")))).to_lower()
 	_viewport.transparent_bg = kind == "boblox_promo"
@@ -163,7 +199,7 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 			face.mesh.size = Vector2(0.86, 0.86)
 			face.position.z = 0.502
 			var face_material := StandardMaterial3D.new()
-			face_material.albedo_texture = ImageTexture.create_from_image(Image.load_from_file(local_path))
+			face_material.albedo_texture = load(local_path) as Texture2D if local_path.begins_with("res://") and ResourceLoader.exists(local_path) else ImageTexture.create_from_image(Image.load_from_file(local_path))
 			face_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			face.material_override = face_material
 			subject.add_child(face)
@@ -201,6 +237,14 @@ func render_item(item: Dictionary, force := false) -> Texture2D:
 						return _fail(item, "Original mesh file unavailable; bounds are not geometry")
 					subject.add_child(_helper.call("_create_avatar_attachment_part", part))
 	if generation != _tree_generation or not is_inside_tree() or not is_instance_valid(_world): return null
+	if kind in ["accessory", "accessories"]:
+		var transform_data: Dictionary = _helper.call("_avatar_attachment_resolve_transform", item, data)
+		var orientation: Vector3 = _helper.call("_avatar_attachment_vector3", transform_data.get("rotation_degrees", []), Vector3.ZERO)
+		if not orientation.is_zero_approx():
+			var oriented := Node3D.new()
+			oriented.rotation_degrees = orientation
+			oriented.add_child(subject)
+			subject = oriented
 	_world.add_child(subject)
 	# Player previews opt in to interpolation in _ready; static snapshots must
 	# override that, including children loaded from animated model scenes.
@@ -266,6 +310,7 @@ func _mannequin() -> Node3D:
 
 func _texture_source(source: String) -> String:
 	if source.is_empty(): return ""
+	if source.begins_with("res://") and ResourceLoader.exists(source): return source
 	if FileAccess.file_exists(source): return source
 	var path := CACHE + source.sha256_text() + "_template.png"
 	if FileAccess.file_exists(path): return path

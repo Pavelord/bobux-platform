@@ -4,23 +4,26 @@ const Lexer = preload("res://addons/roblox_studio/roblox_lua_lexer.gd")
 
 # Rewrites operate on lexical boundaries, never inside comments/string payloads.
 static func interpolate(source: String) -> String:
-	var output := ""
+	if not "`" in source: return source
+	var pieces := PackedStringArray()
+	var cursor := 0
 	var index := 0
 	while index < source.length():
 		var opaque := _opaque_end(source, index)
 		if opaque > index:
-			output += source.substr(index, opaque - index)
 			index = opaque
 		elif source[index] == "`":
 			var parsed := _template(source, index)
 			# Keep malformed syntax for the compiler to diagnose; don't repair it.
 			if not parsed.ok: return source
-			output += str(parsed.code)
+			pieces.append(source.substr(cursor, index - cursor))
+			pieces.append(str(parsed.code))
 			index = int(parsed.end)
+			cursor = index
 		else:
-			output += source[index]
 			index += 1
-	return output
+	pieces.append(source.substr(cursor))
+	return "".join(pieces)
 
 static func _opaque_end(source: String, start: int) -> int:
 	var index := start

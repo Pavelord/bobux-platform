@@ -42,7 +42,8 @@ static func apply(lobby: Control) -> void:
 	var destinations := [0, 1, 5, 3, 2, 4, 12, 11, 6]
 	for name in ["Home", "Profile", "Messages", "Friends", "Avatar", "Inventory", "Games", "Catalog", "Develop"]:
 		menu.get_popup().add_item(name)
-	menu.get_popup().id_pressed.connect(func(index: int): lobby.call("_switch_tab", destinations[index]))
+	menu.get_popup().id_pressed.connect(func(index: int):
+		if index >= 0 and index < destinations.size(): lobby.call("_switch_tab", destinations[index]))
 	header.add_theme_constant_override("separation", 16)
 	(lobby.get_node("TopBar/HBox/Logo") as Control).custom_minimum_size = Vector2(160, 36)
 	(lobby.get_node("TopBar/HBox/PaddingL") as Control).custom_minimum_size.x = 6
@@ -104,6 +105,7 @@ static func apply(lobby: Control) -> void:
 		panel.content_margin_right = 10 if narrow else 24
 	lobby.resized.connect(resize)
 	resize.call()
+	preload("res://scripts/ui/support_dialog.gd").mount(lobby)
 
 static func _settings(lobby: Control) -> void:
 	if lobby.has_node("ClientSettings"): return

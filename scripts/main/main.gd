@@ -45,7 +45,7 @@ var _account_badge_requests: Dictionary = {}
 
 const BOBUX_LOADING_LOGO_PATH: String = "res://assets/branding/bobux_logo_ui.png"
 const BOBUX_LOADING_SPINNER_PATH: String = "res://assets/branding/bobux_app_icon.png"
-const DUPLICATE_SESSION_ERROR_MESSAGE: String = "Этот аккаунт уже находится в игре."
+const DUPLICATE_SESSION_ERROR_MESSAGE: String = "Р­С‚РѕС‚ Р°РєРєР°СѓРЅС‚ СѓР¶Рµ РЅР°С…РѕРґРёС‚СЃСЏ РІ РёРіСЂРµ."
 const ROOM_RUNTIME_SPACING: float = 5000.0
 const ROOM_RUNTIME_GRID_COLUMNS: int = 128
 const ROOM_SPAWN_GROUP_PREFIX: String = "spawn_locations_room_"
@@ -55,7 +55,8 @@ const VEHICLE_TRIGGER_HEIGHT: float = 3.2
 const VEHICLE_SPAWNER_POLL_INTERVAL_MSEC: int = 220
 const VEHICLE_SPAWN_ZONE_RADIUS: float = 8.5
 const DESTRUCTIBLE_DEBRIS_LIFETIME: float = 8.0
-const MAP_LOAD_BLOCKS_PER_FRAME: int = 36
+const MAP_LOAD_BLOCKS_PER_FRAME: int = 256
+const MAP_LOAD_TIME_BUDGET_USEC: int = 3000
 const MAP_LOAD_RUNTIME_OBJECTS_PER_FRAME: int = 96
 const MAP_LOAD_MANIFEST_NODES_PER_FRAME: int = 192
 const MAP_LOAD_MANIFEST_SCRIPTS_PER_FRAME: int = 32
@@ -90,6 +91,8 @@ var peer_profiles: Dictionary = {}
 var _room_runtime_preparations: Dictionary = {}
 var peer_avatar_visuals: Dictionary = {}
 var _runtime_rbxl_material_cache := RbxlMaterialCache.new()
+var _double_sided_runtime_material_cache: Dictionary = {}
+var _double_sided_fallback_material: StandardMaterial3D = null
 var _runtime_object_texture_cache: Dictionary = {}
 var _peer_checkpoint_positions: Dictionary = {}
 var _peer_spawn_infos: Dictionary = {}
@@ -150,6 +153,11 @@ var _runtime_top_hud_layer: CanvasLayer = null
 var _runtime_inventory_controller: CanvasLayer = null
 var _runtime_inventory_button: Button = null
 var _mobile_top_bar: Panel = null
+var _runtime_hud_buttons: Array[Button] = []
+var _runtime_hud_touch_router: Node = null
+var _runtime_player_status: Panel = null
+var _runtime_player_name: Label = null
+var _runtime_hud_style_selector: OptionButton = null
 var _mobile_player_list_panel: Panel = null
 var _mobile_player_list_rows: VBoxContainer = null
 var _friend_request_popup: Panel = null
@@ -203,6 +211,10 @@ func _is_dedicated_server_runtime() -> bool:
 	return GameState != null and GameState.has_method("is_dedicated_server_runtime") and bool(GameState.is_dedicated_server_runtime())
 
 func _ready() -> void:
+	# Runtime GUI/inventory queries start from Main. Resolve its workspace in
+	# constant time instead of searching past thousands of geometry children.
+	if is_instance_valid(world) and not _is_dedicated_server_runtime():
+		set_meta("bobux_workspace_instance_id", world.get_instance_id())
 	_tool_damage_protocol = preload("res://scripts/main/tool_damage_protocol.gd").new()
 	_tool_damage_protocol.name = "ToolDamageProtocol"
 	add_child(_tool_damage_protocol)
@@ -273,6 +285,7 @@ func _configure_runtime_visual_stability() -> void:
 		fallback_camera.far = 420.0
 
 func _process(delta: float) -> void:
+	var profile_started := Time.get_ticks_usec()
 	if _network_loading_spinner != null and _network_loading_spinner.visible:
 		_network_loading_spinner.rotation += delta * 2.35
 	if _is_dedicated_server_runtime():
@@ -289,6 +302,8 @@ func _process(delta: float) -> void:
 	_poll_vehicle_spawners_if_needed()
 	_poll_post_migration_stabilizer()
 	_poll_duplicate_player_guard()
+	if OS.get_cmdline_user_args().has("--profile-loading") and Time.get_ticks_usec()-profile_started > 3000:
+		print("[main-span] process_ms=", (Time.get_ticks_usec()-profile_started)/1000.0)
 
 func _log_keepalive(message: String) -> void:
 	if VERBOSE_KEEPALIVE_LOGS:
@@ -344,7 +359,7 @@ func _build_runtime_hud() -> void:
 	_game_menu_button.offset_bottom = 16.0 + btn_size
 	_game_menu_button.text = ""
 	_game_menu_button.custom_minimum_size = Vector2(btn_size, btn_size)
-	var menu_icon := load(MENU_ICON_PATH) as Texture2D
+	var menu_icon := load(_runtime_menu_icon_path()) as Texture2D
 	if menu_icon != null:
 		_game_menu_button.icon = menu_icon
 		_game_menu_button.expand_icon = true
@@ -511,6 +526,15 @@ func _build_runtime_hud() -> void:
 			sun_light.shadow_enabled = enabled
 	)
 	_escape_menu_settings_page.add_child(shadows_toggle)
+	var hud_style_label := Label.new()
+	hud_style_label.text = "Шторка интерфейса"
+	_escape_menu_settings_page.add_child(hud_style_label)
+	_runtime_hud_style_selector = OptionButton.new()
+	_runtime_hud_style_selector.custom_minimum_size.y = 48.0
+	_runtime_hud_style_selector.add_item("Классическая — прозрачная полоса")
+	_runtime_hud_style_selector.add_item("Компактная — отдельные панели")
+	_runtime_hud_style_selector.item_selected.connect(func(index: int): ClientPreferences.update("hud_style", "classic" if index == 0 else "compact"))
+	_escape_menu_settings_page.add_child(_runtime_hud_style_selector)
 	_add_mobile_controls_settings_if_needed(_escape_menu_settings_page)
 
 	var bottom_buttons := HBoxContainer.new()
@@ -557,11 +581,13 @@ func _build_runtime_hud() -> void:
 	_health_bar.offset_right = -16.0
 	_health_bar.offset_bottom = 36.0
 	_health_bar.min_value = 0.0
+	_health_bar.step = 0.0
 	_health_bar.max_value = 100.0
 	_health_bar.value = 100.0
 	_health_bar.show_percentage = false
+	_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.16, 0.16, 0.18, 0.92)
+	bg_style.bg_color = Color(0.28, 0.31, 0.33, 0.95)
 	bg_style.corner_radius_top_left = 7
 	bg_style.corner_radius_top_right = 7
 	bg_style.corner_radius_bottom_right = 7
@@ -772,61 +798,65 @@ func _build_mobile_runtime_hud(hud: CanvasLayer) -> void:
 		return
 	_runtime_top_hud_layer = CanvasLayer.new()
 	_runtime_top_hud_layer.name = "RuntimeTopHudLayer"
-	_runtime_top_hud_layer.layer = 8
+	_runtime_top_hud_layer.layer = 130
 	add_child(_runtime_top_hud_layer)
 
 	_mobile_top_bar = Panel.new()
-	_mobile_top_bar.name = "MobileRuntimeTopBar"
-	_mobile_top_bar.anchor_left = 0.0
-	_mobile_top_bar.anchor_top = 0.0
-	_mobile_top_bar.anchor_right = 1.0
-	_mobile_top_bar.anchor_bottom = 0.0
-	_mobile_top_bar.offset_left = 0.0
-	_mobile_top_bar.offset_top = 0.0
-	_mobile_top_bar.offset_right = 0.0
-	_mobile_top_bar.offset_bottom = 60.0
+	_mobile_top_bar.name = "RuntimeCurtain"
+	_mobile_top_bar.position = Vector2(12, 12)
+	_mobile_top_bar.size = Vector2(144, 48)
 	_mobile_top_bar.z_index = 130
-	_mobile_top_bar.mouse_filter = Control.MOUSE_FILTER_STOP
-	var top_style := StyleBoxFlat.new()
-	top_style.bg_color = Color(0.39, 0.41, 0.45, 0.96)
-	_mobile_top_bar.add_theme_stylebox_override("panel", top_style)
+	_mobile_top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mobile_top_bar.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_runtime_top_hud_layer.add_child(_mobile_top_bar)
 
-	var left_buttons := HBoxContainer.new()
-	left_buttons.anchor_left = 0.0
-	left_buttons.anchor_top = 0.0
-	left_buttons.anchor_right = 0.0
-	left_buttons.anchor_bottom = 1.0
-	left_buttons.offset_left = 4.0
-	left_buttons.offset_top = 4.0
-	left_buttons.offset_right = 214.0
-	left_buttons.offset_bottom = -4.0
-	left_buttons.add_theme_constant_override("separation", 8)
-	_mobile_top_bar.add_child(left_buttons)
-
-	var menu_button := _make_mobile_top_button(MENU_ICON_PATH, "MENU")
+	var menu_button := _make_mobile_top_button(_runtime_menu_icon_path(), "☰")
+	menu_button.name = "MenuButton"
+	menu_button.tooltip_text = "Меню Bobux"
 	menu_button.pressed.connect(_on_game_menu_button_pressed)
-	left_buttons.add_child(menu_button)
+	_mobile_top_bar.add_child(menu_button)
+	_runtime_hud_buttons.append(menu_button)
 
 	var chat_button := _make_mobile_top_button(CHAT_ICON_PATH, "CHAT")
+	chat_button.name = "ChatButton"
+	chat_button.tooltip_text = "Чат"
+	chat_button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	chat_button.pressed.connect(_toggle_mobile_chat)
-	left_buttons.add_child(chat_button)
+	_mobile_top_bar.add_child(chat_button)
+	_runtime_hud_buttons.append(chat_button)
 
 	_runtime_inventory_button = _make_mobile_top_button(MOBILE_INVENTORY_ICON_PATH, "BAG")
-	_runtime_inventory_button.tooltip_text = "Inventory"
+	_runtime_inventory_button.name = "InventoryButton"
+	_runtime_inventory_button.tooltip_text = "Инвентарь"
+	_runtime_inventory_button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	_runtime_inventory_button.pressed.connect(_toggle_runtime_inventory)
-	left_buttons.add_child(_runtime_inventory_button)
+	_mobile_top_bar.add_child(_runtime_inventory_button)
+	_runtime_hud_buttons.append(_runtime_inventory_button)
+
+	_runtime_player_status = Panel.new()
+	_runtime_player_status.name = "PlayerStatus"
+	_runtime_player_status.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_runtime_player_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_runtime_top_hud_layer.add_child(_runtime_player_status)
+	_runtime_player_name = Label.new()
+	_runtime_player_name.name = "PlayerName"
+	_runtime_player_name.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_runtime_player_name.offset_left = 8.0
+	_runtime_player_name.offset_right = -8.0
+	_runtime_player_name.offset_top = 5.0
+	_runtime_player_name.offset_bottom = 27.0
+	_runtime_player_name.clip_text = true
+	_runtime_player_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_runtime_player_name.add_theme_font_size_override("font_size", 16)
+	_runtime_player_status.add_child(_runtime_player_name)
 
 	_set_mobile_chat_builtin_toggle_visible(false)
 	call_deferred("_set_mobile_chat_builtin_toggle_visible", false)
 	if _health_bar != null:
-		if _health_bar.get_parent() != null and _health_bar.get_parent() != _runtime_top_hud_layer:
-			_health_bar.reparent(_runtime_top_hud_layer)
+		_health_bar.name = "RuntimeHealth"
+		_health_bar.reparent(_runtime_top_hud_layer)
+		_health_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 		_health_bar.z_index = 135
-		_health_bar.offset_left = -154.0
-		_health_bar.offset_top = 28.0
-		_health_bar.offset_right = -12.0
-		_health_bar.offset_bottom = 43.0
 	if _ping_label != null:
 		_ping_label.visible = false
 
@@ -853,6 +883,7 @@ func _build_mobile_runtime_hud(hud: CanvasLayer) -> void:
 	_runtime_top_hud_layer.add_child(_mobile_player_list_panel)
 
 	var list_margin := MarginContainer.new()
+	list_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	list_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	list_margin.add_theme_constant_override("margin_left", 4)
 	list_margin.add_theme_constant_override("margin_top", 4)
@@ -861,20 +892,139 @@ func _build_mobile_runtime_hud(hud: CanvasLayer) -> void:
 	_mobile_player_list_panel.add_child(list_margin)
 
 	_mobile_player_list_rows = VBoxContainer.new()
+	_mobile_player_list_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mobile_player_list_rows.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_mobile_player_list_rows.add_theme_constant_override("separation", 3)
 	list_margin.add_child(_mobile_player_list_rows)
+	get_viewport().size_changed.connect(_layout_runtime_corner_hud)
+	if not ClientPreferences.changed.is_connected(_on_runtime_hud_preference_changed):
+		ClientPreferences.changed.connect(_on_runtime_hud_preference_changed)
+	_apply_runtime_hud_style()
+	_runtime_hud_touch_router = preload("res://addons/roblox_runtime/runtime_hud_touch_router.gd").new()
+	for button in _runtime_hud_buttons:
+		_runtime_hud_touch_router.buttons.append(weakref(button))
+	_attach_runtime_hud_touch_router.call_deferred()
 	_refresh_mobile_player_list()
+
+func _attach_runtime_hud_touch_router() -> void:
+	if is_inside_tree() and is_instance_valid(_runtime_hud_touch_router) and _runtime_hud_touch_router.get_parent() == null:
+		get_tree().root.add_child(_runtime_hud_touch_router)
+
+func _on_runtime_hud_preference_changed(key: String, _value: Variant) -> void:
+	if key in ["hud_style", "app_theme"]:
+		_apply_runtime_hud_style()
+		_refresh_mobile_player_list()
+
+func _runtime_menu_icon_path() -> String:
+	return "res://assets/ui/halloween/menu.svg" if str(ClientPreferences.values.get("app_theme", "halloween")) == "halloween" else MENU_ICON_PATH
+
+func _apply_runtime_hud_style() -> void:
+	if _mobile_top_bar == null:
+		return
+	var compact: bool = str(ClientPreferences.values.get("hud_style", "classic")) == "compact"
+	var halloween: bool = str(ClientPreferences.values.get("app_theme", "halloween")) == "halloween"
+	var icons: Array[String] = [MENU_ICON_PATH, CHAT_ICON_PATH, MOBILE_INVENTORY_ICON_PATH]
+	if halloween:
+		icons = ["res://assets/ui/halloween/menu.svg", "res://assets/ui/halloween/messages.svg", "res://assets/ui/halloween/inventory.svg"]
+	if is_instance_valid(_game_menu_button):
+		_game_menu_button.icon = load(_runtime_menu_icon_path()) as Texture2D
+	for index in range(_runtime_hud_buttons.size()):
+		var button: Button = _runtime_hud_buttons[index]
+		button.icon = load(icons[index]) as Texture2D
+		button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		var pressed := _runtime_corner_style(3)
+		pressed.bg_color = Color(1.0, 0.48, 0.12, 0.18) if halloween else Color(1.0, 1.0, 1.0, 0.12)
+		pressed.set_content_margin_all(8.0)
+		button.add_theme_stylebox_override("hover", pressed)
+		button.add_theme_stylebox_override("pressed", pressed)
+		button.add_theme_color_override("font_color", Color("ff9b3d") if halloween else Color.WHITE)
+	if _runtime_player_name != null:
+		_runtime_player_name.add_theme_color_override("font_color", Color("ffbb70") if halloween else Color.WHITE)
+	_runtime_player_status.visible = compact
+	_runtime_player_status.add_theme_stylebox_override("panel", _runtime_corner_style(2))
+	if _runtime_hud_style_selector != null:
+		_runtime_hud_style_selector.select(1 if compact else 0)
+	_layout_runtime_corner_hud()
+
+func _runtime_corner_style(radius: int = 3) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.13, 0.15, 0.52)
+	style.set_corner_radius_all(radius)
+	return style
+
+func _layout_runtime_corner_hud() -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var compact: bool = str(ClientPreferences.values.get("hud_style", "classic")) == "compact"
+	var mobile: bool = _is_mobile_runtime_platform()
+	var button_size: float = 40.0
+	if mobile:
+		var window_pixels := Vector2(get_window().size)
+		var logical_per_pixel: float = maxf(viewport_size.x / maxf(window_pixels.x, 1.0), viewport_size.y / maxf(window_pixels.y, 1.0))
+		button_size = maxf(56.0, ceilf(48.0 * logical_per_pixel))
+	var safe_insets: Vector3 = _runtime_hud_safe_insets(viewport_size)
+	var safe_left: float = safe_insets.x
+	var safe_top: float = safe_insets.y
+	var safe_right: float = safe_insets.z
+	if _mobile_top_bar != null:
+		var curtain_style := _runtime_corner_style(2 if compact else 0)
+		curtain_style.bg_color.a = 0.60 if compact else 0.52 if mobile else 0.42
+		_mobile_top_bar.add_theme_stylebox_override("panel", curtain_style)
+		_mobile_top_bar.position = Vector2(safe_left, safe_top) if compact else Vector2.ZERO
+		_mobile_top_bar.size = Vector2(button_size * 3.0 + 8.0, button_size + 8.0) if compact else Vector2(viewport_size.x, safe_top + button_size - 4.0)
+		for index in range(_runtime_hud_buttons.size()):
+			var button: Button = _runtime_hud_buttons[index]
+			button.custom_minimum_size = Vector2(button_size, button_size)
+			button.size = Vector2(button_size, button_size)
+			button.position = Vector2(4.0 + button_size * index, 4.0) if compact else Vector2(safe_left + button_size * index, safe_top - 8.0)
+	var controls_end: float = _mobile_top_bar.position.x + (button_size * 3.0 + 8.0 if compact else safe_left + button_size * 3.0)
+	var remaining_width: float = maxf(32.0, viewport_size.x - safe_right - controls_end - 8.0)
+	var status_width: float = minf(188.0, remaining_width)
+	var status_height: float = 58.0 if mobile else 54.0
+	if _runtime_player_status != null:
+		_runtime_player_status.offset_left = -status_width - safe_right
+		_runtime_player_status.offset_right = -safe_right
+		_runtime_player_status.offset_top = safe_top
+		_runtime_player_status.offset_bottom = safe_top + status_height
+	if _health_bar != null:
+		_health_bar.offset_left = -status_width + 8.0 - safe_right if compact else -minf(140.0, remaining_width) - safe_right
+		_health_bar.offset_right = -8.0 - safe_right if compact else -safe_right
+		_health_bar.offset_top = safe_top + 34.0 if compact else safe_top + button_size * 0.5 - 12.0
+		_health_bar.offset_bottom = _health_bar.offset_top + (10.0 if compact else 8.0)
+	if _mobile_player_list_panel != null:
+		_mobile_player_list_panel.offset_right = -safe_right
+		_mobile_player_list_panel.offset_left = -status_width - safe_right
+		_mobile_player_list_panel.offset_top = safe_top + status_height + 6.0 if compact else _mobile_top_bar.size.y + 6.0
+		var row_count: int = _mobile_player_list_rows.get_child_count() if _mobile_player_list_rows != null else 0
+		_mobile_player_list_panel.offset_bottom = _mobile_player_list_panel.offset_top + 8.0 + float(row_count) * 31.0
+	var chat_box := get_node_or_null("ChatBox")
+	if chat_box != null:
+		var chat_panel: Panel = chat_box.get("chat_panel") as Panel
+		if chat_panel != null:
+			chat_panel.offset_top = _mobile_top_bar.position.y + _mobile_top_bar.size.y + 8.0
+			chat_panel.offset_bottom = chat_panel.offset_top + 184.0
+
+func _runtime_hud_safe_insets(viewport_size: Vector2) -> Vector3:
+	var insets := Vector3(12.0, 12.0, 12.0)
+	if OS.has_feature("android") or OS.has_feature("ios"):
+		var screen_size := Vector2(get_window().size)
+		var safe_area := DisplayServer.get_display_safe_area()
+		if screen_size.x > 0.0 and screen_size.y > 0.0 and safe_area.has_area():
+			var logical_scale := viewport_size / screen_size
+			insets.x += maxf(0.0, safe_area.position.x * logical_scale.x)
+			insets.y += maxf(0.0, safe_area.position.y * logical_scale.y)
+			insets.z += maxf(0.0, (screen_size.x - safe_area.end.x) * logical_scale.x)
+	return insets
 
 func _make_mobile_top_button(icon_path: String, fallback_text: String) -> Button:
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(58.0, 52.0)
+	button.custom_minimum_size = Vector2(44.0, 44.0)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
 	button.focus_mode = Control.FOCUS_NONE
 	button.text = ""
 	button.expand_icon = true
+	button.add_theme_constant_override("icon_max_width", 24)
 	var icon_texture := load(icon_path) as Texture2D
 	if icon_texture != null:
 		button.icon = icon_texture
@@ -882,12 +1032,8 @@ func _make_mobile_top_button(icon_path: String, fallback_text: String) -> Button
 		button.text = fallback_text
 		button.add_theme_font_size_override("font_size", 10)
 		button.add_theme_color_override("font_color", Color.WHITE)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.43, 0.45, 0.49, 0.0)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_right = 4
-	style.corner_radius_bottom_left = 4
+	var style := _runtime_corner_style()
+	style.set_content_margin_all(10.0)
 	var hover := style.duplicate()
 	hover.bg_color = Color(1.0, 1.0, 1.0, 0.12)
 	button.add_theme_stylebox_override("normal", style)
@@ -903,6 +1049,7 @@ func _ensure_runtime_inventory_controller() -> void:
 	if not (controller_variant is CanvasLayer):
 		return
 	_runtime_inventory_controller = controller_variant as CanvasLayer
+	_runtime_inventory_controller.set("show_backpack_button", false)
 	if _runtime_inventory_controller.has_method("configure"):
 		_runtime_inventory_controller.call("configure", LuaScriptEngine, self, Callable(self, "_get_local_player"))
 	add_child(_runtime_inventory_controller)
@@ -931,6 +1078,8 @@ func _toggle_mobile_chat() -> void:
 func _set_runtime_top_hud_visible(should_show: bool) -> void:
 	if _runtime_top_hud_layer != null:
 		_runtime_top_hud_layer.visible = should_show
+	if is_instance_valid(_runtime_hud_touch_router):
+		_runtime_hud_touch_router.enabled = should_show
 
 func _set_mobile_chat_builtin_toggle_visible(should_show: bool) -> void:
 	var chat_box := get_node_or_null("ChatBox")
@@ -946,16 +1095,18 @@ func _refresh_mobile_player_list() -> void:
 	if _mobile_player_list_rows == null:
 		return
 	for child in _mobile_player_list_rows.get_children():
+		_mobile_player_list_rows.remove_child(child)
 		child.queue_free()
 	var peer_ids: Array[int] = _get_sorted_leaderboard_peer_ids()
 	if peer_ids.is_empty():
 		peer_ids.append(_get_runtime_local_peer_id())
 	var row_limit: int = 6 if _is_mobile_runtime_platform() else 8
 	var row_count: int = mini(peer_ids.size(), row_limit)
-	if _mobile_player_list_panel != null:
-		_mobile_player_list_panel.offset_bottom = 66.0 + 8.0 + float(row_count) * 31.0
 	for index in range(row_count):
 		_mobile_player_list_rows.add_child(_build_mobile_player_list_row(peer_ids[index]))
+	if _runtime_player_name != null:
+		_runtime_player_name.text = _get_mobile_player_display_name(_get_runtime_local_peer_id())
+	_layout_runtime_corner_hud()
 
 func _is_mobile_runtime_platform() -> bool:
 	var mobile_runtime = get_node_or_null("/root/MobileRuntime")
@@ -966,12 +1117,13 @@ func _build_mobile_player_list_row(peer_id: int) -> Control:
 	row.custom_minimum_size = Vector2(0.0, 28.0)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var row_style := StyleBoxFlat.new()
-	row_style.bg_color = Color(0.40, 0.41, 0.43, 0.86)
+	row_style.bg_color = Color(0.32, 0.33, 0.36, 0.52)
 	row_style.border_width_bottom = 1
 	row_style.border_color = Color(0.86, 0.88, 0.90, 0.35)
 	row.add_theme_stylebox_override("panel", row_style)
 
 	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 8)
 	margin.add_theme_constant_override("margin_top", 2)
@@ -980,6 +1132,7 @@ func _build_mobile_player_list_row(peer_id: int) -> Control:
 	row.add_child(margin)
 
 	var hbox := HBoxContainer.new()
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hbox.add_theme_constant_override("separation", 5)
 	margin.add_child(hbox)
@@ -991,7 +1144,7 @@ func _build_mobile_player_list_row(peer_id: int) -> Control:
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 15)
-	name_label.add_theme_color_override("font_color", Color.WHITE)
+	name_label.add_theme_color_override("font_color", Color("ffbb70") if str(ClientPreferences.values.get("app_theme", "halloween")) == "halloween" else Color.WHITE)
 	name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.48))
 	name_label.add_theme_constant_override("shadow_offset_y", 1)
 	hbox.add_child(name_label)
@@ -2116,7 +2269,7 @@ func _rebind_local_player_after_migration(previous_local_peer_id: int) -> Charac
 	_move_peer_runtime_state(previous_local_peer_id, 1)
 	peer_colors[1] = _get_current_colors()
 	peer_usernames[1] = UserSession.username if UserSession.is_logged_in else "Player"
-	peer_user_ids[1] = SupabaseClient.get_user_id()
+	peer_user_ids[1] = CloudAPI.get_current_user_id()
 
 	# Keep /Players/1 stable when possible: adopt existing host node and copy the preserved state into it.
 	# This avoids transient "Node not found: .../Players/1/StateSynchronizer" replication path errors.
@@ -2691,10 +2844,10 @@ func _update_local_player_hud() -> void:
 		_respawn_button.disabled = true
 		return
 	_respawn_button.disabled = false
-	var health := int(local_player.call("get_health")) if local_player.has_method("get_health") else 100
-	var max_health := int(local_player.call("get_max_health")) if local_player.has_method("get_max_health") else 100
+	var health: float = float(local_player.call("get_health")) if local_player.has_method("get_health") else 100.0
+	var max_health: float = maxf(0.001, float(local_player.call("get_max_health"))) if local_player.has_method("get_max_health") else 100.0
 	_health_bar.max_value = max_health
-	_health_bar.value = clampi(health, 0, max_health)
+	_health_bar.value = clampf(health, 0.0, max_health)
 
 func _update_ping_indicator() -> void:
 	if _ping_label == null:
@@ -3063,7 +3216,27 @@ func _instantiate_template_block_async(shape_type: String, block_data: Dictionar
 	map_target.add_child(inst)
 	return inst
 
+var _loading_viewport: Viewport
+var _loading_viewport_was_disabled := false
+
+func _restore_loading_rendering() -> void:
+	if is_instance_valid(_loading_viewport):
+		_loading_viewport.disable_3d = _loading_viewport_was_disabled
+	_loading_viewport = null
+
 func _load_selected_map() -> void:
+	# Physics, instances and scripts stay active while
+	# the viewport avoids rendering a partially constructed map behind its UI.
+	if OS.has_feature("android") or OS.get_cmdline_user_args().has("--loading-no-3d"):
+		_loading_viewport = get_viewport()
+		_loading_viewport_was_disabled = _loading_viewport.disable_3d
+		_loading_viewport.disable_3d = true
+	await _build_selected_map()
+	_restore_loading_rendering()
+
+func _build_selected_map() -> void:
+	var load_started := Time.get_ticks_msec()
+	_trace_map_load("begin", load_started)
 	_teleport_blocks_by_color.clear()
 	_fallback_spawn_positions.clear()
 	_pending_map_asset_downloads.clear()
@@ -3092,6 +3265,7 @@ func _load_selected_map() -> void:
 		_generate_default_ground()
 		return
 	var data: Dictionary = await _read_map_data_dictionary_async(GameState.selected_map_folder)
+	_trace_map_load("json", load_started)
 	if data.is_empty():
 		print("[Main] Failed to parse map data.")
 		_map_asset_urls.clear()
@@ -3119,6 +3293,7 @@ func _load_selected_map() -> void:
 	var blocks: Array = data.get("blocks", [])
 	var has_neon := false
 	var blocks_loaded: int = 0
+	var block_slice_started := Time.get_ticks_usec()
 	# FIX A (Death Loop): Use the @onready member 'world' instead of a
 	# local variable that shadows it, which caused spawn targets to desync.
 	var map_target: Node3D = self.world
@@ -3127,6 +3302,9 @@ func _load_selected_map() -> void:
 	map_target.set_meta("bobux_map_asset_folder", GameState.selected_map_folder)
 	map_target.set_meta("bobux_map_asset_urls", _map_asset_urls)
 	map_target.set_meta("roblox_manifest", _map_roblox_manifest.duplicate(false))
+	await _prepare_saved_meshes(blocks, GameState.selected_map_folder)
+	_trace_map_load("mesh_resources", load_started)
+	if not is_inside_tree() or _leave_in_progress: return
 
 	for block_data in blocks:
 		var pos := Vector3(
@@ -3155,20 +3333,19 @@ func _load_selected_map() -> void:
 		if shape_type == "Obby1" or shape_type == "Obby2":
 			await _instantiate_template_block_async(shape_type, block_data, pos, map_target, local_room_id)
 			blocks_loaded += 1
-			if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
+			if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0 or Time.get_ticks_usec() - block_slice_started >= MAP_LOAD_TIME_BUDGET_USEC:
 				await get_tree().process_frame
+				block_slice_started = Time.get_ticks_usec()
 			continue
 
 		# Create mesh
 		var mesh_inst := MeshInstance3D.new()
 		mesh_inst.name = _make_runtime_node_name(str(block_data.get("name", "")), "%s_block" % shape_type)
-		var mesh_resource: Mesh = _create_mesh_for_shape(shape_type)
 		var mat := _create_material(col, mat_type, transparency)
 		if _should_apply_saved_roblox_block_material(block_data):
 			var roblox_props: Dictionary = (block_data.get("roblox_properties", {}) as Dictionary).duplicate(true)
 			mat = _runtime_rbxl_material_cache.get_part_material_with_color(roblox_props, col)
-		mesh_resource.surface_set_material(0, mat)
-		mesh_inst.mesh = mesh_resource
+		mesh_inst.mesh = _get_runtime_primitive_mesh(shape_type, mat)
 		mesh_inst.position = pos
 		mesh_inst.rotation_degrees = Vector3(
 			block_data.get("rx", 0.0),
@@ -3207,7 +3384,10 @@ func _load_selected_map() -> void:
 
 		map_target.add_child(mesh_inst)
 		RbxlMaterialCache.sync_texture_scale(mesh_inst, _manifest_stud_scale(_map_roblox_manifest))
-		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
+		var block_properties: Dictionary = block_data.get("roblox_properties", {}) if block_data.get("roblox_properties", {}) is Dictionary else {}
+		var can_query := bool(block_data.get("can_query", block_data.get("CanQuery", block_properties.get("CanQuery", true))))
+		mesh_inst.set_meta("CanQuery", can_query)
+		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, can_query, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
 		_configure_runtime_special_object(mesh_inst, shape_type, col, local_room_id)
@@ -3218,11 +3398,15 @@ func _load_selected_map() -> void:
 			_register_fallback_spawn_surface(mesh_inst)
 		_configure_runtime_ai_components(mesh_inst, block_data)
 		blocks_loaded += 1
-		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
+		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0 or Time.get_ticks_usec() - block_slice_started >= MAP_LOAD_TIME_BUDGET_USEC:
 			await get_tree().process_frame
+			block_slice_started = Time.get_ticks_usec()
 
+	_trace_map_load("blocks", load_started)
 	var loaded_runtime_refs := await _load_runtime_objects_into_map(data.get("runtime_objects", []), map_target, room_origin, local_room_id)
+	_trace_map_load("runtime_objects", load_started)
 	await _apply_roblox_manifest_to_runtime_root(map_target, _map_roblox_manifest, loaded_runtime_refs, room_origin, local_room_id)
+	_trace_map_load("complete", load_started)
 	print("[Main] Loaded %d blocks from user map" % blocks.size())
 
 	# Enable glow if any block uses Neon material
@@ -3232,6 +3416,10 @@ func _load_selected_map() -> void:
 			env_node.environment.glow_enabled = true
 			env_node.environment.glow_intensity = 0.5
 			print("[Main] Neon detected - glow enabled")
+
+func _trace_map_load(stage: String, started: int) -> void:
+	if OS.get_cmdline_user_args().has("--profile-loading"):
+		print("[map-load] ", stage, " elapsed_ms=", Time.get_ticks_msec() - started)
 
 func _restore_runtime_roblox_block_metadata(block: Node, block_data: Dictionary) -> void:
 	if block == null:
@@ -3345,6 +3533,19 @@ func _configure_runtime_ai_effect_node(effect_node: Node, effect_spec: Dictionar
 		if light is OmniLight3D:
 			(light as OmniLight3D).omni_range = float(effect_spec.get("range", 12.0))
 
+func _prepare_saved_meshes(blocks: Array, map_folder: String) -> void:
+	var paths: Array[String] = []
+	var seen := {}
+	for block in blocks:
+		var asset := str(block.get("bobux_mesh_resource_asset", "")).strip_edges()
+		if asset.is_empty(): continue
+		var path := asset if asset.is_absolute_path() or asset.begins_with("user://") or asset.begins_with("res://") else map_folder.path_join(asset)
+		path = _runtime_resource_loader_path(path)
+		if seen.has(path) or not FileAccess.file_exists(path): continue
+		seen[path] = true
+		paths.append(path)
+	if not paths.is_empty(): await GameSceneLoader.prepare_meshes(paths)
+
 func _apply_saved_bobux_mesh_resource(mesh_inst: MeshInstance3D, block_data: Dictionary, map_folder: String = "") -> void:
 	if mesh_inst == null:
 		return
@@ -3358,12 +3559,18 @@ func _apply_saved_bobux_mesh_resource(mesh_inst: MeshInstance3D, block_data: Dic
 		resolved = _resolve_map_asset_path(file_name)
 	if not FileAccess.file_exists(resolved):
 		return
-	var loaded := ResourceLoader.load(_runtime_resource_loader_path(resolved))
+	var loader_path := _runtime_resource_loader_path(resolved)
+	var loaded: Resource = GameSceneLoader.cached_mesh(loader_path)
+	if loaded == null: loaded = ResourceLoader.load(loader_path)
 	if not (loaded is Mesh):
 		return
+	preload("res://addons/roblox_runtime/roblox_shader_cache.gd").share_mesh_programs(loaded)
 	var fallback_material := mesh_inst.get_active_material(0)
-	mesh_inst.mesh = (loaded as Mesh).duplicate(true)
-	_apply_material_to_missing_mesh_surfaces(mesh_inst, fallback_material)
+	# Geometry and embedded shaders are immutable assets. Per-part appearance
+	# is stored in surface overrides below; deep-copying every mesh duplicates
+	# vertex buffers and shaders for repeated trees, props and terrain chunks.
+	mesh_inst.mesh = loaded as Mesh
+	_apply_material_to_missing_mesh_surfaces(mesh_inst, fallback_material, true)
 	RbxlMaterialCache.enable_embedded_vertex_colors(mesh_inst)
 	mesh_inst.set_meta("shape_type", "MeshPart")
 	mesh_inst.set_meta("bobux_mesh_resource_asset", file_name)
@@ -3438,7 +3645,7 @@ func _apply_material_to_all_mesh_surfaces(mesh_inst: MeshInstance3D, material: M
 	for surface_index in range(surface_count):
 		mesh_inst.set_surface_override_material(surface_index, material)
 
-func _apply_material_to_missing_mesh_surfaces(mesh_inst: MeshInstance3D, fallback_material: Material) -> void:
+func _apply_material_to_missing_mesh_surfaces(mesh_inst: MeshInstance3D, fallback_material: Material, preserve_embedded: bool = false) -> void:
 	if mesh_inst == null or mesh_inst.mesh == null or fallback_material == null:
 		return
 	var mesh_has_own_appearance := false
@@ -3448,7 +3655,10 @@ func _apply_material_to_missing_mesh_surfaces(mesh_inst: MeshInstance3D, fallbac
 			break
 	for surface_index in range(mesh_inst.mesh.get_surface_count()):
 		var existing := mesh_inst.get_active_material(surface_index)
-		if existing == null or not mesh_has_own_appearance:
+		# Native .res files contain authored materials, including intentionally
+		# plain white/invisible helper surfaces. A block's material must not
+		# replace these with a normal-mapped fallback requiring absent tangents.
+		if existing == null or (not preserve_embedded and not mesh_has_own_appearance):
 			mesh_inst.set_surface_override_material(surface_index, fallback_material.duplicate(false))
 
 func _mesh_surface_material_has_visible_appearance(material: Material) -> bool:
@@ -3475,12 +3685,28 @@ func _ensure_mesh_materials_double_sided(mesh_inst: MeshInstance3D) -> void:
 	for surface_index in range(surface_count):
 		var existing := mesh_inst.get_active_material(surface_index)
 		if existing == null:
-			var fallback := StandardMaterial3D.new()
-			fallback.cull_mode = BaseMaterial3D.CULL_DISABLED
-			mesh_inst.set_surface_override_material(surface_index, fallback)
+			if _double_sided_fallback_material == null:
+				_double_sided_fallback_material = StandardMaterial3D.new()
+				_double_sided_fallback_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mesh_inst.set_surface_override_material(surface_index, _double_sided_fallback_material)
 		elif existing is BaseMaterial3D:
-			var material := (existing as BaseMaterial3D).duplicate(false) as BaseMaterial3D
-			material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			var source := existing as BaseMaterial3D
+			if source.cull_mode == BaseMaterial3D.CULL_DISABLED:
+				continue
+			var cache_key := source.get_instance_id()
+			var material: BaseMaterial3D = null
+			var cached_ref: Variant = _double_sided_runtime_material_cache.get(cache_key)
+			if cached_ref is WeakRef:
+				material = cached_ref.get_ref() as BaseMaterial3D
+			if material == null:
+				material = source.duplicate(false) as BaseMaterial3D
+				material.cull_mode = BaseMaterial3D.CULL_DISABLED
+				_double_sided_runtime_material_cache[cache_key] = weakref(material)
+				if _double_sided_runtime_material_cache.size() > 2048:
+					for stale_key in _double_sided_runtime_material_cache.keys():
+						var stale_ref: Variant = _double_sided_runtime_material_cache[stale_key]
+						if not stale_ref is WeakRef or stale_ref.get_ref() == null:
+							_double_sided_runtime_material_cache.erase(stale_key)
 			mesh_inst.set_surface_override_material(surface_index, material)
 
 func _saved_block_texture_asset_path(block_data: Dictionary, map_folder: String = "") -> String:
@@ -3666,6 +3892,19 @@ func _generate_default_ground() -> void:
 	self.world.add_child(mesh_inst)
 	_fallback_spawn_positions.append(room_origin + Vector3(0.0, CHECKPOINT_RESPAWN_HEIGHT, 0.0))
 
+var _runtime_primitive_meshes: Dictionary = {}
+
+func _get_runtime_primitive_mesh(shape_name: String, material: Material) -> Mesh:
+	# Geometry/material resources are immutable; per-part edits use overrides.
+	if shape_name in ["Spawn", "Checkpoint", "Teleport", "VehicleSpawner", "Destructible"]:
+		shape_name = "Box"
+	var key := "%s|%s" % [shape_name, material.get_instance_id() if material != null else 0]
+	if _runtime_primitive_meshes.has(key): return _runtime_primitive_meshes[key]
+	var mesh := _create_mesh_for_shape(shape_name)
+	mesh.surface_set_material(0, material)
+	_runtime_primitive_meshes[key] = mesh
+	return mesh
+
 func _create_mesh_for_shape(shape_name: String) -> Mesh:
 	if shape_name == "Spawn" or shape_name == "Checkpoint" or shape_name == "Teleport" or shape_name == "VehicleSpawner" or shape_name == "Destructible":
 		shape_name = "Box"
@@ -3716,7 +3955,7 @@ func _create_collision_for_shape(shape_name: String) -> Shape3D:
 			return BoxShape3D.new()
 
 func _create_material(color: Color, mat_type: String, transparency: float = 0.0) -> StandardMaterial3D:
-	var mat := _runtime_rbxl_material_cache.get_named_material(color, mat_type, transparency)
+	var mat := _runtime_rbxl_material_cache.get_shared_named_material(color, mat_type, transparency)
 	if mat != null:
 		return mat
 	var fallback := StandardMaterial3D.new()
@@ -3740,6 +3979,7 @@ func _attach_runtime_block_physics(
 	shape_type: String,
 	mat_type: String,
 	can_collide: bool,
+	can_query: bool,
 	map_parent: Node
 ) -> CollisionShape3D:
 	if mesh_inst == null or map_parent == null:
@@ -3762,12 +4002,20 @@ func _attach_runtime_block_physics(
 	if shape_type in ["Cone", "Wedge", "WedgePart", "CornerWedge", "CornerWedgePart", "Truss", "TrussPart"]:
 		_ensure_mesh_materials_double_sided(mesh_inst)
 	if not _block_uses_dynamic_physics(block_data):
+		# Parts with both collision and ray queries disabled do not need a body.
+		# Roblox CanQuery remains independent from CanCollide; query-only parts
+		# must still be present in PhysicsRayQueryParameters3D results.
+		# Water volumes keep this shape because their Area3D reuses it as a trigger.
+		if not can_collide and not can_query and mat_type.strip_edges().to_lower() != "water":
+			return null
 		var static_body := StaticBody3D.new()
 		var static_shape := CollisionShape3D.new()
 		static_shape.shape = _create_collision_for_shape(shape_type)
 		_apply_collision_shape_size(static_shape, shape_type, mesh_inst.scale)
-		static_shape.disabled = not can_collide
+		static_shape.disabled = not (can_collide or can_query)
 		static_body.add_child(static_shape)
+		static_body.collision_layer = 1 if can_collide else (16 if can_query else 0)
+		static_body.collision_mask = (PLAYER_TRIGGER_COLLISION_MASK | 1) if can_collide else 0
 		static_body.set_meta("material_type", mat_type)
 		static_body.set_meta("surface_type", mat_type)
 		mesh_inst.add_child(static_body)
@@ -3803,7 +4051,9 @@ func _attach_runtime_block_physics(
 		dynamic_shape.shape = _create_collision_for_shape(shape_type)
 		_apply_collision_shape_size(dynamic_shape, shape_type, visual_scale)
 	dynamic_shape.scale = visual_scale
-	dynamic_shape.disabled = not can_collide
+	dynamic_shape.disabled = not (can_collide or can_query)
+	rigid_body.collision_layer = 1 if can_collide else (16 if can_query else 0)
+	rigid_body.collision_mask = (PLAYER_TRIGGER_COLLISION_MASK | 1) if can_collide else 0
 	rigid_body.add_child(dynamic_shape)
 	var remote := RemoteTransform3D.new()
 	remote.name = "VisualFollower"
@@ -4842,7 +5092,7 @@ func _on_hosting_started(_port: int, _external_ip: String, _upnp_mapped: bool) -
 	print("[Host] Session transport: %s" % NetworkManager.get_active_transport_label())
 	peer_colors[local_peer_id] = _get_current_colors()
 	peer_usernames[local_peer_id] = UserSession.username if UserSession.is_logged_in else "Player"
-	peer_user_ids[local_peer_id] = SupabaseClient.get_user_id()
+	peer_user_ids[local_peer_id] = CloudAPI.get_current_user_id()
 	peer_avatar_visuals[local_peer_id] = _get_current_avatar_visuals()
 	_runtime_world_ready = _map_loaded
 	_spawn_player_for_peer(local_peer_id)
@@ -5254,7 +5504,11 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 	map_target.set_meta("roblox_manifest", _room_runtime_roblox_manifests[clean_room_id].duplicate(false))
 	map_target.set_meta("roblox_stud_scale", _manifest_stud_scale(_room_runtime_roblox_manifests[clean_room_id]))
 	var blocks: Array = data.get("blocks", [])
+	await _prepare_saved_meshes(blocks, clean_map_folder)
+	if not is_inside_tree() or not is_instance_valid(map_target):
+		return {"ok": false, "error": "Map loading canceled"}
 	var blocks_loaded: int = 0
+	var block_slice_started := Time.get_ticks_usec()
 	for block_data in blocks:
 		var pos := Vector3(
 			block_data.get("px", 0.0),
@@ -5278,18 +5532,17 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 		if shape_type == "Obby1" or shape_type == "Obby2":
 			await _instantiate_template_block_async(shape_type, block_data, pos, map_target, clean_room_id)
 			blocks_loaded += 1
-			if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
+			if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0 or Time.get_ticks_usec() - block_slice_started >= MAP_LOAD_TIME_BUDGET_USEC:
 				await get_tree().process_frame
+				block_slice_started = Time.get_ticks_usec()
 			continue
 		var mesh_inst := MeshInstance3D.new()
 		mesh_inst.name = _make_runtime_node_name(str(block_data.get("name", "")), "%s_block" % shape_type)
-		var mesh_resource: Mesh = _create_mesh_for_shape(shape_type)
 		var mat := _create_material(col, mat_type, transparency)
 		if _should_apply_saved_roblox_block_material(block_data):
 			var roblox_props: Dictionary = (block_data.get("roblox_properties", {}) as Dictionary).duplicate(true)
 			mat = _runtime_rbxl_material_cache.get_part_material_with_color(roblox_props, col)
-		mesh_resource.surface_set_material(0, mat)
-		mesh_inst.mesh = mesh_resource
+		mesh_inst.mesh = _get_runtime_primitive_mesh(shape_type, mat)
 		mesh_inst.position = pos
 		mesh_inst.rotation_degrees = Vector3(
 			block_data.get("rx", 0.0),
@@ -5326,7 +5579,10 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 			mesh_inst.add_child(_create_spawn_decal_node(mesh_inst.scale))
 		map_target.add_child(mesh_inst)
 		RbxlMaterialCache.sync_texture_scale(mesh_inst, _manifest_stud_scale(_room_runtime_roblox_manifests[clean_room_id]))
-		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, map_target)
+		var block_properties: Dictionary = block_data.get("roblox_properties", {}) if block_data.get("roblox_properties", {}) is Dictionary else {}
+		var can_query := bool(block_data.get("can_query", block_data.get("CanQuery", block_properties.get("CanQuery", true))))
+		mesh_inst.set_meta("CanQuery", can_query)
+		var coll_shape := _attach_runtime_block_physics(mesh_inst, block_data, shape_type, mat_type, can_collide, can_query, map_target)
 		if is_water_volume:
 			_attach_runtime_water_volume(mesh_inst, coll_shape)
 		_configure_runtime_special_object(mesh_inst, shape_type, col, clean_room_id)
@@ -5337,8 +5593,9 @@ func _load_map_into_room_runtime(room_id: String, map_folder: String, map_target
 		if can_collide and not deals_damage and shape_type != "Teleport" and not _block_uses_dynamic_physics(block_data):
 			_register_fallback_spawn_surface(mesh_inst, clean_room_id)
 		blocks_loaded += 1
-		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0:
+		if blocks_loaded % MAP_LOAD_BLOCKS_PER_FRAME == 0 or Time.get_ticks_usec() - block_slice_started >= MAP_LOAD_TIME_BUDGET_USEC:
 			await get_tree().process_frame
+			block_slice_started = Time.get_ticks_usec()
 	var loaded_runtime_refs := await _load_runtime_objects_into_map(data.get("runtime_objects", []), map_target, Vector3.ZERO, clean_room_id)
 	await _apply_roblox_manifest_to_runtime_root(map_target, _room_runtime_roblox_manifests.get(clean_room_id, {}), loaded_runtime_refs, Vector3.ZERO, clean_room_id)
 	return {
@@ -5527,7 +5784,7 @@ func _process_chat_bubble_on_server(peer_id: int, text: String) -> void:
 		return
 	# Display locally on the server (for dedicated server rendering, if any)
 	player_node.show_chat_bubble(text)
-	# Broadcast to all peers in the SAME ROOM only — not all connected peers.
+	# Broadcast to all peers in the SAME ROOM only вЂ” not all connected peers.
 	# Using rpc_id() per peer instead of .rpc() because .rpc() would send
 	# to peers in OTHER rooms on a multi-room dedicated server.
 	var room_id: String = _get_peer_room_id(peer_id)
@@ -5550,7 +5807,7 @@ func _on_server_disconnected() -> void:
 	_hide_network_loading()
 	print("[Client] Server disconnected.")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	GameState.set_network_error("Соединение с сервером потеряно. Подключитесь к режиму ещё раз.")
+	GameState.set_network_error("РЎРѕРµРґРёРЅРµРЅРёРµ СЃ СЃРµСЂРІРµСЂРѕРј РїРѕС‚РµСЂСЏРЅРѕ. РџРѕРґРєР»СЋС‡РёС‚РµСЃСЊ Рє СЂРµР¶РёРјСѓ РµС‰С‘ СЂР°Р·.")
 	GameState.clear_launch_mode()
 	call_deferred("_return_to_lobby_after_connection_failure")
 
@@ -5923,7 +6180,7 @@ func _sync_checkpoint_for_peer(peer_id: int, checkpoint_position: Vector3) -> vo
 
 func _register_local_color_with_server(retry_count: int = 0) -> void:
 	var uname: String = UserSession.username if UserSession.is_logged_in else "Player"
-	var current_user_id: String = SupabaseClient.get_user_id()
+	var current_user_id: String = CloudAPI.get_current_user_id()
 	if multiplayer.multiplayer_peer == null:
 		return
 	if multiplayer.is_server():
@@ -5982,12 +6239,16 @@ func _confirm_room_join(payload: Dictionary) -> void:
 	_map_load_in_progress = false
 	_runtime_world_ready = true
 	_show_network_loading("Loading World...", "Finalizing collisions and your character.", 0.97)
+	if OS.get_cmdline_user_args().has("--batch-static"):
+		print("[render-batches] ", JSON.stringify(preload("res://addons/roblox_runtime/roblox_render_batches.gd").build(world)))
 	call_deferred("_hide_network_loading_after_spawn_ready")
 	# Start the keepalive watchdog only AFTER the server confirmed room join.
 	# Previously this ran in _on_connected_to_server, but the server's async
 	# profile load could delay _confirm_room_join, causing premature timeouts.
 	_host_last_pong_msec = Time.get_ticks_msec()
 	_start_host_keepalive()
+
+var _profile_visit_recorded := false
 
 func _hide_network_loading_after_spawn_ready() -> void:
 	var deadline_msec := Time.get_ticks_msec() + CHARACTER_SPAWN_TIMEOUT_MSEC
@@ -6007,6 +6268,9 @@ func _hide_network_loading_after_spawn_ready() -> void:
 			if fallback_camera != null:
 				fallback_camera.current = false
 			_hide_network_loading()
+			if not _profile_visit_recorded and not multiplayer.is_server() and not EditorTestServer.session_active and not "--performance-probe" in OS.get_cmdline_user_args() and CloudAPI.has_authenticated_session():
+				_profile_visit_recorded = true
+				CloudAPI.call_deferred("record_profile_visit", GameState.get_selected_map_identifier())
 			return
 		await get_tree().process_frame
 	if fallback_camera != null:
@@ -6117,8 +6381,8 @@ func _despawn_player_for_peer(peer_id: int) -> void:
 func _spawn_custom(spawn_data: Dictionary) -> Node:
 	var peer_id: int = int(spawn_data.get("peer_id", 1))
 	var spawn_room_id: String = str(spawn_data.get("room_id", "")).strip_edges()
-	if not _peer_matches_effective_local_room(peer_id, spawn_room_id):
-		return null
+	# Server-authority SpawnVisibility filters rooms before the spawn packet.
+	# MultiplayerSpawner requires a valid node from this callback on every peer.
 	var string_id: String = str(peer_id)
 	var chosen_colors: Dictionary = spawn_data.get("colors", _get_current_colors())
 	var player_instance: CharacterBody3D = PLAYER_SCENE.instantiate() as CharacterBody3D
@@ -6467,6 +6731,23 @@ func _apply_roblox_environment_to_runtime_environment(env: Environment, settings
 	env.set("fog_enabled", bool(settings.get("fog_enabled", false)))
 	env.set("fog_light_color", _color_from_array(settings.get("fog_color", [0.78, 0.78, 0.78]), Color(0.78, 0.78, 0.78)))
 	env.set("fog_density", clampf(float(settings.get("fog_density", 0.0)), 0.0, 0.05))
+	# Older published imports saved Lighting but no flattened ambient/fog fields.
+	# Use the same mapping as Studio rather than inheriting lobby defaults.
+	if settings.get("lighting") is Dictionary:
+		var light: Dictionary = settings.lighting
+		var brightness := float(light.get("Brightness", 2.0))
+		if not settings.has("ambient_color"):
+			var ambient := _color_from_array(light.get("Ambient", [0.45, 0.50, 0.58]), Color.GRAY)
+			var outdoor := _color_from_array(light.get("OutdoorAmbient", [0.55, 0.65, 0.78]), Color.GRAY)
+			env.ambient_light_color = ambient.lerp(outdoor, 0.42).lerp(Color(0.56, 0.66, 0.78), 0.18)
+		if not settings.has("ambient_energy"): env.ambient_light_energy = clampf(0.32 + brightness * 0.10, 0.32, 0.82)
+		if not settings.has("glow_enabled"): env.glow_enabled = false
+		if not settings.has("fog_enabled"):
+			var start := float(light.get("FogStart", 0.0))
+			var end := float(light.get("FogEnd", 100000.0))
+			env.fog_enabled = end > start and end < 50000.0
+			env.fog_light_color = _color_from_array(light.get("FogColor", [0.62, 0.76, 0.95]), Color.GRAY)
+			if env.fog_enabled: env.fog_density = clampf(1.0 / maxf(end - start, 1.0), 0.000005, 0.02)
 	preload("res://addons/roblox_runtime/roblox_environment_snapshot.gd").apply(env, get_node_or_null("World/Sun") as DirectionalLight3D, settings)
 
 
@@ -6747,11 +7028,22 @@ func _download_runtime_visual_asset(download_key: String, asset_url: String, tar
 
 func _apply_roblox_manifest_to_runtime_root(map_target: Node3D, manifest_variant: Variant, loaded_runtime_refs: Dictionary,
 		origin_offset: Vector3, room_id: String) -> void:
+	var manifest_started := Time.get_ticks_msec()
 	if map_target == null or not (manifest_variant is Dictionary):
 		return
 	var manifest: Dictionary = manifest_variant
 	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").bind_runtime_assets(manifest, map_target.get_meta("bobux_runtime_asset_records", []))
 	manifest = preload("res://addons/roblox_runtime/roblox_manifest_assets.gd").resolve(manifest, str(map_target.get_meta("bobux_map_asset_folder", GameState.selected_map_folder)))
+	_trace_map_load("manifest_assets", manifest_started)
+	var workspace_stud_scale := _infer_workspace_stud_scale_from_scripts(manifest)
+	if workspace_stud_scale > 0.0:
+		# Bobux-native places may author Workspace positions in a larger world-unit
+		# space while the character root stays 1:1. Honor the script's explicit
+		# unit declaration at the Workspace boundary; character scale remains its
+		# own manifest/player setting.
+		map_target.set_meta("roblox_stud_scale", workspace_stud_scale)
+		map_target.set_meta("bobux_workspace_stud_scale_inferred", true)
+		print("[Main] Applied Workspace stud scale %.3f from authored Luau unit declaration" % workspace_stud_scale)
 	# The manifest can be tens of megabytes. A deep duplicate here used to double
 	# peak memory just before DataModel/GUI construction and was enough to crash
 	# large published places. The importer and runtime treat it as immutable.
@@ -6762,18 +7054,53 @@ func _apply_roblox_manifest_to_runtime_root(map_target: Node3D, manifest_variant
 	map_target.set_meta("roblox_script_refs_count", (manifest.get("scripts", []) as Array).size() if manifest.get("scripts", []) is Array else 0)
 	map_target.set_meta("roblox_constraint_refs_count", (manifest.get("constraints", []) as Array).size() if manifest.get("constraints", []) is Array else 0)
 	await _install_roblox_manifest_data_model(manifest, map_target)
-	_prepare_imported_workspace_physics(map_target)
+	_trace_map_load("manifest_install", manifest_started)
+	await _prepare_imported_workspace_physics(map_target)
+	_trace_map_load("physics", manifest_started)
 	if not ImportedPlaceNetwork.replica_ready.is_connected(_on_imported_replica_ready):
 		ImportedPlaceNetwork.replica_ready.connect(_on_imported_replica_ready)
 	ImportedPlaceNetwork.register_workspace(map_target, room_id)
+	_trace_map_load("replica_registered", manifest_started)
 	await _load_manifest_scripts_into_map(manifest, loaded_runtime_refs, map_target, origin_offset, room_id)
+	_trace_map_load("scripts", manifest_started)
 	for runtime_node in map_target.get_children():
 		if runtime_node.is_in_group(RBXL_RUNTIME_OBJECT_GROUP) and not runtime_node.has_meta("bobux_script_runtime_id"):
 			_start_runtime_lua_script_if_needed(runtime_node, runtime_node.get_meta("runtime_object_data", {}))
 	await _refresh_runtime_roblox_ui(manifest, room_id)
+	_trace_map_load("gui", manifest_started)
 	var local_character := _get_local_player()
 	if is_instance_valid(local_character):
 		_bind_runtime_local_character(local_character.get_instance_id())
+
+func _infer_workspace_stud_scale_from_scripts(manifest: Dictionary) -> float:
+	# Allow an explicit Luau comment to describe Bobux-native coordinate units:
+	# `local S = 2 -- studs per world unit for workspace parts (character root uses 1:1)`.
+	# The inverse is the world-units-per-stud factor used by the Roblox API adapter.
+	# Ignore this convention when the importer already supplied an explicit scale.
+	if manifest.has("stud_scale") or str(manifest.get("format", "")).to_lower() in ["xml", "binary", "rbxl", "rbxlx"]:
+		return -1.0
+	var declared_studs_per_unit: Variant = manifest.get("workspace_studs_per_unit", null)
+	if (declared_studs_per_unit is int or declared_studs_per_unit is float) and float(declared_studs_per_unit) > 0.0:
+		return clampf(1.0 / float(declared_studs_per_unit), 0.25, 2.0)
+	var directive := RegEx.new()
+	if directive.compile("(?m)^\\s*local\\s+[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\s*--\\s*studs per world unit for workspace parts\\b") != OK:
+		return -1.0
+	var scripts: Variant = manifest.get("scripts", [])
+	if not scripts is Array:
+		return -1.0
+	for script_variant in scripts:
+		if not script_variant is Dictionary:
+			continue
+		var source := str(script_variant.get("source", ""))
+		if not source.contains("character root uses 1:1"):
+			continue
+		var regex_match := directive.search(source)
+		if regex_match == null:
+			continue
+		var studs_per_unit := float(regex_match.get_string(1))
+		if studs_per_unit > 0.0:
+			return clampf(1.0 / studs_per_unit, 0.25, 2.0)
+	return -1.0
 
 func _prepare_imported_workspace_physics(workspace: Node3D) -> void:
 	if not workspace.has_meta("roblox_manifest"):
@@ -6781,10 +7108,15 @@ func _prepare_imported_workspace_physics(workspace: Node3D) -> void:
 	# Restore authored surface joints before gravity advances even one frame.
 	if str(workspace.get_meta("bobux_network_role", "")) != "client":
 		preload("res://addons/roblox_runtime/roblox_surface_joints.gd").make_joints(workspace)
+	var slice_started := Time.get_ticks_usec()
 	for part in workspace.find_children("*", "MeshInstance3D", true, false):
 		if not preload("res://addons/roblox_runtime/roblox_spatial_query.gd").is_part(part) or not part.has_meta("roblox_ref") or bool(part.get_meta("bobux_deferred_geometry", false)):
 			continue
 		preload("res://addons/roblox_runtime/roblox_part_physics.gd").body_for(part, true)
+		if Time.get_ticks_usec() - slice_started >= MAP_LOAD_TIME_BUDGET_USEC:
+			await get_tree().process_frame
+			if not is_instance_valid(workspace) or workspace.is_queued_for_deletion(): return
+			slice_started = Time.get_ticks_usec()
 
 
 func _install_roblox_manifest_data_model(manifest: Dictionary, context_node: Node) -> void:
@@ -7406,16 +7738,27 @@ func leave_game() -> void:
 	GameState.selected_map_folder = "" # Clear selected map
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(world): ImportedPlaceNetwork.retire_tree(world)
+	var lobby_transition_error: Error = await GameSceneLoader.open_lobby()
+	if lobby_transition_error != OK:
+		lobby_transition_error = get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
 	_leave_in_progress = false
-	get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+	if lobby_transition_error != OK:
+		push_error("[Main] Could not return to the lobby: %s" % error_string(lobby_transition_error))
 
 func _stop_scene_scripts() -> void:
 	if is_instance_valid(_runtime_inventory_controller):
 		_runtime_inventory_controller.set_process(false)
 		_runtime_inventory_controller.set_process_unhandled_input(false)
 	LuaScriptEngine.stop_all_scripts(self)
+	if not _is_dedicated_server_runtime():
+		LuaScriptEngine.queue_stopped_state_cleanup(self)
 
 func _exit_tree() -> void:
+	if is_instance_valid(_runtime_hud_touch_router):
+		_runtime_hud_touch_router.enabled = false
+		_runtime_hud_touch_router.set_process_input(false)
+		_runtime_hud_touch_router.queue_free()
+	_restore_loading_rendering()
 	# Also cover scene changes caused by a failed connection or editor Stop.
 	_stop_scene_scripts()
 	if is_instance_valid(world): ImportedPlaceNetwork.unregister_workspace(world)

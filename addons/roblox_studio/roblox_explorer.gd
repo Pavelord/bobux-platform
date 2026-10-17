@@ -27,7 +27,10 @@ const SERVICE_ORDER := [
 const API_ONLY_SERVICES := [
 	"RunService", "TweenService", "Debris", "CollectionService",
 	"UserInputService", "ContextActionService", "MarketplaceService",
-	"BadgeService", "InsertService", "PhysicsService",
+	"BadgeService", "InsertService", "PhysicsService", "DataStoreService",
+	"HttpService", "ContentProvider", "GuiService", "LocalizationService",
+	"LogService", "PolicyService", "Stats", "TeleportService", "TestService",
+	"UserService", "VoiceChatService",
 ]
 
 ## TreeItem metadata key that records the Roblox class so context menus and the
@@ -157,16 +160,44 @@ const CLASS_ICON := {
 	"CylinderMesh": "MeshInstance3D",
 }
 
+# The exported Studio cannot access Godot's EditorIcons theme. Use the same
+# crisp Lucide SVG family as the Studio toolbar there, with the generated pixel
+# icons retained as a fallback for classes without a dedicated glyph.
+const RUNTIME_ICON_FILE := {
+	"DataModel": "boxes.svg", "Workspace": "box.svg", "Model": "boxes.svg",
+	"Folder": "folder-open.svg", "Configuration": "sliders-horizontal.svg",
+	"ReplicatedStorage": "folder-open.svg", "ServerStorage": "folder-open.svg",
+	"ServerScriptService": "file-code-2.svg", "StarterPlayerScripts": "file-code-2.svg",
+	"StarterCharacterScripts": "file-code-2.svg", "Script": "file-code-2.svg",
+	"LocalScript": "file-code-2.svg", "ModuleScript": "file-code-2.svg",
+	"Part": "box.svg", "MeshPart": "box.svg", "WedgePart": "box.svg",
+	"CornerWedgePart": "box.svg", "TrussPart": "box.svg", "SpawnLocation": "anchor.svg",
+	"Sound": "audio.svg", "SoundService": "audio.svg", "PointLight": "circle-dot.svg",
+	"SpotLight": "circle-dot.svg", "SurfaceLight": "circle-dot.svg",
+	"ScreenGui": "panels-top-left.svg", "Frame": "panels-top-left.svg",
+	"TextLabel": "panels-top-left.svg", "TextButton": "panels-top-left.svg",
+	"ImageLabel": "images.svg", "ImageButton": "images.svg", "Tool": "briefcase-business.svg",
+	"Backpack": "briefcase-business.svg", "Humanoid": "person-standing.svg",
+	"Player": "person-standing.svg", "StarterPlayer": "person-standing.svg",
+	"RemoteEvent": "audio.svg", "RemoteFunction": "audio.svg",
+	"BindableEvent": "audio.svg", "BindableFunction": "audio.svg",
+}
+const RUNTIME_ICON_ROOT := "res://assets/studio/icons/lucide/"
+
 
 var _collapsed: Dictionary = {} # node_path (String) -> bool
 var _expanded_once: Dictionary = {} # node_path (String) -> bool (seen at least once)
 var _filter_text: String = ""
 var _runtime_icon_cache: Dictionary = {}
+var _filter_match_cache: Dictionary = {}
 var show_runtime: bool = false
+var show_insert_buttons: bool = false
+var insert_button_icon: Texture2D = null
 
 
 func set_filter_text(text: String) -> void:
 	_filter_text = text.strip_edges().to_lower()
+	_filter_match_cache.clear()
 
 
 ## Build the entire Explorer tree from `data_model` into `tree`.
@@ -175,11 +206,12 @@ func rebuild(tree: Tree, data_model: Node) -> TreeItem:
 	if tree == null or data_model == null:
 		return null
 	_record_expanded_state(tree)
+	_filter_match_cache.clear()
 	tree.clear()
-	tree.columns = 2
+	# Roblox's Explorer is a single name hierarchy; putting ClassName in a
+	# second column made long instance names unreadable in Bobux's narrow dock.
+	tree.columns = 1
 	tree.set_column_expand(0, true)
-	tree.set_column_expand(1, false)
-	tree.set_column_custom_minimum_width(1, 78)
 	tree.hide_root = true
 	var hidden_root := tree.create_item()
 
@@ -243,15 +275,16 @@ func _create_item(parent_item: TreeItem, node: Node, display: String, is_service
 	if roblox_class.is_empty():
 		roblox_class = str(node.get_meta(ROBLOX_CLASS_META, _infer_class(node)))
 	item.set_meta(META_CLASS_KEY, roblox_class)
-	item.set_text(1, roblox_class if not is_service else "")
-	item.set_custom_color(1, Color("#747B87"))
-	item.set_selectable(1, false)
 	item.set_meta(META_IS_SERVICE_KEY, is_service)
 	var tooltip := "%s (%s)\n%s" % [display, roblox_class, str(node.get_path())]
 	if roblox_class in ["Script", "LocalScript", "ModuleScript"]:
 		tooltip += "\n" + {"Script": "Серверный код. Запуск через Play.", "LocalScript": "Код игрока. Запускается в PlayerGui, Backpack, PlayerScripts или Character.", "ModuleScript": "Модуль. Запускается через require()."}[roblox_class]
 	item.set_tooltip_text(0, tooltip)
 	_apply_icon(item, roblox_class)
+	if show_insert_buttons and insert_button_icon != null:
+		item.add_button(0, insert_button_icon, 1, false, "Insert Object")
+		# Keep rows uncluttered; studio.gd reveals this glyph on the hovered row.
+		item.set_button_color(0, 0, Color(0, 0, 0, 0))
 	item.set_selectable(0, true)
 	item.set_editable(0, false) # rename handled via dialog (F2), not inline edit
 
@@ -269,28 +302,22 @@ func _create_item(parent_item: TreeItem, node: Node, display: String, is_service
 	return item
 
 
-func _node_or_descendants_match_filter(node: Node, roblox_class: String, display: String) -> bool:
+func _node_or_descendants_match_filter(node: Node, _roblox_class: String, _display: String) -> bool:
 	if _filter_text.is_empty():
 		return true
-	if _matches_filter(display, roblox_class):
-		return true
-	for child in node.get_children():
-		if bool(child.get_meta("bobux_internal_editor_visual", false)):
-			continue
-		var cname := str(child.name)
-		if cname in ["SelectionBody", "CollisionBody", "SpecialVisuals", "SelectionBody3D"]:
-			continue
-		if _subtree_matches_filter(child):
-			return true
-	return false
+	return _subtree_matches_filter(node)
 
 
 func _subtree_matches_filter(node: Node) -> bool:
 	if _filter_text.is_empty():
 		return true
+	var node_id := node.get_instance_id()
+	if _filter_match_cache.has(node_id):
+		return bool(_filter_match_cache[node_id])
 	var roblox_class := str(node.get_meta(ROBLOX_CLASS_META, _infer_class(node)))
 	var display := _display_name(node, roblox_class)
 	if _matches_filter(display, roblox_class):
+		_filter_match_cache[node_id] = true
 		return true
 	for child in node.get_children():
 		if bool(child.get_meta("bobux_internal_editor_visual", false)):
@@ -299,7 +326,9 @@ func _subtree_matches_filter(node: Node) -> bool:
 		if cname in ["SelectionBody", "CollisionBody", "SpecialVisuals", "SelectionBody3D"]:
 			continue
 		if _subtree_matches_filter(child):
+			_filter_match_cache[node_id] = true
 			return true
+	_filter_match_cache[node_id] = false
 	return false
 
 
@@ -359,6 +388,7 @@ func _apply_icon(item: TreeItem, roblox_class: String) -> void:
 	var runtime_tex := _get_runtime_icon(roblox_class)
 	if runtime_tex != null:
 		item.set_icon(0, runtime_tex)
+		item.set_icon_modulate(0, _runtime_icon_color(roblox_class))
 
 
 func has_editor_theme() -> bool:
@@ -380,6 +410,12 @@ func _get_editor_icon(icon_key: String) -> Texture2D:
 func _get_runtime_icon(roblox_class: String) -> Texture2D:
 	if _runtime_icon_cache.has(roblox_class):
 		return _runtime_icon_cache[roblox_class]
+	var icon_file := str(RUNTIME_ICON_FILE.get(roblox_class, ""))
+	if not icon_file.is_empty():
+		var svg_icon := load(RUNTIME_ICON_ROOT + icon_file) as Texture2D
+		if svg_icon != null:
+			_runtime_icon_cache[roblox_class] = svg_icon
+			return svg_icon
 	var color := _runtime_icon_color(roblox_class)
 	var image := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))

@@ -26,6 +26,7 @@ var _mobile_use_button: Button = null
 var _player_list: PanelContainer = null
 var _player_list_text: Label = null
 var show_local_player_list: bool = false
+var show_backpack_button: bool = true
 var _proximity_button: Button
 var _system_menu_open: bool = false
 
@@ -49,12 +50,15 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	var profile_started := Time.get_ticks_usec()
 	_update_proximity_overlay()
 	_refresh_accumulator += delta
 	if _refresh_accumulator < REFRESH_INTERVAL_SECONDS:
 		return
 	_refresh_accumulator = 0.0
 	refresh_now(false)
+	if OS.get_cmdline_user_args().has("--profile-loading") and Time.get_ticks_usec()-profile_started > 3000:
+		print("[inventory-span] process_ms=", (Time.get_ticks_usec()-profile_started)/1000.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -235,6 +239,7 @@ func _build_interface() -> void:
 	backpack_button.name = "OpenBackpack"
 	backpack_button.text = "Inventory [`]"
 	backpack_button.position = Vector2(12, 12)
+	backpack_button.visible = show_backpack_button
 	backpack_button.focus_mode = Control.FOCUS_NONE
 	backpack_button.pressed.connect(toggle_inventory)
 	_root.add_child(backpack_button)

@@ -1,0 +1,21 @@
+import os
+from pathlib import Path
+root = Path(Dir('#').abspath).parents[1]
+godot = root / '.codex-tools/sources/godot_luaAPI/external/godot-cpp'
+luau = root / '.codex-tools/sources/luau'
+env = SConscript(str(godot / 'SConstruct')).Clone()
+env.Append(CPPDEFINES=['LAPI_GDEXTENSION', 'BOBUX_NATIVE_LUAU', ('LUA_USE_LONGJMP', 1)])
+env['CPPDEFINES'] = [d for d in env['CPPDEFINES'] if not (isinstance(d, (tuple, list)) and d[0] == '_HAS_EXCEPTIONS') and d != '_HAS_EXCEPTIONS=0']
+env.Append(CPPDEFINES=[('_HAS_EXCEPTIONS', 1)])
+env.Append(CPPPATH=[str(Dir('compat')), str(Dir('src'))] + [str(luau / part / 'include') for part in ['VM', 'Compiler', 'Ast', 'Common', 'Bytecode']])
+if env['platform'] == 'windows':
+    env.Append(CCFLAGS=['/std:c++17', '/EHsc'])
+    env.Append(LINKFLAGS=['/MAP'])
+else:
+    env.Append(CCFLAGS=['-std=c++17', '-fexceptions'])
+sources = Glob('src/*.cpp') + Glob('src/classes/*.cpp') + Glob('compat/*.cpp') + ['register_types.cpp']
+for part in ['VM', 'Compiler', 'Ast', 'Common', 'Bytecode']:
+    for source in sorted((luau / part / 'src').glob('*.cpp')):
+        sources.append(env.SharedObject('build/' + part + '/' + source.stem, str(source)))
+library = env.SharedLibrary(str(root / 'addons/luaAPI/bin' / ('libbobuxluau' + env['suffix'] + env['SHLIBSUFFIX'])), sources)
+Default(library)

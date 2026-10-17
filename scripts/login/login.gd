@@ -12,9 +12,26 @@ var _auto_login_in_flight: bool = false
 var _session_cover: Control
 
 func _ready() -> void:
+	# The packaged native-runtime smoke owns startup and shutdown. Opening a
+	# cached account's lobby here races its threaded UI load against that exit.
+	if OS.get_cmdline_user_args().has("--verify-lua-runtime"): return
+	if OS.get_cmdline_user_args().has("--performance-probe"):
+		if not OS.get_user_data_dir().replace("\\", "/").contains(".codex-tmp/"):
+			push_error("Performance probe requires isolated APPDATA under .codex-tmp")
+			get_tree().quit(2)
+			return
+		get_tree().call_deferred("change_scene_to_file", "res://scripts/diagnostics/runtime_performance_probe.tscn")
+		return
 	_disable_mobile_gameplay_controls()
+	preload("res://scripts/ui/startup_connection_banner.gd").begin(get_tree())
+	# Saved local profile data is enough to draw the lobby. CloudAPI still
+	# validates/refreshes its session in the background before any remote action.
+	if _open_cached_session():
+		hide()
+		_go_to_lobby()
+		return
 	_build_login_screen()
-	_show_session_cover()
+	preload("res://scripts/ui/seasonal_theme.gd").mount(self)
 	var mobile_runtime: Node = get_node_or_null("/root/MobileRuntime")
 	if mobile_runtime != null and mobile_runtime.has_method("check_for_updates"):
 		mobile_runtime.call_deferred("check_for_updates", true)
@@ -27,21 +44,32 @@ func _ready() -> void:
 		username_input.text = remembered_username
 		username_input.caret_column = username_input.text.length()
 
-	status_label.text = "Preparing login..."
+	status_label.text = "Sign in to continue."
+	if not CloudAPI.has_authenticated_session():
+		preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
 	status_label.add_theme_color_override("font_color", Color(0.42, 0.42, 0.42, 1.0))
 	call_deferred("_try_restore_saved_session", remembered_username)
 
+func _open_cached_session() -> bool:
+	if UserSession.explicitly_logged_out or not CloudAPI.has_authenticated_session(): return false
+	var cloud_user_id: String = CloudAPI.get_current_user_id()
+	if cloud_user_id.is_empty(): return false
+	if not UserSession.is_logged_in: UserSession.load_profile()
+	if UserSession.is_logged_in and UserSession.user_id == cloud_user_id: return true
+	# Never expose another player's cached inventory when a saved token belongs
+	# to a different account. begin_cloud_session reads only this account's cache.
+	UserSession.begin_cloud_session(cloud_user_id, CloudAPI.get_current_username())
+	return UserSession.is_logged_in and UserSession.user_id == cloud_user_id
+
 func _try_restore_saved_session(remembered_username: String) -> void:
-	if _auto_login_in_flight:
+	if _auto_login_in_flight or UserSession.explicitly_logged_out or not CloudAPI.has_authenticated_session():
 		return
 	_auto_login_in_flight = true
 	await get_tree().process_frame
-	status_label.text = "Checking saved session..."
 	var auth_result: Dictionary = await CloudAPI.ensure_authenticated_session()
 	if not _auto_login_in_flight:
 		return
 	if bool(auth_result.get("ok", false)):
-		status_label.text = "Loading your profile..."
 		var session_username: String = CloudAPI.get_current_username()
 		var preferred_username: String = session_username if not session_username.is_empty() else remembered_username
 		var profile_result: Dictionary = await CloudAPI.authenticate_or_create_profile(preferred_username)
@@ -52,39 +80,10 @@ func _try_restore_saved_session(remembered_username: String) -> void:
 			_go_to_lobby()
 			return
 
-	if CloudAPI.has_authenticated_session() and int(auth_result.get("status", 0)) not in [400, 401, 403]:
-		# Stay on the neutral startup screen during a temporary outage.
-		_auto_login_in_flight = false
-		await get_tree().create_timer(3.0).timeout
-		if is_inside_tree(): _try_restore_saved_session(remembered_username)
-		return
-	if is_instance_valid(_session_cover): _session_cover.queue_free()
-	status_label.text = "Sign in to continue."
+	status_label.text = "Sign in to continue." if not CloudAPI.has_authenticated_session() else "Could not reconnect. Try signing in again."
+	preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
 	status_label.add_theme_color_override("font_color", Color(0.42, 0.42, 0.42, 1.0))
 	_auto_login_in_flight = false
-
-func _show_session_cover() -> void:
-	_session_cover = ColorRect.new()
-	_session_cover.color = Color("eef1f4")
-	_session_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(_session_cover)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_session_cover.add_child(center)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 20)
-	center.add_child(column)
-	var logo := TextureRect.new()
-	logo.texture = _load_image_texture(LOGO_TEXTURE_PATH)
-	logo.custom_minimum_size = Vector2(240, 90)
-	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	column.add_child(logo)
-	var caption := Label.new()
-	caption.text = "Подключаемся к Bobux…"
-	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	caption.add_theme_color_override("font_color", Color("526174"))
-	column.add_child(caption)
 
 func _build_login_screen() -> void:
 	for child in get_children():
@@ -198,7 +197,7 @@ func _build_login_screen() -> void:
 	form.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "Mobile beta: friends and places are ready. Studio stays on PC." if mobile_beta else "Log in or create an account to continue."
+	subtitle.text = "Log in or create an account to continue."
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	subtitle.add_theme_font_size_override("font_size", 13)
@@ -352,10 +351,12 @@ func _on_login() -> void:
 	status_label.text = "Signing in..."
 	status_label.add_theme_color_override("font_color", Color(0.22, 0.32, 0.42, 1))
 	CloudAPI.reset_authenticated_session(true)
+	preload("res://scripts/ui/startup_connection_banner.gd").begin(get_tree())
 	var result: Dictionary = await CloudAPI.sign_in_with_credentials(uname, pwd)
 	if bool(result.get("ok", false)):
 		_go_to_lobby()
 	else:
+		preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
 		_set_inputs_enabled(true)
 		status_label.text = str(result.get("error", "Invalid username or password."))
 		status_label.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
@@ -377,10 +378,12 @@ func _on_signup() -> void:
 	status_label.text = "Creating account..."
 	status_label.add_theme_color_override("font_color", Color(0.22, 0.32, 0.42, 1))
 	CloudAPI.reset_authenticated_session(true)
+	preload("res://scripts/ui/startup_connection_banner.gd").begin(get_tree())
 	var result: Dictionary = await CloudAPI.sign_up_with_credentials(uname, pwd)
 	if bool(result.get("ok", false)):
 		_go_to_lobby()
 	else:
+		preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
 		_set_inputs_enabled(true)
 		status_label.text = str(result.get("error", "Could not create account."))
 		status_label.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
@@ -392,5 +395,22 @@ func _set_inputs_enabled(enabled: bool) -> void:
 	signup_button.disabled = not enabled
 
 func _go_to_lobby() -> void:
-	get_tree().call_deferred("change_scene_to_file", "res://scenes/lobby/lobby.tscn")
-	queue_free()
+	# Run the premiere from the lightweight login shell. Instantiating a lobby
+	# full of 3D avatars behind its first frames caused mobile stalls.
+	var trailer := get_node_or_null("/root/UpdateTrailer")
+	if trailer != null and bool(trailer.call("maybe_play_first_visit", UserSession.user_id)):
+		preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
+		await trailer.finished
+		if not is_inside_tree(): return
+	var result: Error = await GameSceneLoader.open_lobby()
+	if result == OK or not is_inside_tree(): return
+	preload("res://scripts/ui/startup_connection_banner.gd").finish(get_tree())
+	if username_input == null:
+		_build_login_screen()
+		preload("res://scripts/ui/seasonal_theme.gd").mount(self)
+		login_button.pressed.connect(_on_login)
+		signup_button.pressed.connect(_on_signup)
+		username_input.text = UserSession.username
+	_set_inputs_enabled(true)
+	show()
+	status_label.text = "Could not open the menu. Try signing in again."

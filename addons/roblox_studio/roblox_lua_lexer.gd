@@ -4,6 +4,7 @@ static func protect_strings(source: String) -> Dictionary:
 	var prefix := "BOBUX_LITERAL_"
 	while prefix in source: prefix += "X"
 	var literals := {}
+	var replacements: Array[Dictionary] = []
 	var spans := tokens(source)
 	spans.reverse()
 	for token in spans:
@@ -11,12 +12,43 @@ static func protect_strings(source: String) -> Dictionary:
 		if not (value.begins_with("'") or value.begins_with('"') or value.begins_with("`") or (value.begins_with("[") and value.length() > 1)): continue
 		var placeholder := '"' + prefix + str(literals.size()) + '"'
 		literals[placeholder] = value
-		source = source.left(token.start) + placeholder + source.substr(token.end)
-	return {"source": source, "literals": literals}
+		replacements.append({"start": token.start, "end": token.end, "text": placeholder})
+	return {"source": apply_edits(source, replacements), "literals": literals}
 
 static func restore_strings(source: String, literals: Dictionary) -> String:
-	for placeholder in literals: source = source.replace(placeholder, literals[placeholder])
-	return source
+	if literals.is_empty(): return source
+	# Placeholders share a collision-free prefix. Scan it once instead of
+	# copying the entire script once for every literal in a large place.
+	var first := str(literals.keys()[0])
+	var prefix := first.left(first.length() - 2)
+	var pieces := PackedStringArray()
+	var cursor := 0
+	var start := source.find(prefix)
+	while start >= 0:
+		var finish := source.find('"', start + prefix.length())
+		if finish < 0: break
+		var placeholder := source.substr(start, finish - start + 1)
+		if literals.has(placeholder):
+			pieces.append(source.substr(cursor, start - cursor))
+			pieces.append(str(literals[placeholder]))
+			cursor = finish + 1
+		start = source.find(prefix, finish + 1)
+	pieces.append(source.substr(cursor))
+	return "".join(pieces)
+
+static func apply_edits(source: String, edits: Array[Dictionary]) -> String:
+	# Descending offsets preserve the previous rewrite order, including multiple
+	# insertions at one position. Assemble spans once without quadratic copies.
+	edits.sort_custom(func(a: Dictionary, b: Dictionary): return int(a.start) > int(b.start))
+	var pieces := PackedStringArray()
+	var cursor := source.length()
+	for edit in edits:
+		pieces.append(source.substr(int(edit.end), cursor - int(edit.end)))
+		pieces.append(str(edit.text))
+		cursor = int(edit.start)
+	pieces.append(source.left(cursor))
+	pieces.reverse()
+	return "".join(pieces)
 
 static func tokens(source: String) -> Array[Dictionary]:
 	# Token offsets let compatibility rewrites leave comments and string payloads

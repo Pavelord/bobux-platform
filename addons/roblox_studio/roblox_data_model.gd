@@ -345,6 +345,8 @@ static func default_service_for_class(class_name_: String) -> String:
 			return "StarterGui"
 		"Tool", "HopperBin":
 			return "StarterPack"
+		"Sound":
+			return "SoundService"
 		"Part", "Model", "WedgePart", "MeshPart", "Folder", "TrussPart", \
 		"SpawnLocation", "Seat", "VehicleSeat", "CornerWedgePart", \
 		"UnionOperation", "NegateOperation", "IntersectOperation":
@@ -492,8 +494,9 @@ func _serialize_node_properties(node: Node, roblox_class: String) -> Dictionary:
 		properties["CanCollide"] = bool(node.get_meta("can_collide", properties.get("CanCollide", true)))
 		properties["Transparency"] = float(node.get_meta("transparency", properties.get("Transparency", 0)))
 		var material := node.get_active_material(0) as StandardMaterial3D if node.mesh != null else null
-		if node.has_meta("bobux_color") or material != null:
-			var color: Color = node.get_meta("bobux_color", material.albedo_color if material != null else Color.WHITE)
+		if node.has_meta("bobux_color") or properties.has("Color") or properties.has("BrickColor") or material != null:
+			var authored: Color = preload("res://addons/rbxl_importer/material_cache.gd").part_color_from_properties(properties) if properties.has("Color") or properties.has("BrickColor") else material.albedo_color if material != null else Color.WHITE
+			var color: Color = node.get_meta("bobux_color", authored)
 			properties["Color"] = [color.r, color.g, color.b]
 		if node.has_meta("bobux_mesh_resource_asset"): properties["BobuxMeshResource"] = str(node.get_meta("bobux_mesh_resource_asset"))
 	if node is Node3D:

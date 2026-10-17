@@ -72,8 +72,9 @@ static func _style_sidebar(lobby: Control) -> void:
 		if not sidebar.has_meta("has_bg_draw"):
 			sidebar.set_meta("has_bg_draw", true)
 			sidebar.draw.connect(func():
-				sidebar.draw_rect(Rect2(Vector2.ZERO, sidebar.size), Color.WHITE)
-				sidebar.draw_line(Vector2(sidebar.size.x - 1, 0), Vector2(sidebar.size.x - 1, sidebar.size.y), Color("#E3E3E3"), 1.0)
+				var seasonal := preload("res://scripts/ui/seasonal_theme.gd")
+				sidebar.draw_rect(Rect2(Vector2.ZERO, sidebar.size), seasonal.color("surface", Color.WHITE))
+				sidebar.draw_line(Vector2(sidebar.size.x - 1, 0), Vector2(sidebar.size.x - 1, sidebar.size.y), seasonal.color("edge", Color("#E3E3E3")), 1.0)
 			)
 			sidebar.queue_redraw()
 	

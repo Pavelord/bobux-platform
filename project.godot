@@ -11,12 +11,12 @@ config_version=5
 [application]
 
 config/name="Bobux"
-config/version="0.1.45"
+config/version="0.1.53"
 run/main_scene="res://scenes/login/login.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-boot_splash/bg_color=Color(0.933, 0.945, 0.957, 1)
+boot_splash/bg_color=Color(0.055, 0.05, 0.07, 1)
 boot_splash/show_image=false
-config/icon="res://assets/branding/bobux_app_icon.png"
+config/icon="res://assets/branding/halloween/bobux_app_icon.png"
 config/dedicated_server_ws_url="ws://109.71.245.162/ws"
 config/dedicated_server_public_host="109.71.245.162"
 config/dedicated_server_public_port=80
@@ -25,25 +25,28 @@ config/dedicated_server_routes_json="{}"
 
 [autoload]
 
+GameSceneLoader="*res://autoload/game_scene_loader.gd"
 ClientPreferences="*res://autoload/client_preferences.gd"
 GameState="*res://autoload/game_state.gd"
 UserSession="*res://autoload/user_session.gd"
 Analytics="*res://autoload/analytics.gd"
 CloudAPI="*res://autoload/cloud_api.gd"
-SupabaseClient="*res://autoload/supabase_client.gd"
 MapManager="*res://autoload/map_manager.gd"
 NetworkManager="*res://autoload/client_network.gd"
+EditorTestServer="*res://autoload/editor_test_server.gd"
 MobileRuntime="*res://autoload/mobile_runtime.gd"
 LuaScriptEngine="*res://autoload/lua_script_engine.gd"
 ToolboxAssetService="*res://autoload/toolbox_asset_service.gd"
 RobloxAudioPack="*res://autoload/roblox_audio_pack.gd"
 MapMediaStream="*res://autoload/map_media_stream.gd"
 ImportedPlaceNetwork="*res://autoload/imported_place_network.gd"
+HalloweenEventUI="*res://autoload/halloween_event_ui.gd"
+UpdateTrailer="*res://autoload/update_trailer.gd"
 
 [bobux]
 
 mobile/manifest_url="http://109.71.245.162/mobile/latest.json"
-mobile/build=37
+mobile/build=58
 mobile/force_mobile_beta=false
 mobile/auto_open_required_update=true
 
@@ -71,4 +74,6 @@ common/physics_interpolation=true
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.055, 0.05, 0.07, 1)

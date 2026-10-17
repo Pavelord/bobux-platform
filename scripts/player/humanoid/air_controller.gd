@@ -9,7 +9,7 @@ static func update_horizontal(current: Vector3, move_direction: Vector3, input_s
 	return planar
 
 
-static func update_vertical(velocity_y: float, delta: float, config: HumanoidConfig) -> float:
-	var gravity := config.float_value("Gravity")
+static func update_vertical(velocity_y: float, delta: float, config: HumanoidConfig, gravity_override: float = -1.0) -> float:
+	var gravity := gravity_override if is_finite(gravity_override) and gravity_override >= 0.0 else config.float_value("Gravity")
 	var max_fall_speed := config.float_value("Motion.MaxFallSpeed")
 	return maxf(velocity_y - gravity * delta, -max_fall_speed)

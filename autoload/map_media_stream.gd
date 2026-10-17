@@ -9,6 +9,11 @@ var _queued: Dictionary = {}
 var _worker: Thread
 var _working_path := ""
 
+func _ready() -> void:
+	# Autoload Nodes do not process by default. Without this, streamed images
+	# download correctly but their shared ImageTextures remain white placeholders.
+	set_process(true)
+
 static func service() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node("MapMediaStream")
 
@@ -37,6 +42,11 @@ func file_available(path: String) -> void:
 	var key := _key(path)
 	_expected.erase(key)
 	if _textures.has(key): _queued[key] = true
+
+func file_failed(path: String) -> void:
+	# Audio waits until an announced download finishes. Release the pending
+	# marker on failure too, so a removed or unavailable asset cannot poll forever.
+	_expected.erase(_key(path))
 
 func _process(_delta: float) -> void:
 	if _worker != null:

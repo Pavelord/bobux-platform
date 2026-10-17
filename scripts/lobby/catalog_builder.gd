@@ -5,6 +5,7 @@ const CATALOG_CARD_WIDTH := 162
 const CATALOG_CARD_HEIGHT := 230
 const CATALOG_THUMBNAIL_SIZE := 152
 const THUMBNAIL_RENDERER := preload("res://scripts/lobby/catalog_thumbnail_renderer.gd")
+const EVENT_DATA := preload("res://scripts/ui/halloween_event_data.gd")
 
 static func build(lobby: Control) -> void:
 	var tabs = lobby.get_node_or_null("%MainTabs")
@@ -20,6 +21,7 @@ static func build(lobby: Control) -> void:
 	catalog_view.add_theme_stylebox_override("panel", page_style)
 	catalog_view.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	catalog_view.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	catalog_view.scroll_deadzone = 8
 	catalog_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	catalog_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		
@@ -40,6 +42,24 @@ static func build(lobby: Control) -> void:
 	root.add_theme_constant_override("separation", 20)
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(root)
+	var catalog_tabs := HBoxContainer.new()
+	catalog_tabs.name = "CatalogSections"
+	root.add_child(catalog_tabs)
+	var browse_button := Button.new()
+	browse_button.text = "Каталог"
+	browse_button.custom_minimum_size.y = 44
+	catalog_tabs.add_child(browse_button)
+	var halloween_button := Button.new()
+	halloween_button.name = "HalloweenTab"
+	halloween_button.text = "Хеллоуин 2026"
+	halloween_button.custom_minimum_size.y = 44
+	catalog_tabs.add_child(halloween_button)
+	var halloween_view := VBoxContainer.new()
+	halloween_view.name = "HalloweenCatalog"
+	halloween_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	halloween_view.add_theme_constant_override("separation", 18)
+	halloween_view.visible = false
+	root.add_child(halloween_view)
 	
 
 	
@@ -198,7 +218,226 @@ static func build(lobby: Control) -> void:
 		if catalog_view.resized.is_connected(resize): catalog_view.resized.disconnect(resize)
 	)
 	resize.call()
+	browse_button.pressed.connect(func():
+		header_hbox.show()
+		content_hbox.show()
+		halloween_view.hide()
+	)
+	halloween_button.pressed.connect(func():
+		header_hbox.hide()
+		content_hbox.hide()
+		halloween_view.show()
+		catalog_view.scroll_vertical = 0
+		_load_halloween_catalog(lobby, halloween_view)
+	)
 	_load_catalog(lobby, content_area, cat_opt, search_box, btn_search, section_buttons)
+
+static func open_halloween(lobby: Node) -> void:
+	var view := lobby.get_node_or_null("%MainTabs/CatalogView")
+	if view == null: return
+	var button := view.find_child("HalloweenTab", true, false) as Button
+	if button == null:
+		build(lobby)
+		button = view.find_child("HalloweenTab", true, false) as Button
+	if button != null: button.pressed.emit()
+
+static func limited_badge(halloween: bool = false, compact: bool = false) -> PanelContainer:
+	var badge := PanelContainer.new()
+	badge.name = "HalloweenBadge" if halloween else "LimitedBadge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("57301a") if halloween else Color("399341")
+	style.border_color = Color("ffab4c") if halloween else Color("b2dc8c")
+	style.set_border_width_all(1)
+	style.content_margin_left = 6 if compact else 8
+	style.content_margin_right = 6 if compact else 8
+	style.content_margin_top = 3
+	style.content_margin_bottom = 3
+	badge.add_theme_stylebox_override("panel", style)
+	var text := Label.new()
+	text.text = "Halloween 2026" if halloween else "LIMITED"
+	text.add_theme_font_size_override("font_size", 10 if compact else 12)
+	text.add_theme_color_override("font_color", Color.WHITE)
+	badge.add_child(text)
+	badge.set_meta("seasonal_preserve_color", true)
+	badge.set_meta("seasonal_ignore", true)
+	text.set_meta("seasonal_preserve_color", true)
+	return badge
+
+static func _load_halloween_catalog(lobby: Node, container: VBoxContainer) -> void:
+	if bool(container.get_meta("loading", false)): return
+	container.set_meta("loading", true)
+	var account := UserSession.user_id
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
+	var title := Label.new()
+	title.text = "Хеллоуин 2026"
+	title.add_theme_font_size_override("font_size", 28)
+	container.add_child(title)
+	# The complete product page is visible immediately, even if the old live
+	# API does not yet expose the seasonal endpoint. Ownership stays disabled
+	# until an authoritative response (or explicit editor preview) arrives.
+	var gift: Dictionary = EVENT_DATA.catalog()[0]
+	var row := BoxContainer.new()
+	row.name = "HalloweenGiftPage"
+	row.add_theme_constant_override("separation", 24)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_child(row)
+	var image_box := Panel.new()
+	image_box.name = "GiftPreviewFrame"
+	image_box.custom_minimum_size = Vector2(280, 280)
+	image_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var image_style := StyleBoxFlat.new()
+	image_style.bg_color = Color("25232a")
+	image_style.border_color = Color("755037")
+	image_style.set_border_width_all(1)
+	image_style.set_corner_radius_all(8)
+	image_box.add_theme_stylebox_override("panel", image_style)
+	row.add_child(image_box)
+	var preview := TextureRect.new()
+	preview.name = "GiftPreviewImage"
+	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preview.offset_left = 14; preview.offset_top = 14; preview.offset_right = -14; preview.offset_bottom = -38
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	image_box.add_child(preview)
+	var badge := limited_badge(true)
+	image_box.add_child(badge)
+	badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	badge.offset_left = 12; badge.offset_right = 144; badge.offset_top = -34; badge.offset_bottom = -10
+	var details := VBoxContainer.new()
+	details.add_theme_constant_override("separation", 12)
+	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(details)
+	for entry in [["Coffin Gift Box - Halloween", 24], ["Гроб-подарок · аксессуар на голову", 16], ["Автор: Bobux", 14], ["Бесплатно", 20]]:
+		var label := Label.new()
+		label.text = entry[0]
+		label.add_theme_font_size_override("font_size", entry[1])
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		details.add_child(label)
+	var description := Label.new()
+	description.text = "Заберите бесплатный гроб-подарок до конца 30 октября по московскому времени. После получения аксессуар останется в вашем инвентаре."
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	details.add_child(description)
+	var status := Label.new()
+	status.text = "Проверяем инвентарь…"
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	details.add_child(status)
+	var claim := Button.new()
+	claim.name = "ClaimHalloweenGift"
+	claim.text = "Забрать подарок"
+	claim.custom_minimum_size.y = 48
+	claim.disabled = true
+	details.add_child(claim)
+	var wear := Button.new()
+	wear.name = "WearHalloweenGift"
+	wear.text = "Надеть"
+	wear.custom_minimum_size.y = 44
+	wear.hide()
+	details.add_child(wear)
+	var refresh := Button.new()
+	refresh.text = "Обновить"
+	refresh.custom_minimum_size.y = 44
+	refresh.pressed.connect(_load_halloween_catalog.bind(lobby, container))
+	details.add_child(refresh)
+	var fit := func():
+		if not is_instance_valid(row): return
+		row.vertical = container.size.x < 680
+		image_box.custom_minimum_size = Vector2(minf(280, maxf(180, container.size.x)), 280)
+	container.resized.connect(fit)
+	row.tree_exiting.connect(func():
+		if is_instance_valid(container) and container.resized.is_connected(fit): container.resized.disconnect(fit))
+	fit.call()
+	var renderer := lobby.get_node_or_null("CatalogThumbnailRenderer")
+	if renderer == null:
+		renderer = THUMBNAIL_RENDERER.new()
+		renderer.name = "CatalogThumbnailRenderer"
+		lobby.add_child(renderer)
+	renderer.call("request_preview", gift, preview)
+	var api := lobby.get_node_or_null("/root/CloudAPI")
+	var page_state := {"gift": gift, "development_preview": false}
+	claim.pressed.connect(func():
+		if api == null or not api.has_method("fetch_halloween_event"): return
+		claim.disabled = true
+		claim.text = "Получаем…"
+		var response: Dictionary = await api.fetch_halloween_event(EVENT_DATA.GIFT_ID)
+		if not is_instance_valid(claim) or account != UserSession.user_id: return
+		if response.get("ok", false) and response.get("data") is Dictionary and bool(response.data.get("gift_owned", false)):
+			page_state.development_preview = bool(response.data.get("development_preview", false))
+			for item in response.data.get("items", []):
+				if item is Dictionary and str(item.get("id", "")) == EVENT_DATA.GIFT_ID: page_state.gift = item.duplicate(true)
+			_remember_event_gift(lobby, page_state.gift, bool(page_state.development_preview))
+			claim.text = "Получено"
+			wear.show()
+			status.text = "Локальный предпросмотр Godot: подарок получен для теста, серверный инвентарь не изменён." if bool(page_state.development_preview) else "Подарок в вашем инвентаре."
+		else:
+			claim.text = "Повторить получение"
+			claim.disabled = false
+			status.text = "Не удалось получить подарок. Проверьте подключение и попробуйте ещё раз."
+	)
+	wear.pressed.connect(func():
+		if account != UserSession.user_id: return
+		if bool(page_state.development_preview):
+			lobby.call("_switch_tab", 2)
+			var preview_avatar: Variant = lobby.get("avatar_ui")
+			if preview_avatar != null and preview_avatar.has_method("preview_event_item"): preview_avatar.call("preview_event_item", page_state.gift)
+			return
+		_remember_event_gift(lobby, page_state.gift, bool(page_state.development_preview))
+		var equipped: Array = UserSession.avatar_data.get("equipped", []).duplicate()
+		if not equipped.has(EVENT_DATA.GIFT_ID): equipped.append(EVENT_DATA.GIFT_ID)
+		UserSession.avatar_data["equipped"] = equipped
+		var payloads: Array = UserSession.avatar_data.get("equipped_avatar_item_payloads", []).duplicate(true)
+		payloads = payloads.filter(func(item): return not item is Dictionary or str(item.get("id", "")) != EVENT_DATA.GIFT_ID)
+		payloads.append(page_state.gift.duplicate(true))
+		UserSession.avatar_data["equipped_avatar_item_payloads"] = payloads
+		UserSession.apply_avatar_to_game_state()
+		lobby.call("_refresh_all_local_avatar_previews_from_session")
+		if not bool(page_state.development_preview):
+			UserSession.save_profile()
+			lobby.call("_queue_avatar_cloud_sync")
+		wear.text = "Надето"
+	)
+	var result: Dictionary = {}
+	if lobby.has_meta("halloween_preview_state"):
+		result = {"ok": true, "data": lobby.get_meta("halloween_preview_state")}
+	elif api != null and api.has_method("fetch_halloween_event"):
+		result = await api.fetch_halloween_event()
+	if not is_instance_valid(container) or not is_instance_valid(status): return
+	container.set_meta("loading", false)
+	if account != UserSession.user_id: return
+	if not bool(result.get("ok", false)) or not result.get("data", {}) is Dictionary:
+		status.text = "Получение подарка откроется после выпуска обновления. Превью уже доступно; статус можно проверить кнопкой «Обновить»."
+		return
+	var state: Dictionary = result.data
+	page_state.development_preview = bool(state.get("development_preview", false))
+	var owned := bool(state.get("gift_owned", false))
+	status.text = "Подарок уже в вашем инвентаре." if owned else ("Подарок доступен — заберите его бесплатно." if bool(state.get("can_claim_gift", false)) else "Получение подарка завершено.")
+	if bool(page_state.development_preview): status.text = "Локальный предпросмотр Godot. Получение и примерка доступны для теста; серверный инвентарь не изменяется."
+	claim.disabled = owned or not bool(state.get("can_claim_gift", false))
+	claim.text = "Получено" if owned else ("Забрать подарок" if bool(state.get("can_claim_gift", false)) else "Получение завершено")
+	wear.visible = owned
+	for raw_item in state.get("items", []):
+		if not raw_item is Dictionary: continue
+		if str(raw_item.get("id", "")) == EVENT_DATA.GIFT_ID:
+			page_state.gift = raw_item.duplicate(true)
+			if owned: _remember_event_gift(lobby, page_state.gift, bool(page_state.development_preview))
+
+static func _remember_event_gift(lobby: Node, gift: Dictionary, development_preview: bool) -> void:
+	if development_preview: return
+	if not UserSession.inventory_items.has(EVENT_DATA.GIFT_ID): UserSession.inventory_items.append(EVENT_DATA.GIFT_ID)
+	var payloads: Array = UserSession.avatar_data.get("owned_avatar_item_payloads", []).duplicate(true)
+	payloads = payloads.filter(func(item): return not item is Dictionary or str(item.get("id", "")) != EVENT_DATA.GIFT_ID)
+	var acquired := gift.duplicate(true)
+	acquired["owned"] = true
+	acquired["development_preview"] = development_preview
+	payloads.push_front(acquired)
+	UserSession.avatar_data["owned_avatar_item_payloads"] = payloads
+	var avatar: Variant = lobby.get("avatar_ui")
+	if avatar != null:
+		if development_preview and avatar.has_method("refresh_local_event_preview"): avatar.call("refresh_local_event_preview")
+		elif avatar.has_method("reload_cloud_inventory"): avatar.call_deferred("reload_cloud_inventory")
 
 static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, search_box: LineEdit, btn_search: Button, section_buttons: Dictionary) -> void:
 	# Show loading
@@ -255,6 +494,7 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 			if not (avatar_item_variant is Dictionary):
 				continue
 			var avatar_item: Dictionary = avatar_item_variant
+			if str(avatar_item.get("id", "")).begins_with("event_halloween_2026_"): continue
 			var normalized := avatar_item.duplicate(true)
 			normalized["item_id"] = str(avatar_item.get("id", ""))
 			normalized["asset_type"] = "avatar_item"
@@ -267,6 +507,7 @@ static func _load_catalog(lobby: Node, container: Node, cat_opt: OptionButton, s
 				known_avatar_item_ids[known_id] = true
 	for local_avatar_item in _extract_session_avatar_item_payloads():
 		var local_id := str(local_avatar_item.get("id", local_avatar_item.get("item_id", ""))).strip_edges()
+		if local_id.begins_with("event_halloween_2026_"): continue
 		if local_id.is_empty() or bool(known_avatar_item_ids.get(local_id, false)):
 			continue
 		local_avatar_item["id"] = local_id
@@ -382,6 +623,7 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 	img_box.custom_minimum_size = Vector2(CATALOG_THUMBNAIL_SIZE, CATALOG_THUMBNAIL_SIZE)
 	card.add_child(img_box)
 	var preview := TextureRect.new()
+	preview.name = "PreviewImage"
 	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	preview.offset_left = 1
 	preview.offset_top = 1
@@ -391,6 +633,16 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	img_box.add_child(preview)
+	var item_data: Dictionary = item.get("data", {}) if item.get("data", {}) is Dictionary else {}
+	if bool(item_data.get("limited", false)) or str(item.get("id", "")).begins_with("event_halloween_2026_"):
+		var halloween := str(item.get("id", "")) in [EVENT_DATA.GIFT_ID, EVENT_DATA.PUMPKIN_ID]
+		var badge := limited_badge(halloween)
+		img_box.add_child(badge)
+		badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+		badge.offset_left = 7
+		badge.offset_right = 139 if halloween else 79
+		badge.offset_top = -30
+		badge.offset_bottom = -7
 	var renderer := lobby.get_node_or_null("CatalogThumbnailRenderer")
 	if renderer == null:
 		renderer = THUMBNAIL_RENDERER.new()
@@ -442,6 +694,11 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 	var is_owned := _is_catalog_item_owned(item, cloud_api)
 	get_btn.text = "Owned" if is_owned else "Get"
 	get_btn.disabled = is_owned
+	if bool(item.get("event_item", false)):
+		get_btn.custom_minimum_size = Vector2(140, 44)
+		get_btn.text = "Получено" if is_owned else ("Забрать подарок" if bool(item.get("event_can_claim", false)) else ("31 октября" if owned_id.ends_with("_pumpkin") else "Завершено"))
+		get_btn.disabled = is_owned or not bool(item.get("event_can_claim", false))
+		get_btn.tooltip_text = str(item.get("description", ""))
 	get_btn.pressed.connect(func() -> void:
 		if cloud_api.has_method("get_catalog_item"):
 			get_btn.disabled = true
@@ -450,7 +707,7 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 			if not is_instance_valid(get_btn): return
 			if bool(get_result.get("ok", false)):
 				item["owned"] = true
-				get_btn.text = "Owned"
+				get_btn.text = "Получено" if bool(item.get("event_item", false)) else "Owned"
 				if UserSession.inventory_items is Array and not UserSession.inventory_items.has(owned_id):
 					UserSession.inventory_items.append(owned_id)
 				if owned_type != "model":
@@ -469,6 +726,14 @@ static func _add_catalog_card(lobby: Node, grid: Container, cloud_api: Node, ite
 				get_btn.text = "Retry"
 	)
 	actions.add_child(get_btn)
+	if bool(item.get("event_item", false)):
+		var event_note := Label.new()
+		event_note.text = "Маленький аксессуар на голову" if owned_id.ends_with("_gift") else "Светится · награда за подарок"
+		event_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		event_note.custom_minimum_size.x = CATALOG_CARD_WIDTH
+		card.add_child(event_note)
+		grid.add_child(card)
+		return
 	var like_btn := Button.new()
 	like_btn.text = "Like"
 	like_btn.custom_minimum_size = Vector2(68, 30)

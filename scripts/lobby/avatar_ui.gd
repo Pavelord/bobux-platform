@@ -57,12 +57,19 @@ var _pending_template_kind := ""
 var _selected_body_part_key := "torso"
 var _cloud_inventory_loaded := false
 var _cloud_inventory_loading := false
+var _cloud_ownership_snapshot_complete := false
+var _inventory_retry_scheduled := false
+var _inventory_retry_delay := 5.0
 var _inventory_reload_pending := false
 var _avatar_sync_in_flight := false
 var _avatar_sync_pending := false
 var _remote_item_texture_cache: Dictionary = {}
 var _remote_item_texture_loading: Dictionary = {}
+var _remote_item_texture_waiters: Dictionary = {}
+var _remote_item_texture_retry_attempts: Dictionary = {}
 var _wardrobe_render_generation: int = 0
+var _avatar_view: Control
+var _wardrobe_scroll: ScrollContainer
 
 
 func init(parent_lobby: Control) -> void:
@@ -73,6 +80,7 @@ func init(parent_lobby: Control) -> void:
 	var avatar_view := lobby.get_node_or_null("%MainTabs/AvatarView")
 	if avatar_view == null:
 		return
+	_avatar_view = avatar_view
 	_prepare_avatar_surface(avatar_view)
 	_apply_responsive_avatar_layout(avatar_view)
 	_install_preview_background(avatar_view)
@@ -83,6 +91,9 @@ func init(parent_lobby: Control) -> void:
 	_group_catalog()
 	_refresh_ui()
 	_apply_visuals_to_preview_player()
+	if not avatar_view.resized.is_connected(_refresh_responsive_layout):
+		avatar_view.resized.connect(_refresh_responsive_layout)
+	_refresh_responsive_layout.call_deferred()
 
 
 func ensure_cloud_inventory_loaded() -> void:
@@ -101,6 +112,14 @@ func reload_cloud_inventory() -> void:
 	_cloud_inventory_loaded = false
 	await _load_cloud_inventory()
 
+func preview_event_item(item: Dictionary) -> void:
+	# An editor-only fitting never enters UserSession or the cloud sync queue.
+	if not OS.has_feature("editor") or not is_instance_valid(_preview_player): return
+	var items := _get_equipped_avatar_item_payloads()
+	items.append(item.duplicate(true))
+	_preview_player.set("equipped_avatar_items", items)
+	_preview_player.call("force_avatar_visual_refresh")
+
 
 func _extract_response_array(response: Dictionary) -> Array:
 	var data: Variant = response.get("data", [])
@@ -115,6 +134,10 @@ func _extract_response_array(response: Dictionary) -> Array:
 
 func _load_cloud_inventory() -> void:
 	_cloud_inventory_loading = true
+	_cloud_ownership_snapshot_complete = false
+	var loading_account := _get_current_user_id()
+	var owned_snapshot_ok := false
+	var profile_snapshot_ok := false
 	_cloud_catalog.clear()
 	var cloud_api := _get_cloud_api()
 	if cloud_api != null:
@@ -134,6 +157,7 @@ func _load_cloud_inventory() -> void:
 						_cloud_catalog.append(item)
 		if cloud_api.has_method("fetch_owned_avatar_items"):
 			var owned_result: Dictionary = await cloud_api.fetch_owned_avatar_items()
+			owned_snapshot_ok = bool(owned_result.get("ok", false))
 			if owned_result.get("ok", false):
 				for owned_item in _extract_response_array(owned_result):
 					if owned_item is Dictionary:
@@ -152,11 +176,14 @@ func _load_cloud_inventory() -> void:
 				return
 			if profile_result is Dictionary:
 				var profile_response := profile_result as Dictionary
+				profile_snapshot_ok = bool(profile_response.get("ok", false))
 				var profile: Dictionary = profile_response.get("data", {}) if profile_response.get("data", {}) is Dictionary else profile_response
 				if profile.has("inventory_items") and profile["inventory_items"] is Array:
 					_user_inventory_ids = profile["inventory_items"]
-	if not is_instance_valid(self):
+	if not is_instance_valid(lobby) or not lobby.is_inside_tree() or loading_account != _get_current_user_id():
+		_cloud_inventory_loading = false
 		return
+	_cloud_ownership_snapshot_complete = owned_snapshot_ok and profile_snapshot_ok
 	_cloud_inventory_loaded = true
 	_cloud_inventory_loading = false
 	_normalize_avatar_data()
@@ -169,6 +196,21 @@ func _load_cloud_inventory() -> void:
 	if _inventory_reload_pending:
 		_inventory_reload_pending = false
 		call_deferred("reload_cloud_inventory")
+	elif not _cloud_ownership_snapshot_complete:
+		_schedule_inventory_retry()
+	else:
+		_inventory_retry_delay = 5.0
+
+func _schedule_inventory_retry() -> void:
+	if _inventory_retry_scheduled or not is_instance_valid(lobby): return
+	_inventory_retry_scheduled = true
+	var retry_account := _get_current_user_id()
+	await lobby.get_tree().create_timer(_inventory_retry_delay).timeout
+	_inventory_retry_scheduled = false
+	if not is_instance_valid(lobby) or not lobby.is_inside_tree() or retry_account != _get_current_user_id(): return
+	if _cloud_inventory_loading or _cloud_ownership_snapshot_complete: return
+	_inventory_retry_delay = minf(60.0, _inventory_retry_delay * 2.0)
+	await _load_cloud_inventory()
 
 
 func _load_session_avatar_data() -> void:
@@ -270,13 +312,64 @@ func _apply_responsive_avatar_layout(avatar_view: Control) -> void:
 		child.reparent(replacement)
 	parent.remove_child(current)
 	current.free()
-	replacement.name = "MainRow"
+	replacement.name = "MainRow" if parent.name == "Content" else "Content"
 
 
 func _uses_compact_avatar_layout() -> bool:
 	if is_instance_valid(lobby) and bool(lobby.get_meta("bobux_compact_layout_override", false)):
 		return true
-	return OS.has_feature("mobile") or (is_instance_valid(lobby) and minf(lobby.size.x, lobby.get_viewport_rect().size.x) < 820.0)
+	var width := _avatar_view.size.x if is_instance_valid(_avatar_view) and _avatar_view.size.x > 0 else (lobby.size.x if is_instance_valid(lobby) else 1280.0)
+	return width < 740.0
+
+func _uses_mobile_avatar_controls() -> bool:
+	if OS.has_feature("mobile"): return true
+	if not is_instance_valid(lobby): return false
+	if bool(lobby.get_meta("bobux_mobile_layout_override", false)) or bool(lobby.get_meta("bobux_compact_layout_override", false)): return true
+	return lobby.has_method("_is_mobile_beta") and bool(lobby.call("_is_mobile_beta"))
+
+func _refresh_responsive_layout() -> void:
+	if not is_instance_valid(_avatar_view) or not is_instance_valid(lobby): return
+	_apply_responsive_avatar_layout(_avatar_view)
+	var content := _get_avatar_content(_avatar_view)
+	if content == null: return
+	var compact := _uses_compact_avatar_layout()
+	var mobile := _uses_mobile_avatar_controls()
+	var column_width := clampf(_avatar_view.size.x * 0.30, 232.0, 340.0) if mobile else 320.0
+	var left := content.get_node_or_null("LeftColumn") as Control
+	if left != null:
+		left.custom_minimum_size.x = 0 if compact else column_width
+		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_SHRINK_BEGIN
+		var preview := _get_preview_panel(content)
+		if preview != null:
+			var preview_height := clampf(_avatar_view.size.y * (0.52 if compact else 0.62), 220.0, 290.0 if compact else 390.0) if mobile else 390.0
+			preview.custom_minimum_size = Vector2(0 if compact else column_width, preview_height)
+			var container := _find_child_recursive(preview, "SubViewportContainer") as SubViewportContainer
+			if container != null:
+				container.stretch_shrink = maxi(1, ceili(maxf(preview.size.x, preview.size.y) / (400.0 if mobile else 720.0)))
+				var viewport := _find_child_recursive(preview, "SubViewport") as SubViewport
+				if viewport != null: viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+			var resize_preview := _refresh_preview_resolution.bind(preview)
+			if not preview.resized.is_connected(resize_preview): preview.resized.connect(resize_preview)
+		var palette := left.get_node_or_null("BodyPartsRow/ColorGrid") as GridContainer
+		if palette != null: palette.columns = 3 if compact and mobile else 2
+	if is_instance_valid(_wardrobe_scroll) and compact:
+		# The outer Avatar page owns the vertical gesture in a stacked layout.
+		# A second independently scrolling wardrobe used to trap swipes.
+		_wardrobe_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	elif is_instance_valid(_wardrobe_scroll):
+		_wardrobe_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_refresh_wardrobe_columns()
+
+func _refresh_preview_resolution(preview: Control) -> void:
+	if not is_instance_valid(preview): return
+	var container := _find_child_recursive(preview, "SubViewportContainer") as SubViewportContainer
+	var mobile := _uses_mobile_avatar_controls()
+	if container != null: container.stretch_shrink = maxi(1, ceili(maxf(preview.size.x, preview.size.y) / (400.0 if mobile else 720.0)))
+
+func _refresh_wardrobe_columns() -> void:
+	if not is_instance_valid(wardrobe_container): return
+	var available := _wardrobe_scroll.size.x if is_instance_valid(_wardrobe_scroll) and _wardrobe_scroll.size.x > 0 else wardrobe_container.size.x
+	wardrobe_container.columns = clampi(int((available + 12) / (AVATAR_ITEM_CARD_WIDTH + 12)), 1, 5)
 
 
 func _install_preview_background(avatar_view: Control) -> void:
@@ -325,6 +418,7 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 		old_overlay.free()
 	var overlay: Control = AVATAR_PREVIEW_INPUT_OVERLAY_SCRIPT.new() as Control
 	overlay.name = "AvatarPreviewInputOverlay"
+	overlay.set_meta("mobile_scroll_block", true)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay.focus_mode = Control.FOCUS_ALL
 	overlay.mouse_default_cursor_shape = Control.CURSOR_DRAG
@@ -400,7 +494,7 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 	var rotate_left_btn := Button.new()
 	rotate_left_btn.text = "<"
 	rotate_left_btn.tooltip_text = "Rotate left"
-	rotate_left_btn.custom_minimum_size = Vector2(46, 32)
+	rotate_left_btn.custom_minimum_size = Vector2(46, 44 if _uses_mobile_avatar_controls() else 32)
 	rotate_left_btn.pressed.connect(func() -> void:
 		camera_state["yaw"] = float(camera_state["yaw"]) + 0.32
 		update_preview_camera.call()
@@ -409,7 +503,7 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 	var rotate_right_btn := Button.new()
 	rotate_right_btn.text = ">"
 	rotate_right_btn.tooltip_text = "Rotate right"
-	rotate_right_btn.custom_minimum_size = Vector2(46, 32)
+	rotate_right_btn.custom_minimum_size = Vector2(46, 44 if _uses_mobile_avatar_controls() else 32)
 	rotate_right_btn.pressed.connect(func() -> void:
 		camera_state["yaw"] = float(camera_state["yaw"]) - 0.32
 		update_preview_camera.call()
@@ -417,7 +511,7 @@ func _install_preview_interaction(avatar_view: Control) -> void:
 	orbit_controls.add_child(rotate_right_btn)
 	var reset_orbit_btn := Button.new()
 	reset_orbit_btn.text = "Reset"
-	reset_orbit_btn.custom_minimum_size = Vector2(82, 32)
+	reset_orbit_btn.custom_minimum_size = Vector2(82, 44 if _uses_mobile_avatar_controls() else 32)
 	reset_orbit_btn.pressed.connect(func() -> void:
 		camera_state["yaw"] = 0.0
 		camera_state["pitch"] = 0.04
@@ -578,12 +672,12 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	top_row.add_child(hint)
 	var get_more := Button.new()
 	get_more.text = "Каталог"
-	get_more.custom_minimum_size.y = 34
+	get_more.custom_minimum_size.y = 44 if _uses_mobile_avatar_controls() else 34
 	get_more.pressed.connect(func(): lobby.call("_switch_tab", 11))
 	top_row.add_child(get_more)
 	var save_look := Button.new()
 	save_look.text = "Сохранить образ"
-	save_look.custom_minimum_size.y = 34
+	save_look.custom_minimum_size.y = 44 if _uses_mobile_avatar_controls() else 34
 	save_look.pressed.connect(_show_save_outfit)
 	top_row.add_child(save_look)
 	var tabs := HFlowContainer.new()
@@ -604,7 +698,7 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 		var button := Button.new()
 		button.text = str(tab_spec["label"])
 		button.toggle_mode = true
-		button.custom_minimum_size = Vector2(92, 36)
+		button.custom_minimum_size = Vector2(92, 44 if _uses_mobile_avatar_controls() else 36)
 		button.pressed.connect(_on_category_pressed.bind(category_name))
 		tabs.add_child(button)
 		_category_buttons[category_name] = button
@@ -615,6 +709,8 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	outer.add_child(breadcrumb)
 
 	var scroll := ScrollContainer.new()
+	_wardrobe_scroll = scroll
+	scroll.name = "WardrobeScroll"
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(scroll)
@@ -623,6 +719,7 @@ func _build_right_catalog_ui(avatar_view: Control) -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	wardrobe_container.columns = 2 if _uses_compact_avatar_layout() else 5
+	scroll.resized.connect(_refresh_wardrobe_columns)
 	wardrobe_container.add_theme_constant_override("h_separation", 12)
 	wardrobe_container.add_theme_constant_override("v_separation", 12)
 	wardrobe_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -780,6 +877,8 @@ func _refresh_ui() -> void:
 
 func _render_wardrobe_items_async(items: Array, render_generation: int) -> void:
 	var rendered_in_frame := 0
+	var frame_started := Time.get_ticks_usec()
+	var limit := 2 if _uses_mobile_avatar_controls() else 6
 	for raw_item in items:
 		if render_generation != _wardrobe_render_generation or wardrobe_container == null or not is_instance_valid(wardrobe_container):
 			return
@@ -788,10 +887,11 @@ func _render_wardrobe_items_async(items: Array, render_generation: int) -> void:
 			wardrobe_container.add_child(card)
 			_style_button_tree(card)
 			rendered_in_frame += 1
-		if rendered_in_frame >= 8:
+		if rendered_in_frame >= limit or Time.get_ticks_usec() - frame_started > 2200:
 			rendered_in_frame = 0
 			if is_instance_valid(lobby) and lobby.is_inside_tree():
 				await lobby.get_tree().process_frame
+				frame_started = Time.get_ticks_usec()
 			else:
 				return
 
@@ -858,6 +958,16 @@ func _create_item_card(item: Dictionary) -> Control:
 	image_panel.add_theme_stylebox_override("panel", _make_panel_style(Color("f2f4f6"), Color("e2e6ea"), 0, 3))
 	image_panel.add_child(preview)
 	box.add_child(image_panel)
+	var data: Dictionary = item.get("data", {}) if item.get("data", {}) is Dictionary else {}
+	if bool(data.get("limited", false)) or item_id.begins_with("event_halloween_2026_"):
+		var halloween := item_id in ["event_halloween_2026_gift", "event_halloween_2026_pumpkin"]
+		var badge := CatalogBuilder.limited_badge(halloween, halloween)
+		preview.add_child(badge)
+		badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+		badge.offset_left = 5
+		badge.offset_right = 117 if halloween else 77
+		badge.offset_top = -29
+		badge.offset_bottom = -5
 	var image_button := Button.new()
 	image_button.flat = true
 	image_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -874,7 +984,7 @@ func _create_item_card(item: Dictionary) -> Control:
 		check.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		preview.add_child(check)
 	var title := Label.new()
-	title.text = str(item.get("name", item.get("title", item_id)))
+	title.text = preload("res://scripts/ui/halloween_event_data.gd").display_name(item)
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, 34)
@@ -886,7 +996,7 @@ func _create_item_card(item: Dictionary) -> Control:
 	box.add_child(title)
 	var action := Button.new()
 	action.text = "✓ Надето" if _is_item_wearing(item) else "Надеть"
-	action.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, 32)
+	action.custom_minimum_size = Vector2(AVATAR_ITEM_PREVIEW_WIDTH, 44 if _uses_mobile_avatar_controls() else 32)
 	action.pressed.connect(_toggle_item.bind(item_id))
 	box.add_child(action)
 	return card
@@ -1223,7 +1333,7 @@ func _load_texture_from_any_path(path: String) -> Texture2D:
 
 
 func _load_remote_texture_for_item_async(item: Dictionary, target: TextureRect) -> void:
-	if target == null:
+	if not is_instance_valid(target):
 		return
 	for candidate in _get_item_texture_candidates(item):
 		var url := str(candidate).strip_edges()
@@ -1232,10 +1342,15 @@ func _load_remote_texture_for_item_async(item: Dictionary, target: TextureRect) 
 		if _remote_item_texture_cache.has(url):
 			target.texture = _remote_item_texture_cache[url]
 			return
+		target.set_meta("avatar_preview_url", url)
+		var waiters: Array = _remote_item_texture_waiters.get(url, [])
+		if not waiters.any(func(reference): return reference.get_ref() == target): waiters.append(weakref(target))
+		_remote_item_texture_waiters[url] = waiters
 		if bool(_remote_item_texture_loading.get(url, false)):
 			return
 		_remote_item_texture_loading[url] = true
 		var request := HTTPRequest.new()
+		request.timeout = 12
 		if is_instance_valid(lobby):
 			lobby.add_child(request)
 		else:
@@ -1245,25 +1360,48 @@ func _load_remote_texture_for_item_async(item: Dictionary, target: TextureRect) 
 		if err != OK:
 			_remote_item_texture_loading.erase(url)
 			request.queue_free()
+			_complete_remote_item_texture(url, item, null)
 			return
 		request.request_completed.connect(func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 			_remote_item_texture_loading.erase(url)
 			if is_instance_valid(request):
 				request.queue_free()
 			if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+				_complete_remote_item_texture(url, item, null)
 				return
-			var image := Image.new()
-			if image.load_png_from_buffer(body) != OK:
-				if image.load_jpg_from_buffer(body) != OK and image.load_webp_from_buffer(body) != OK:
-					return
+			var image := preload("res://scripts/ui/image_byte_decoder.gd").decode(body)
+			if image == null:
+				_complete_remote_item_texture(url, item, null)
+				return
 			var texture := _make_item_preview_texture(image)
 			if texture == null:
+				_complete_remote_item_texture(url, item, null)
 				return
-			_remote_item_texture_cache[url] = texture
-			if is_instance_valid(target):
-				target.texture = texture
+			_complete_remote_item_texture(url, item, texture)
 		)
 		return
+
+func _complete_remote_item_texture(url: String, item: Dictionary, texture: Texture2D) -> void:
+	var waiters: Array = _remote_item_texture_waiters.get(url, [])
+	_remote_item_texture_waiters.erase(url)
+	if texture != null:
+		_remote_item_texture_cache[url] = texture
+		_remote_item_texture_retry_attempts.erase(url)
+	else: _remote_item_texture_retry_attempts[url] = int(_remote_item_texture_retry_attempts.get(url, 0)) + 1
+	for reference in waiters:
+		var target: TextureRect = reference.get_ref()
+		if target == null or str(target.get_meta("avatar_preview_url", "")) != url: continue
+		if texture != null: target.texture = texture
+		else: _retry_item_texture_after_failure(item, target, url)
+
+func _retry_item_texture_after_failure(item: Dictionary, target: TextureRect, url: String) -> void:
+	if not is_instance_valid(lobby) or not lobby.is_inside_tree(): return
+	var account := _get_current_user_id()
+	var attempt := int(_remote_item_texture_retry_attempts.get(url, 1))
+	await lobby.get_tree().create_timer(minf(60, 5 * pow(2, mini(attempt - 1, 4)))).timeout
+	if not is_instance_valid(lobby) or not lobby.is_inside_tree() or account != _get_current_user_id(): return
+	if not is_instance_valid(target) or not target.is_inside_tree() or str(target.get_meta("avatar_preview_url", "")) != url: return
+	_load_remote_texture_for_item_async(item, target)
 
 func _make_item_preview_texture(source: Image) -> Texture2D:
 	if source == null or source.is_empty():
@@ -1386,7 +1524,13 @@ func _get_owned_equipped_item_ids(sanitize_avatar_data: bool) -> Array:
 		if item_id.is_empty() or item_id in resolved:
 			continue
 		var item := _get_cloud_catalog_item_by_id(item_id)
-		if item.is_empty() or not _is_cloud_item_owned(item):
+		if item.is_empty():
+			# Marketplace listings are paged and may fail independently of the
+			# outfit. Never erase a worn ID because its metadata has not arrived.
+			if not _cloud_ownership_snapshot_complete or item_id in _user_inventory_ids or item_id in UserSession.inventory_items:
+				resolved.append(item_id)
+			continue
+		if not _is_cloud_item_owned(item):
 			continue
 		resolved.append(item_id)
 	if sanitize_avatar_data and resolved != equipped:
@@ -1605,6 +1749,7 @@ func _refresh_body_controls() -> void:
 		var button = _body_part_buttons[part_key]
 		if not is_instance_valid(button):
 			continue
+		button.set_meta("seasonal_preserve_color", true)
 		button.button_pressed = str(part_key) == _selected_body_part_key
 		var current_color := _resolve_avatar_color_value(
 			_user_avatar_data.get(part_key, _get_default_body_color(part_key)),
@@ -1643,6 +1788,7 @@ func _get_selected_body_label() -> String:
 
 
 func _apply_swatch_style(button: Button, color: Color, selected: bool) -> void:
+	button.set_meta("seasonal_preserve_color", true)
 	button.text = ""
 	var border := Color(0.04, 0.48, 0.82, 1) if selected else Color(0.25, 0.25, 0.25, 0.65)
 	var border_width := 3 if selected else 1

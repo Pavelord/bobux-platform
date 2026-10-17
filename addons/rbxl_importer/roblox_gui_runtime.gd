@@ -41,6 +41,7 @@ static func apply_manifest(parent: Node, manifest_variant: Variant, options: Dic
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE if bool(options.get("ignore_mouse", true)) else Control.MOUSE_FILTER_PASS
 	root.z_index = int(options.get("z_index", 200))
 	root.set_meta("bobux_gui_build_cancelled", false)
+	root.set_meta("bobux_gui_runtime_options", runtime_options)
 	parent.add_child(root)
 	var gui_count := 0
 	var tool_count := 0
@@ -81,6 +82,7 @@ static func apply_manifest_async(parent: Node, manifest_variant: Variant, option
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE if bool(options.get("ignore_mouse", true)) else Control.MOUSE_FILTER_PASS
 	root.z_index = int(options.get("z_index", 200))
 	root.set_meta("bobux_gui_build_cancelled", false)
+	root.set_meta("bobux_gui_runtime_options", runtime_options)
 	parent.add_child(root)
 	var gui_count := 0
 	var tool_count := 0
@@ -545,6 +547,7 @@ static func _apply_visual_style(control: Control, roblox_class: String, props: D
 	if bool(options.get("editor_preview", false)):
 		bg_alpha = minf(bg_alpha, float(options.get("editor_preview_max_alpha", 1.0)))
 	var fg := _color_from_variant(props.get("TextColor3", [1.0, 1.0, 1.0]), Color.WHITE)
+	var font_scale := maxf(0.01, float(options.get("gui_offset_scale", 1.0)))
 	var border_width := int(maxf(0.0, float(props.get("BorderSizePixel", 1))))
 	control.set_meta("bobux_gui_bg", _color_with_alpha(bg, bg_alpha))
 	control.set_meta("bobux_gui_border", Color(0.0, 0.0, 0.0, 0.22))
@@ -556,7 +559,7 @@ static func _apply_visual_style(control: Control, roblox_class: String, props: D
 		label.horizontal_alignment = _horizontal_alignment_from_roblox(props.get("TextXAlignment", 2))
 		label.vertical_alignment = _vertical_alignment_from_roblox(props.get("TextYAlignment", 1))
 		label.add_theme_color_override("font_color", _color_with_alpha(fg, 1.0 - clampf(float(props.get("TextTransparency", 0.0)), 0.0, 1.0)))
-		label.add_theme_font_size_override("font_size", int(clampf(float(props.get("TextSize", 18.0)), 8.0, 72.0)))
+		label.add_theme_font_size_override("font_size", int(clampf(float(props.get("TextSize", 18.0)) * font_scale, 8.0, 72.0)))
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if bool(props.get("TextWrapped", false)) else TextServer.AUTOWRAP_OFF
 		if bool(props.get("TextScaled", false)):
 			var text_size := _control_pixel_size(control)
@@ -566,7 +569,7 @@ static func _apply_visual_style(control: Control, roblox_class: String, props: D
 	elif control is Button:
 		var button := control as Button
 		button.alignment = _horizontal_alignment_from_roblox(props.get("TextXAlignment", 2))
-		button.add_theme_font_size_override("font_size", int(clampf(float(props.get("TextSize", 18.0)), 8.0, 72.0)))
+		button.add_theme_font_size_override("font_size", int(clampf(float(props.get("TextSize", 18.0)) * font_scale, 8.0, 72.0)))
 		_apply_control_box_style(control, fg)
 	elif control is LineEdit:
 		var edit := control as LineEdit
@@ -821,7 +824,11 @@ static func _apply_control_box_style(control: Control, fg: Color) -> void:
 	elif control is Panel:
 		(control as Panel).add_theme_stylebox_override("panel", _stylebox(bg, border, border_width, radius))
 	elif control is Label:
-		(control as Label).add_theme_stylebox_override("normal", _stylebox(bg, border, border_width, radius))
+		# TextLabel has no implicit button padding. Six extra vertical pixels
+		# forced tightly spaced HUD counters to grow and overlap their neighbours.
+		var style := _stylebox(bg, border, border_width, radius)
+		style.set_content_margin_all(0.0)
+		(control as Label).add_theme_stylebox_override("normal", style)
 
 
 static func _direct_visual_children(control: Control) -> Array[Control]:
@@ -1246,6 +1253,14 @@ static func _color_from_variant(raw: Variant, fallback: Color) -> Color:
 
 
 static func absolute_rect(control: Control) -> Rect2:
+	# Once mirrored, decorators, scrolling and viewport fitting determine the
+	# rendered rectangle. A weak link cannot retain a deleted PlayerGui/view.
+	var mirror_ref: Variant = control.get_meta("bobux_gui_view") if control.has_meta("bobux_gui_view") else null
+	var mirror: Variant = mirror_ref.get_ref() if mirror_ref is WeakRef else null
+	if mirror is Control and mirror.is_inside_tree() and not mirror.is_queued_for_deletion():
+		return mirror.get_global_rect()
+	if not control.has_meta("roblox_class"):
+		return control.get_global_rect()
 	# Layout the logical GUI against its viewport, even before its visible mirror
 	# is built. Legacy scripts use AbsoluteSize to calculate list row spacing.
 	var props: Dictionary = control.get_meta("roblox_properties", {})

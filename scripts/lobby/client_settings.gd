@@ -46,6 +46,11 @@ func _ready() -> void:
 	_slider(controls, "Чувствительность камеры", "mouse_sensitivity", 25, 300, 100, "%")
 	_toggle(controls, "Инвертировать камеру по вертикали", "invert_y")
 	controls.add_child(UI._label("W A S D — движение   ·   Space — прыжок\nПравая кнопка мыши — камера\nShift — фиксация камеры   ·   Ctrl — бег" if not OS.has_feature("mobile") else "Джойстик — движение. Проведи пальцем справа для поворота камеры. Кнопки управления доступны в режиме.", 14, UI.MUTED))
+	var appearance := _page("Appearance")
+	_select(appearance, "Оформление Bobux", "app_theme", ["Хеллоуин", "Классическое"], ["halloween", "classic"])
+	_select(appearance, "Шторка в режиме", "hud_style", ["Прозрачная полоса", "Панели по углам"], ["classic", "compact"])
+	_toggle(appearance, "Анимации интерфейса", "interface_animations")
+	appearance.add_child(UI._label("Классическое оформление можно вернуть в любое время. Выбор шторки действует во всех режимах.", 14, UI.MUTED))
 	var footer := HBoxContainer.new()
 	page.add_child(footer)
 	var saved := UI._label("Сохраняется на этом устройстве", 13, UI.MUTED)
@@ -58,6 +63,22 @@ func _ready() -> void:
 	resized.connect(resize)
 	resize.call()
 	done.grab_focus()
+	preload("res://scripts/ui/seasonal_theme.gd").mount(self)
+
+func _select(page: VBoxContainer, title: String, key: String, labels: Array, ids: Array) -> void:
+	var row := HBoxContainer.new()
+	page.add_child(row)
+	var label := UI._label(title, 16)
+	label.size_flags_horizontal = SIZE_EXPAND_FILL
+	row.add_child(label)
+	var select := OptionButton.new()
+	select.name = key
+	select.custom_minimum_size = Vector2(180, 42)
+	for index in labels.size():
+		select.add_item(str(labels[index]))
+		if str(ClientPreferences.values[key]) == str(ids[index]): select.select(index)
+	select.item_selected.connect(func(index: int): ClientPreferences.update(key, ids[index]))
+	row.add_child(select)
 
 func _page(title: String) -> VBoxContainer:
 	var page := VBoxContainer.new()

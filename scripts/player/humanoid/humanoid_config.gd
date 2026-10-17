@@ -5,6 +5,7 @@ class_name HumanoidConfig
 ## Values and their provenance live together in humanoid_config.tres.
 @export var values: Dictionary = {}
 @export var sources: Dictionary = {}
+@export var source_refs: Dictionary = {}
 
 
 func value(key: StringName, fallback: Variant = null) -> Variant:
@@ -48,7 +49,7 @@ func validate() -> PackedStringArray:
 	for key in values:
 		if not sources.has(key):
 			issues.append("Missing provenance for %s" % key)
-		elif not ["documented", "measured", "TODO_MEASURE"].has(str(sources[key])):
+		elif not ["documented", "measured", "TODO_MEASURE", "engineering_approximation", "custom"].has(str(sources[key])):
 			issues.append("Invalid provenance for %s: %s" % [key, sources[key]])
 	var floor_search := float(value("GroundSensor.SearchDistance", 0.0))
 	var ground_offset := float(value("GroundController.GroundOffset", 0.0))

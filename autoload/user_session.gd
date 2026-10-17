@@ -15,8 +15,6 @@ const DEFAULT_TORSO_COLOR: Color = Color(0.05, 0.4, 0.7)
 const DEFAULT_ARM_COLOR: Color = Color(0.96, 0.8, 0.2)
 const DEFAULT_LEG_COLOR: Color = Color(0.65, 0.8, 0.2)
 const ILLEGAL_PATH_CHARS: Array[String] = ["/", "\\", ":", "*", "?", "\"", "<", ">", "|"]
-const MAX_AVATAR_EQUIPPED_ITEMS: int = 32
-const MAX_AVATAR_OWNED_ITEM_PAYLOADS: int = 96
 const MAX_AVATAR_SAVED_TEXTURES: int = 128
 const MAX_AVATAR_STRING_VALUE_LENGTH: int = 4096
 const MAX_AVATAR_PAYLOAD_KEYS: int = 48
@@ -634,12 +632,14 @@ func _sanitize_avatar_data_for_runtime(raw: Dictionary) -> Dictionary:
 		clean[texture_key] = _coerce_avatar_string(raw.get(texture_key, defaults.get(texture_key, "")), str(defaults.get(texture_key, "")))
 	clean["saved_shirt_texture_paths"] = _sanitize_string_list(raw.get("saved_shirt_texture_paths", []), MAX_AVATAR_SAVED_TEXTURES)
 	clean["saved_pants_texture_paths"] = _sanitize_string_list(raw.get("saved_pants_texture_paths", []), MAX_AVATAR_SAVED_TEXTURES)
-	clean["equipped"] = _sanitize_avatar_item_ids(raw.get("equipped", []), MAX_AVATAR_EQUIPPED_ITEMS)
+	# Item count is an outfit choice, not a mobile quality setting. Structural
+	# validation below and the API/network body limits still bound untrusted data.
+	clean["equipped"] = _sanitize_avatar_item_ids(raw.get("equipped", []), -1)
 	for list_key in ["equipped_avatar_item_payloads", "equipped_avatar_items", "avatar_items"]:
 		if raw.has(list_key):
-			clean[list_key] = _sanitize_avatar_item_payloads(raw.get(list_key, []), MAX_AVATAR_EQUIPPED_ITEMS)
+			clean[list_key] = _sanitize_avatar_item_payloads(raw.get(list_key, []), -1)
 	if raw.has("owned_avatar_item_payloads"):
-		clean["owned_avatar_item_payloads"] = _sanitize_avatar_item_payloads(raw.get("owned_avatar_item_payloads", []), MAX_AVATAR_OWNED_ITEM_PAYLOADS)
+		clean["owned_avatar_item_payloads"] = _sanitize_avatar_item_payloads(raw.get("owned_avatar_item_payloads", []), -1)
 	return clean
 
 func _sanitize_string_list(value: Variant, limit: int) -> Array:
@@ -669,7 +669,7 @@ func _sanitize_avatar_item_payloads(value: Variant, limit: int) -> Array:
 	if not (value is Array):
 		return result
 	var source: Array = value
-	for index in range(mini(source.size(), maxi(limit, 0))):
+	for index in range(source.size() if limit < 0 else mini(source.size(), limit)):
 		var raw_item: Variant = source[index]
 		if raw_item is Dictionary:
 			var clean_item: Dictionary = {}
@@ -697,7 +697,7 @@ func _sanitize_avatar_item_ids(value: Variant, limit: int) -> Array:
 	if not (value is Array):
 		return result
 	var source: Array = value
-	for index in range(mini(source.size(), maxi(limit, 0))):
+	for index in range(source.size() if limit < 0 else mini(source.size(), limit)):
 		var raw_item: Variant = source[index]
 		var item_id := ""
 		if raw_item is Dictionary:

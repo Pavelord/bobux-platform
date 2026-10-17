@@ -16,6 +16,12 @@ static func activate_nearest_prompt(boundary: Node, character: CharacterBody3D, 
 	var player: Variant = instance_from_id(player_id) if player_id > 0 else null
 	if not is_instance_valid(player): return false
 	var handled := bool(native_action.call(nearest, character)) if native_action.is_valid() else false
+	var bridge := engine.get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null and bridge.forward_interaction(nearest, "Triggered"):
+		# Client listeners still observe their input. Server listeners run once
+		# through the room bridge, using the authenticated server-side actor.
+		engine.fire_roblox_instance_event(nearest, "Triggered", [player])
+		return true
 	return bool(engine.fire_roblox_instance_event(nearest, "Triggered", [player])) or handled
 
 static func nearest_prompt(boundary: Node, character: CharacterBody3D, room_filter: Callable = Callable()) -> Node:
@@ -86,4 +92,8 @@ static func activate_detector(detector: Node, character: CharacterBody3D, engine
 	if not is_instance_valid(actor):
 		return false
 	var handled := bool(native_action.call(detector, character)) if native_action.is_valid() else false
+	var bridge := engine.get_node_or_null("/root/ImportedPlaceNetwork")
+	if bridge != null and bridge.forward_interaction(detector, "MouseClick"):
+		engine.fire_roblox_instance_event(detector, "MouseClick", [actor])
+		return true
 	return bool(engine.fire_roblox_instance_event(detector, "MouseClick", [actor])) or handled

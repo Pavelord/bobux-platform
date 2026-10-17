@@ -29,7 +29,6 @@ const DEFAULT_BLOCK_DAMAGE: float = 25.0
 const SHAPE_OPTIONS: Array[String] = ["Select", "Box", "Sphere", "Wedge", "Cylinder", "Spawn", "Checkpoint", "Teleport"]
 const CLOUD_INLINE_ASSET_MAX_BYTES: int = 24 * 1024 * 1024
 const CLOUD_INLINE_ASSET_TOTAL_MAX_BYTES: int = 96 * 1024 * 1024
-const CLOUD_INLINE_ASSET_MAX_TRACKS: int = 32
 const CLOUD_THUMBNAIL_MAX_DIMENSION: int = 320
 const CLOUD_THUMBNAIL_FALLBACK_MAX_BYTES: int = 256 * 1024
 const RbxlRuntimeImporter = preload("res://addons/rbxl_importer/rbxl_runtime_importer.gd")
@@ -2859,29 +2858,16 @@ func _on_sky_browse_pressed() -> void:
 		sky_file_dialog.popup_centered(Vector2(720, 420))
 
 func _on_music_file_selected(path: String) -> void:
-	if current_music_source_paths.size() >= CLOUD_INLINE_ASSET_MAX_TRACKS:
-		push_warning("[Studio] Track limit reached (%d). Remove some tracks before adding new ones." % CLOUD_INLINE_ASSET_MAX_TRACKS)
-		if toolbar_status_label:
-			toolbar_status_label.text = "Track limit reached (%d max)" % CLOUD_INLINE_ASSET_MAX_TRACKS
-		return
 	if not current_music_source_paths.has(path):
 		current_music_source_paths.append(path)
 	_refresh_atmosphere_path_labels()
 
 func _on_music_files_selected(paths: PackedStringArray) -> void:
-	var skipped: int = 0
 	for path in paths:
-		if current_music_source_paths.size() >= CLOUD_INLINE_ASSET_MAX_TRACKS:
-			skipped += 1
-			continue
 		var clean_path: String = str(path).strip_edges()
 		if clean_path.is_empty() or current_music_source_paths.has(clean_path):
 			continue
 		current_music_source_paths.append(clean_path)
-	if skipped > 0:
-		push_warning("[Studio] Skipped %d track(s) — playlist limit is %d." % [skipped, CLOUD_INLINE_ASSET_MAX_TRACKS])
-		if toolbar_status_label:
-			toolbar_status_label.text = "Skipped %d track(s) (max %d)" % [skipped, CLOUD_INLINE_ASSET_MAX_TRACKS]
 	_refresh_atmosphere_path_labels()
 
 func _remove_music_track_at(index: int) -> void:
