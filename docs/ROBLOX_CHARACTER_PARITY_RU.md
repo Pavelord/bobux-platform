@@ -1,6 +1,6 @@
 # Roblox Character Parity: текущие доказательства и ворота
 
-Снимок от **16 октября 2026**. Общий статус: **IN_PROGRESS**. Это предварительный отчёт, а не заявление о завершении фаз A–J или готовности к выпуску. Архитектурный план: [ROBLOX_CHARACTER_ARCHITECTURE_RU.md](ROBLOX_CHARACTER_ARCHITECTURE_RU.md). Официальные измерения отделены от реализации Bobux и от функциональных PASS.
+Снимок от **18 октября 2026**. Общий статус: **IN_PROGRESS**. Это предварительный отчёт, а не заявление о завершении фаз A–J или готовности к выпуску. Архитектурный план: [ROBLOX_CHARACTER_ARCHITECTURE_RU.md](ROBLOX_CHARACTER_ARCHITECTURE_RU.md). Официальные измерения отделены от реализации Bobux и от функциональных PASS.
 
 ## Сохранённая исходная база
 
@@ -67,6 +67,8 @@ Registry теперь реализует **10 enum domains / 99 canonical items*
 Количество rows включает дубли разных расположений; это не количество уникальных систем или независимых повторов. Данные являются Source-derived metadata из официальной Studio: Source, тела функций, исходные анимационные ключи и ассеты Roblox в Bobux не экспортированы. Статические identifier sets не доказывают runtime вызовы или значения выражений.
 
 ## Следующие ворота A3
+
+Отдельно завершена native scalar матрица `Humanoid.RigType`: пять независимых Play Studio `0.743.0.7431133`, 720 cases, train 1–3 / holdout 4–5, VERIFIED transport и строгая проверка 144 cases каждого запуска. Измеренные setter/getter/event исходы совпали между пятью повторами. Реализация нового RigType consumer в Bobux этим не выполнена; физическая смена skeleton и живой Player не испытывались. [Наблюдения, архивы и ограничения](ROBLOX_RIG_TYPE_OBSERVED_RU.md).
 
 Настоящий `LuaScriptEngine.start_script` fixture с Humanoid, Camera3D, общими cached wrappers/events и двумя VM имеет 43 PASS в обоих порядках. Полное пространство native input/bool casts/physical ChangeState остаётся вне этого результата. CameraType consumer закрыт только в указанной области; наличие enum namespace не доказывает работу Material, RigType или FloorMaterial consumers.
 

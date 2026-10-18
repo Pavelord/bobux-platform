@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "kind": "own_native_evidence_archive",
+  "source_basename": "2026-10-17-rig-type-play3.raw.log",
+  "raw_bytes": 1811485,
+  "raw_sha256": "54c80499d7103a0ca0c0761c5b608069352fffc0b1ef02f5ea2cdfb26806c1d8",
+  "packed_bytes": 99898,
+  "packed_sha256": "39b856f2178ca300dc5adf4d3a1ea15c374c0103632a6b08256df845e9902bb5",
+  "codec": {
+    "name": "zstd",
+    "level": 3,
+    "write_content_size": true,
+    "write_checksum": true,
+    "single_frame": true
+  },
+  "strict_utf8": true,
+  "zstandard_package_version": "0.25.0",
+  "scope": "Byte-exact storage of own native telemetry; no parity result"
+}

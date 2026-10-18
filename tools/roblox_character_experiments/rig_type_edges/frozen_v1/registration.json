@@ -1,0 +1,1325 @@
+{
+  "schema": 1,
+  "fixture_version": "2026-10-17-a3-rig-type-edges-v1",
+  "status": "PREREGISTERED_SOURCE_READY_NOT_NATIVE_OBSERVED",
+  "creator_docs_commit": "031b2f91d3d47274c255f3ed5691c29f792c181d",
+  "creator_docs_snapshot_sha256": "82d9ba4b397c95077ae4a8389f0c13f359ed3b877df4514e0c43653cfccca088",
+  "fixture_source_sha256": {
+    "common.luau": "0630d159685c1f606c5b149dd22cf05b8c1f6c5bda0486c00b8be5773543356d",
+    "probe.server.luau": "c57e74bbbe7d3e9cfeed893ab18d9e3783d046435b8dc98fce2eda7fea526911",
+    "serializer_test.luau": "7ca36978917ce0cf011c842f02f5a37144008027905b87833a6e134d9533ab14"
+  },
+  "builder_sha256": "128e45ee04474cce6b474f343030317ac1fc529f54ba051018059e8b716bbdbd",
+  "source_test_sha256": "0d9011352446f661f6a4a0ca44a6a0aa0d229e822c12a6decccc40cd5c4fe7ea",
+  "reused_transport": {
+    "export": "tools/roblox_character_experiments/export_zstd.commandbar.luau",
+    "export_sha256": "f09c7e42d7779c6c3f4f06b49488c6092e79862c52005405d8f06f08dc476aee",
+    "parser": "tools/roblox_character_experiments/parse_compressed_output.py",
+    "parser_sha256": "f908e0634ba4e57caf2f06606f128b48df3891732d9070c38de6c67eead49ac0",
+    "folder": "CharacterExperimentTelemetry",
+    "policy": "Existing immutable exporter/parser; generic climbing baseline_summary is not RigType analysis"
+  },
+  "sessions": [
+    {
+      "id": "rig_type_edges_play1",
+      "session_index": 1,
+      "split": "train",
+      "seed": 20261016
+    },
+    {
+      "id": "rig_type_edges_play2",
+      "session_index": 2,
+      "split": "train",
+      "seed": 20261016
+    },
+    {
+      "id": "rig_type_edges_play3",
+      "session_index": 3,
+      "split": "train",
+      "seed": 20261016
+    },
+    {
+      "id": "rig_type_edges_play4",
+      "session_index": 4,
+      "split": "holdout",
+      "seed": 20261016
+    },
+    {
+      "id": "rig_type_edges_play5",
+      "session_index": 5,
+      "split": "holdout",
+      "seed": 20261016
+    }
+  ],
+  "cases": [
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_wrong_domain",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "wrong_domain",
+      "ordinal": 1
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_nil",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "nil",
+      "ordinal": 2
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_positive_inf",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "positive_inf",
+      "ordinal": 3
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_positive_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "positive_fraction",
+      "ordinal": 4
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_positive_inf",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "positive_inf",
+      "ordinal": 5
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_boolean_true",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "boolean_true",
+      "ordinal": 6
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_positive_inf",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "positive_inf",
+      "ordinal": 7
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_matching_enum",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "matching_enum",
+      "ordinal": 8
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_matching_enum",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "matching_enum",
+      "ordinal": 9
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_wrong_domain",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "wrong_domain",
+      "ordinal": 10
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_nil",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "nil",
+      "ordinal": 11
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_invalid_name",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "invalid_name",
+      "ordinal": 12
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_bare_name",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "bare_name",
+      "ordinal": 13
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_bare_name",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "bare_name",
+      "ordinal": 14
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_bare_name",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "bare_name",
+      "ordinal": 15
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_boolean_false",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "boolean_false",
+      "ordinal": 16
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_bare_name",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "bare_name",
+      "ordinal": 17
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_nil",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "nil",
+      "ordinal": 18
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_positive_inf",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "positive_inf",
+      "ordinal": 19
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_positive_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "positive_fraction",
+      "ordinal": 20
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_boolean_true",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "boolean_true",
+      "ordinal": 21
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_positive_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "positive_fraction",
+      "ordinal": 22
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_invalid_name",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "invalid_name",
+      "ordinal": 23
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_matching_enum",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "matching_enum",
+      "ordinal": 24
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_bare_name",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "bare_name",
+      "ordinal": 25
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_full_name_string",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "full_name_string",
+      "ordinal": 26
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_positive_inf",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "positive_inf",
+      "ordinal": 27
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_negative_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_fraction",
+      "ordinal": 28
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_bare_name",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "bare_name",
+      "ordinal": 29
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_wrong_domain",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "wrong_domain",
+      "ordinal": 30
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_positive_inf",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "positive_inf",
+      "ordinal": 31
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_full_name_string",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "full_name_string",
+      "ordinal": 32
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_nan",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "nan",
+      "ordinal": 33
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_invalid_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "invalid_number",
+      "ordinal": 34
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_invalid_name",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "invalid_name",
+      "ordinal": 35
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_invalid_name",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "invalid_name",
+      "ordinal": 36
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_invalid_name",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "invalid_name",
+      "ordinal": 37
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_boolean_true",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "boolean_true",
+      "ordinal": 38
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_empty_table",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "empty_table",
+      "ordinal": 39
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_boolean_false",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "boolean_false",
+      "ordinal": 40
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "number",
+      "ordinal": 41
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_nil",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "nil",
+      "ordinal": 42
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_empty_table",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "empty_table",
+      "ordinal": 43
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_negative_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_number",
+      "ordinal": 44
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "number",
+      "ordinal": 45
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_negative_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_number",
+      "ordinal": 46
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_negative_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_fraction",
+      "ordinal": 47
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_boolean_false",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "boolean_false",
+      "ordinal": 48
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_invalid_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "invalid_number",
+      "ordinal": 49
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_negative_inf",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_inf",
+      "ordinal": 50
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_boolean_true",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "boolean_true",
+      "ordinal": 51
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_matching_enum",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "matching_enum",
+      "ordinal": 52
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_positive_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "positive_fraction",
+      "ordinal": 53
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_full_name_string",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "full_name_string",
+      "ordinal": 54
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_positive_inf",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "positive_inf",
+      "ordinal": 55
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_wrong_domain",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "wrong_domain",
+      "ordinal": 56
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_matching_enum",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "matching_enum",
+      "ordinal": 57
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_numeric_string",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "numeric_string",
+      "ordinal": 58
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_full_name_string",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "full_name_string",
+      "ordinal": 59
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_negative_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_fraction",
+      "ordinal": 60
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_negative_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_number",
+      "ordinal": 61
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_boolean_true",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "boolean_true",
+      "ordinal": 62
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_positive_inf",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "positive_inf",
+      "ordinal": 63
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_nil",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "nil",
+      "ordinal": 64
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_negative_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_fraction",
+      "ordinal": 65
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "number",
+      "ordinal": 66
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_nan",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "nan",
+      "ordinal": 67
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "number",
+      "ordinal": 68
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_positive_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "positive_fraction",
+      "ordinal": 69
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_invalid_name",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "invalid_name",
+      "ordinal": 70
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_boolean_false",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "boolean_false",
+      "ordinal": 71
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_negative_inf",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_inf",
+      "ordinal": 72
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_nil",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "nil",
+      "ordinal": 73
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_boolean_false",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "boolean_false",
+      "ordinal": 74
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_negative_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_number",
+      "ordinal": 75
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "number",
+      "ordinal": 76
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_matching_enum",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "matching_enum",
+      "ordinal": 77
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_numeric_string",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "numeric_string",
+      "ordinal": 78
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_nil",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "nil",
+      "ordinal": 79
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_full_name_string",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "full_name_string",
+      "ordinal": 80
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_negative_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_number",
+      "ordinal": 81
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_negative_inf",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_inf",
+      "ordinal": 82
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_numeric_string",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "numeric_string",
+      "ordinal": 83
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_bare_name",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "bare_name",
+      "ordinal": 84
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_nan",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "nan",
+      "ordinal": 85
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_wrong_domain",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "wrong_domain",
+      "ordinal": 86
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_nan",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "nan",
+      "ordinal": 87
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_negative_inf",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_inf",
+      "ordinal": 88
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_negative_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_number",
+      "ordinal": 89
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_invalid_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "invalid_number",
+      "ordinal": 90
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_invalid_name",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "invalid_name",
+      "ordinal": 91
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_nan",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "nan",
+      "ordinal": 92
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_wrong_domain",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "wrong_domain",
+      "ordinal": 93
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_empty_table",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "empty_table",
+      "ordinal": 94
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_empty_table",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "empty_table",
+      "ordinal": 95
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_numeric_string",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "numeric_string",
+      "ordinal": 96
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_boolean_true",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "boolean_true",
+      "ordinal": 97
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_negative_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_fraction",
+      "ordinal": 98
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_invalid_name",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "invalid_name",
+      "ordinal": 99
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_negative_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_fraction",
+      "ordinal": 100
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_bare_name",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "bare_name",
+      "ordinal": 101
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_negative_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_fraction",
+      "ordinal": 102
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_nil",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "nil",
+      "ordinal": 103
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_empty_table",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "empty_table",
+      "ordinal": 104
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_empty_table",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "empty_table",
+      "ordinal": 105
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_boolean_false",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "boolean_false",
+      "ordinal": 106
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_matching_enum",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "matching_enum",
+      "ordinal": 107
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_nan",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "nan",
+      "ordinal": 108
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_positive_fraction",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "positive_fraction",
+      "ordinal": 109
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_wrong_domain",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "wrong_domain",
+      "ordinal": 110
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_nan",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "nan",
+      "ordinal": 111
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "number",
+      "ordinal": 112
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_negative_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_number",
+      "ordinal": 113
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_boolean_true",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "boolean_true",
+      "ordinal": 114
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_numeric_string",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "numeric_string",
+      "ordinal": 115
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_negative_inf",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_inf",
+      "ordinal": 116
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_negative_inf",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "negative_inf",
+      "ordinal": 117
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_negative_inf",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_inf",
+      "ordinal": 118
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_empty_table",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "empty_table",
+      "ordinal": 119
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_negative_inf",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "negative_inf",
+      "ordinal": 120
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_positive_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "positive_fraction",
+      "ordinal": 121
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r6_invalid_number",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "invalid_number",
+      "ordinal": 122
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_number",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "number",
+      "ordinal": 123
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_full_name_string",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "full_name_string",
+      "ordinal": 124
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_boolean_true",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "boolean_true",
+      "ordinal": 125
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r6_empty_table",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "empty_table",
+      "ordinal": 126
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_wrong_domain",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "wrong_domain",
+      "ordinal": 127
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_numeric_string",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "numeric_string",
+      "ordinal": 128
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_negative_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "negative_number",
+      "ordinal": 129
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_numeric_string",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "numeric_string",
+      "ordinal": 130
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_numeric_string",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "numeric_string",
+      "ordinal": 131
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_negative_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "negative_fraction",
+      "ordinal": 132
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_invalid_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "invalid_number",
+      "ordinal": 133
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_full_name_string",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "full_name_string",
+      "ordinal": 134
+    },
+    {
+      "id": "fresh_workspace_baseline_r6_target_r15_matching_enum",
+      "context": "fresh_workspace",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "matching_enum",
+      "ordinal": 135
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_invalid_number",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "invalid_number",
+      "ordinal": 136
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_nan",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "nan",
+      "ordinal": 137
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r15_boolean_false",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R15",
+      "variant": "boolean_false",
+      "ordinal": 138
+    },
+    {
+      "id": "fresh_unparented_baseline_r6_target_r6_positive_fraction",
+      "context": "fresh_unparented",
+      "baseline": "R6",
+      "target": "R6",
+      "variant": "positive_fraction",
+      "ordinal": 139
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "number",
+      "ordinal": 140
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_full_name_string",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "full_name_string",
+      "ordinal": 141
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r6_invalid_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R6",
+      "variant": "invalid_number",
+      "ordinal": 142
+    },
+    {
+      "id": "fresh_unparented_baseline_r15_target_r15_invalid_number",
+      "context": "fresh_unparented",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "invalid_number",
+      "ordinal": 143
+    },
+    {
+      "id": "fresh_workspace_baseline_r15_target_r15_boolean_false",
+      "context": "fresh_workspace",
+      "baseline": "R15",
+      "target": "R15",
+      "variant": "boolean_false",
+      "ordinal": 144
+    }
+  ],
+  "cases_per_Play": 144,
+  "required_independent_Play_sessions": 5,
+  "variant_descriptions": [
+    {
+      "id": "matching_enum",
+      "construction": "Enum.HumanoidRigType[target]"
+    },
+    {
+      "id": "number",
+      "construction": "target.Value"
+    },
+    {
+      "id": "bare_name",
+      "construction": "target.Name"
+    },
+    {
+      "id": "numeric_string",
+      "construction": "tostring(target.Value)"
+    },
+    {
+      "id": "positive_fraction",
+      "construction": "target.Value + 0.5"
+    },
+    {
+      "id": "negative_fraction",
+      "construction": "-0.5; independent of target label"
+    },
+    {
+      "id": "wrong_domain",
+      "construction": "Enum.CameraType.Fixed; same numeric value as R6, different domain"
+    },
+    {
+      "id": "full_name_string",
+      "construction": "tostring(target EnumItem)"
+    },
+    {
+      "id": "nil",
+      "construction": "nil; explicit tagged nil in telemetry"
+    },
+    {
+      "id": "boolean_false",
+      "construction": "false; preserved as boolean"
+    },
+    {
+      "id": "boolean_true",
+      "construction": "true; preserved as boolean"
+    },
+    {
+      "id": "empty_table",
+      "construction": "new empty table"
+    },
+    {
+      "id": "negative_number",
+      "construction": "-1"
+    },
+    {
+      "id": "invalid_number",
+      "construction": "999999"
+    },
+    {
+      "id": "invalid_name",
+      "construction": "\"BOBUX_NONEXISTENT_ITEM\""
+    },
+    {
+      "id": "nan",
+      "construction": "0/0; tagged special=nan, never a raw JSON number"
+    },
+    {
+      "id": "positive_inf",
+      "construction": "math.huge; tagged special=positive_inf"
+    },
+    {
+      "id": "negative_inf",
+      "construction": "-math.huge; tagged special=negative_inf"
+    }
+  ],
+  "order": {
+    "seed": 20261016,
+    "algorithm": "LCG32 state=(1664525*state+1013904223)&0xffffffff; descending Fisher-Yates swap=state%(i+1)",
+    "policy": "Same frozen 144-case permutation in each independent Play; no adaptive reordering"
+  },
+  "target_policy": "Target name selects input construction only; resulting getter/error/events are native observations, never expected outcomes",
+  "contexts": {
+    "fresh_unparented": "New Instance.new Humanoid; Parent nil",
+    "fresh_workspace": "New Instance.new Humanoid; Parent Workspace directly, without Model/skeleton/body parts"
+  },
+  "fresh_default_policy": "Read before parenting and in measured context; never assert R6 as an experimental input",
+  "baseline_policy": "Own matching EnumItem setter, immediate getter, one settle Heartbeat and exact getter validation; baseline failure BLOCKED without target call or retry",
+  "baseline_settle_Heartbeats": 1,
+  "observation_Heartbeats_after_setter": 2,
+  "required_points": [
+    "before_setter",
+    "immediate_after_setter",
+    "after_Heartbeat_1",
+    "after_Heartbeat_2"
+  ],
+  "signals": [
+    "GetPropertyChangedSignal(RigType)",
+    "Changed"
+  ],
+  "signal_policy": "Attach after baseline settle. Preserve actual callback order, arguments, getter, counts and wall/simulation callback clocks; no asserted count or exclusion of later callbacks",
+  "timing_policy": "Actual os.clock wall time, Heartbeat ordinal/dt and accumulated callback dt; no assumed fixed frame length, physical/render timing or cross-realm synchronization",
+  "rollout_policy": "No hidden Avatar settings, Player.Character, description/model factories, assets or stock Source accessed",
+  "fixed_XML_input": {
+    "Players.CharacterAutoLoads": false
+  },
+  "timeouts": {
+    "session_wall_s": 300
+  },
+  "limits": {
+    "recorded_events_per_case": 64
+  },
+  "coverage_policy": "144 independent fresh scalar targets in a Play are one Play session, never 144 independent Play repeats",
+  "noise_policy": "If setter/getter/event outcomes vary across five independent Plays, preserve them and preregister a separate >=10-Play extension before comparison or fitting",
+  "no_fit": true,
+  "no_parity_pass_claim": true,
+  "no_physical_rig_claim": true
+}

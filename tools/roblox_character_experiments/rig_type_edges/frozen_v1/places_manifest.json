@@ -1,0 +1,11 @@
+{
+  "scope": "Frozen own native scalar places; native Play NOT_RUN",
+  "registration_sha256": "373875440df6200fef789a08d140899317a88cc96059d04f94106cf9ccd05f09",
+  "place_sha256": {
+    "rig_type_edges_play1.rbxlx": "68a858abc309fc813c1cb669fbdcfd72cecf559d3f0feb954582e14e547d2687",
+    "rig_type_edges_play2.rbxlx": "d66479c2f9fe8762c8c801eff10006fd977a3610bf7925aaf56ce5792a59b26c",
+    "rig_type_edges_play3.rbxlx": "01434c38a84d5ece542039592fc85385acb9a647ef74491a04db0b557907a8ea",
+    "rig_type_edges_play4.rbxlx": "72d3818129059c58ee7a34d787b6048ba8612aafc0ec90e46ed36370165d8859",
+    "rig_type_edges_play5.rbxlx": "181824798995af7d22fbd963a89447eeb311b068527c21adff0b73125292aff3"
+  }
+}

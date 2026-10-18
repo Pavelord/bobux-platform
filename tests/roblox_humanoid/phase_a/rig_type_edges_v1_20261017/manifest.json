@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "status": "OBSERVED_NOT_BOBUX_PARITY_PASS",
+  "scope": "Own fresh bare Humanoid scalar RigType only; no Player/skeleton/physical rig conversion",
+  "studio_version": "0.743.0.7431133",
+  "native_dates_utc": [
+    "2026-10-17",
+    "2026-10-18"
+  ],
+  "independent_Play_sessions": 5,
+  "cases_per_Play": 144,
+  "observed_scalar_cases": 720,
+  "raw_records": 7450,
+  "raw_bytes": 9063160,
+  "registration_sha256": "373875440df6200fef789a08d140899317a88cc96059d04f94106cf9ccd05f09",
+  "analyzer_source_sha256": "750bd6af4b6d7c06c69e844eee628816a7c9cd4f3153d774e018b57cc6e54a89",
+  "variable_case_outcomes": [],
+  "no_fit": true,
+  "no_physical_rig_claim": true,
+  "files": {
+    "analyzer-review.json": {
+      "bytes": 305,
+      "sha256": "cd78f2f9a36b0db98140f69b21f5de13fa2ac401b9db3f307207c407dd78371f"
+    },
+    "five-plays.aggregate.json": {
+      "bytes": 4417,
+      "sha256": "bf667ee91f8fc23187f7542cc03503bbde1e57645ab351aeafa398139d232687"
+    },
+    "play1.analysis.json": {
+      "bytes": 2167320,
+      "sha256": "aae5a01bea6e2d478efea1b1dfc34527197ef84c69484027fa120b47f33e5beb"
+    },
+    "play1.archive.json": {
+      "bytes": 615,
+      "sha256": "11db058b6c57ac8adfca69b4630a2b27931e9b3faf8a6ebb2023635661ffbf3f"
+    },
+    "play1.raw.log.zstd": {
+      "bytes": 99633,
+      "sha256": "ee109b50ea0b11bf63d6f69a7349a12e4bfab9b31329a9096c4114be79c9eb03"
+    },
+    "play1.transport.json": {
+      "bytes": 267653,
+      "sha256": "7db31cc9f85ff3ccb1d6bf9300c7e2a0863fbc7b4e389753d290d454a369a83d"
+    },
+    "play2.analysis.json": {
+      "bytes": 2167838,
+      "sha256": "87805d848291e950cb3538437c8419e0eca38ac3bae59646f41d3a77551b9a77"
+    },
+    "play2.archive.json": {
+      "bytes": 615,
+      "sha256": "ce2518f4cdf7f373ab84ef896ce8e571924e117bbea0c45c5d0849c3b2bf2380"
+    },
+    "play2.raw.log.zstd": {
+      "bytes": 99690,
+      "sha256": "3f62d3323f8ff2a873a51eea3f2ac7d3ddc4935025703511e765147c63941fa0"
+    },
+    "play2.transport.json": {
+      "bytes": 267692,
+      "sha256": "0d3ca5bbd87aeafcd7acb44746e8fe088d517d57566cf62b57801fa317e4fc73"
+    },
+    "play3.analysis.json": {
+      "bytes": 2167702,
+      "sha256": "2035a57d9b06981296af580ec3b42010a836b6fd43b3fa9883a4a3ef9908aed8"
+    },
+    "play3.archive.json": {
+      "bytes": 615,
+      "sha256": "fcbe3f128ac6f5c4b86163de9938b461b2a1b24180037672b7559d0d44edd3d6"
+    },
+    "play3.raw.log.zstd": {
+      "bytes": 99898,
+      "sha256": "39b856f2178ca300dc5adf4d3a1ea15c374c0103632a6b08256df845e9902bb5"
+    },
+    "play3.transport.json": {
+      "bytes": 267681,
+      "sha256": "6995d7a95bc125f7e2bec6d27421c4d3091f74479f9b2d3706811c2509ee80a7"
+    },
+    "play4.analysis.json": {
+      "bytes": 2170345,
+      "sha256": "05148904842eb278989d5b98344b1dcf7fe86be3f16627782dad83259432c274"
+    },
+    "play4.archive.json": {
+      "bytes": 616,
+      "sha256": "f922ad60f1052a51df812283ad34722a8bebed81630683381b86c7360c77f4f5"
+    },
+    "play4.raw.log.zstd": {
+      "bytes": 100295,
+      "sha256": "08e26e4fb25d8ed30dca419eb4307b9f90a5b71380523a5a97850902a93573c2"
+    },
+    "play4.transport.json": {
+      "bytes": 267982,
+      "sha256": "9205b3523e42172ec5758e20e40274ca6164ac7e4d3c424409399a2f6224f1fb"
+    },
+    "play5.analysis.json": {
+      "bytes": 2169415,
+      "sha256": "745eb32bececbf57d1f27445ab78c26214c75f12d75365596d228d745f9dc614"
+    },
+    "play5.archive.json": {
+      "bytes": 615,
+      "sha256": "146bf6ae3617d059fcba94fde3f89f49023f6d77ee44141beb8b51bf9fb72a04"
+    },
+    "play5.raw.log.zstd": {
+      "bytes": 95106,
+      "sha256": "93d40c89211a66469b6ded22a27f929a0c0294e98e868b6ebd244e376675de8e"
+    },
+    "play5.transport.json": {
+      "bytes": 267944,
+      "sha256": "d6843fea32c025f981333387a9877b5ac1f166bb0fc5de33150a3ea8f4886f8e"
+    },
+    "README_RU.md": {
+      "bytes": 4091,
+      "sha256": "2396c642415e77176b4ab79be9ba3fc7e8c68be62a47614fe4dc0ed0fae4b3cc"
+    }
+  }
+}

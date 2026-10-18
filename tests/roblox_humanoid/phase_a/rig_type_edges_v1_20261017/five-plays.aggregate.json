@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "aggregate_utc": "2026-10-18T09:15:59.997905+00:00",
+  "status": "OBSERVED",
+  "scope": "Five independent frozen bare-scalar Plays per Studio version only; versions never pooled",
+  "parity_status": "NOT_IMPLEMENTED_NOT_CALIBRATED",
+  "no_fit": true,
+  "no_physical_rig_claim": true,
+  "registration_sha256": "373875440df6200fef789a08d140899317a88cc96059d04f94106cf9ccd05f09",
+  "registered_source_sha256": {
+    "common.luau": "0630d159685c1f606c5b149dd22cf05b8c1f6c5bda0486c00b8be5773543356d",
+    "probe.server.luau": "c57e74bbbe7d3e9cfeed893ab18d9e3783d046435b8dc98fce2eda7fea526911",
+    "serializer_test.luau": "7ca36978917ce0cf011c842f02f5a37144008027905b87833a6e134d9533ab14"
+  },
+  "counts": {
+    "submitted_reports": 5,
+    "observed_independent_Play_sessions": 5,
+    "required_Play_sessions_per_version": 5,
+    "observed_scalar_cases": 720,
+    "scalar_instances_are_not_Play_repeats": true
+  },
+  "input_issues": [],
+  "versions": [
+    {
+      "studio_version": "0.743.0.7431133",
+      "coverage_status": "OBSERVED",
+      "observed_independent_Play_sessions": 5,
+      "required_independent_Play_sessions": 5,
+      "train_sessions": [
+        "rig_type_edges_play1",
+        "rig_type_edges_play2",
+        "rig_type_edges_play3"
+      ],
+      "holdout_sessions": [
+        "rig_type_edges_play4",
+        "rig_type_edges_play5"
+      ],
+      "not_run_session_ids": [],
+      "variable_case_outcomes": [],
+      "separate_preregistered_10_Play_extension_required": false,
+      "sessions": [
+        {
+          "session_id": "rig_type_edges_play1",
+          "run_id": "8c964842-9464-484a-820a-691cd956beaf",
+          "raw_sha256": "5abf8f7febf9b8dfcc6848a44a17e88f3ee3e403a746e84ffe1a06c4918c899e",
+          "analysis_path": "C:\\robloxclone\\.codex-tmp\\character_parity\\native\\2026-10-17-rig-type-play1.analysis.json",
+          "analysis_sha256": "aae5a01bea6e2d478efea1b1dfc34527197ef84c69484027fa120b47f33e5beb"
+        },
+        {
+          "session_id": "rig_type_edges_play2",
+          "run_id": "de90348b-103e-4868-bc08-9d425777fd61",
+          "raw_sha256": "77550557aaa7c56e4d91a84ae4c023521b53aa7e8be4f4665511bb65de51cf56",
+          "analysis_path": "C:\\robloxclone\\.codex-tmp\\character_parity\\native\\2026-10-17-rig-type-play2.analysis.json",
+          "analysis_sha256": "87805d848291e950cb3538437c8419e0eca38ac3bae59646f41d3a77551b9a77"
+        },
+        {
+          "session_id": "rig_type_edges_play3",
+          "run_id": "c4e2eeb4-87a6-4491-81aa-466ae651be00",
+          "raw_sha256": "54c80499d7103a0ca0c0761c5b608069352fffc0b1ef02f5ea2cdfb26806c1d8",
+          "analysis_path": "C:\\robloxclone\\.codex-tmp\\character_parity\\native\\2026-10-17-rig-type-play3.analysis.json",
+          "analysis_sha256": "2035a57d9b06981296af580ec3b42010a836b6fd43b3fa9883a4a3ef9908aed8"
+        },
+        {
+          "session_id": "rig_type_edges_play4",
+          "run_id": "bc7f0017-538e-43f8-ad5f-26b2eefa9e67",
+          "raw_sha256": "0374e5a6c7f64c2cc7f6991fe17d9dbc485fc7eeb98ea8610e606257eb8fd864",
+          "analysis_path": "C:\\robloxclone\\.codex-tmp\\character_parity\\native\\2026-10-17-rig-type-play4.analysis.json",
+          "analysis_sha256": "05148904842eb278989d5b98344b1dcf7fe86be3f16627782dad83259432c274"
+        },
+        {
+          "session_id": "rig_type_edges_play5",
+          "run_id": "5c9d5cdd-360d-4803-b831-27a82ede7cac",
+          "raw_sha256": "e82b8ba8af7d2e7a4ddb6872dea2680b579df0d104b83b78702f1e764bfce0f4",
+          "analysis_path": "C:\\robloxclone\\.codex-tmp\\character_parity\\native\\2026-10-18-rig-type-play5.analysis.json",
+          "analysis_sha256": "745eb32bececbf57d1f27445ab78c26214c75f12d75365596d228d745f9dc614"
+        }
+      ]
+    }
+  ],
+  "five_Play_matrix_complete": true,
+  "separate_preregistered_10_Play_extension_required": false,
+  "limitations": [
+    "No native setter/getter/error/event outcome was presumed or fitted.",
+    "Variable outcomes require a new preregistered >=10-Play extension; no adaptive rerun selection.",
+    "The two-Heartbeat event window does not exclude later callbacks.",
+    "Only fresh bare Humanoids: no actual Player, physical rig conversion or Bobux parity claim."
+  ],
+  "analyzer_source_sha256": "750bd6af4b6d7c06c69e844eee628816a7c9cd4f3153d774e018b57cc6e54a89"
+}
